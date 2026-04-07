@@ -1,0 +1,96 @@
+services:
+
+  frontend:
+    image: nusc_viewer_frontend # Docker image name to be built
+    build:
+      context: ./frontend
+      target: ${APP_ENV:-development}   # dev/prod切り替え
+    ports:
+      - "3000:3000"                     # dev: Vite dev server
+      # - "3000:80"                     # prod: Nginx
+    networks:
+      - frontend-network 
+    volumes:
+      - ./frontend:/app                 # 開発時ホットリロード
+      - /app/node_modules               # node_modules は除外
+    depends_on:
+      - api
+
+  api:
+    image: nusc_viewer_api # Docker image name to be built
+    build:
+      context: ./backend
+      target: ${APP_ENV:-development}
+    networks:
+      - frontend-network
+      - backend-network
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_APP_USER}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB} # Application user for FastAPI
+      - ENV=${APP_ENV:-development}
+      - AUTO_CREATE_TABLES=${AUTO_CREATE_TABLES:-True}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  migrations:
+    build:
+      context: ./backend
+    command: alembic upgrade head
+    networks:
+      - backend-network
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB} # Migration user for Alembic
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"                       # Run only once
+
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    networks:
+      - backend-network
+      - pgadmin-network
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}  # Migration user (For DDL, used by Alembic)
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_APP_USER=${POSTGRES_APP_USER}  # Application user (For DML, used by FastAPI)
+      - POSTGRES_APP_PASSWORD=${POSTGRES_APP_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Init scripts for database setup (users, permissions, etc.)
+      - ./db/initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    ports:
+      - 5050:80
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pgadmin-network
+
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+  pgadmin-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  pgadmin_data:

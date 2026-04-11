@@ -14,7 +14,8 @@ services:
       - ./frontend:/app                 # 開発時ホットリロード
       - /app/node_modules               # node_modules は除外
     depends_on:
-      - api
+      api:
+        condition: service_started
 
   api:
     image: nusc_viewer_api # Docker image name to be built
@@ -26,6 +27,7 @@ services:
       - backend-network
     volumes:
       - ./backend:/app
+      - ${NUSCENES_DATAROOT}:/data/nuscenes:ro  # Data mount for NuScenes dataset (read-only)
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_APP_USER}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB} # Application user for FastAPI
       - ENV=${APP_ENV:-development}

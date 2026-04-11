@@ -1,7 +1,7 @@
 from uuid import uuid4, UUID
 import numpy as np
 import xxhash
-from backend.map_expansion.json_conversion import schemas_mapexpansion
+from backend.app.json_conversion import schemas_mapexpansion
 
 class GeomCollection:
     """

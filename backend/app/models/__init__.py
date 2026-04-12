@@ -1,4 +1,5 @@
 # Import all models here so Alembic can detect them for autogenerate.
+from app.db.base import Base  # noqa: F401 — re-export for Alembic
 from app.models.scene import Log, Scene, Sample
 from app.models.annotation import (
     Category,

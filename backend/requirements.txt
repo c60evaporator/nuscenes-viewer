@@ -5,6 +5,12 @@ shapely
 pyproj
 requests
 psycopg2-binary
+asyncpg
 alembic
 fastapi
 uvicorn
+pydantic-settings
+python-dotenv
+pytest
+pytest-asyncio
+httpx

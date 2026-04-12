@@ -1,26 +1,54 @@
 import os
 from logging.config import fileConfig
+
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-from app.models import Base  # Import SQLAlchemy models
+# Import Base (re-exported from app.models to ensure all models are registered)
+from app.models import Base  # noqa: F401
 
 config = context.config
 
-# Get DATABASE_URL
-# asyncpg → psycopg2 (Alembic uses psycopg2)
+# Convert asyncpg URL to psycopg2 (Alembic uses synchronous driver)
 db_url = os.environ["DATABASE_URL"].replace(
     "postgresql+asyncpg://", "postgresql+psycopg2://"
 )
 config.set_main_option("sqlalchemy.url", db_url)
 
-fileConfig(config.config_file_name)
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata  # Automatically detect schema from models
+target_metadata = Base.metadata
 
-def run_migrations_online():
+# PostGIS system tables to exclude from autogenerate
+_POSTGIS_SYSTEM_TABLES = {"spatial_ref_sys", "geography_columns", "geometry_columns", "raster_columns", "raster_overviews"}
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    """Exclude PostGIS system tables from autogenerate."""
+    if type_ == "table" and name in _POSTGIS_SYSTEM_TABLES:
+        return False
+    return True
+
+
+def run_migrations_offline() -> None:
+    """Run migrations in 'offline' mode (no DB connection required)."""
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+        include_schemas=True,
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode (connects to DB)."""
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
@@ -28,10 +56,15 @@ def run_migrations_online():
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            # Exclude PostGIS spatial indexes from diffs
             include_schemas=True,
+            compare_type=True,  # detect column type changes
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()
 
-run_migrations_online()
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()

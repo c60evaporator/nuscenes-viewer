@@ -1,6 +1,12 @@
-from pydantic import BaseModel
-from uuid import UUID
 from enum import Enum
+from typing import Annotated
+from uuid import UUID
+
+from pydantic import BaseModel, BeforeValidator
+
+# 空文字列 "" または null (None) を None に変換するカスタム型（任意FK用）
+# 実データに "" と null の両方が存在するため両方を処理する
+OptionalToken = Annotated[str | None, BeforeValidator(lambda v: None if v == "" else (str(v) if v else None))]
 
 class Node(BaseModel):
     token: UUID
@@ -15,23 +21,23 @@ class Hole(BaseModel):
     node_tokens: list[UUID]
 
 class Polygon(BaseModel):
-    token: UUID
+    token: OptionalToken  # Singapore マップで null が存在する
     exterior_node_tokens: list[UUID]
     holes: list[Hole] = []
 
 class DrivableArea(BaseModel):
     token: UUID
-    polygon_tokens: list[UUID]
+    polygon_tokens: list[OptionalToken]  # Singapore マップでリスト内に null が存在する
 
 class RoadSegment(BaseModel):
     token: UUID
     polygon_token: UUID
     is_intersection: bool
-    drivable_area_token: UUID
+    drivable_area_token: OptionalToken  # "" が多数存在する
 
 class RoadBlock(BaseModel):
     token: UUID
-    polygon_token: UUID
+    polygon_token: OptionalToken  # Singapore マップで null が多数存在する
     from_edge_line_token: UUID
     to_edge_line_token: UUID
     road_segment_token: UUID
@@ -39,7 +45,7 @@ class RoadBlock(BaseModel):
 class PedCrossing(BaseModel):
     token: UUID
     polygon_token: UUID
-    road_segment_token: UUID
+    road_segment_token: OptionalToken  # Singapore マップで null が存在する
 
 class Walkway(BaseModel):
     token: UUID
@@ -51,13 +57,13 @@ class StopLine(BaseModel):
     stop_line_type: str
     ped_crossing_tokens: list[UUID]
     traffic_light_tokens: list[UUID]
-    road_block_token: UUID
+    road_block_token: OptionalToken  # "" と null の両方が存在する
 
 class CarparkArea(BaseModel):
     token: UUID
     polygon_token: UUID
     orientation: float
-    road_block_token: UUID
+    road_block_token: OptionalToken  # Singapore マップで null が存在する
 
 class DividerSegment(BaseModel):
     node_token: UUID
@@ -75,7 +81,7 @@ class Lane(BaseModel):
 class RoadDivider(BaseModel):
     token: UUID
     line_token: UUID
-    road_segment_token: UUID
+    road_segment_token: OptionalToken  # Singapore マップで null が存在する
 
 class LaneDivider(BaseModel):
     token: UUID
@@ -86,9 +92,9 @@ class Pose(BaseModel):
     tx: float
     ty: float
     tz: float
-    rx: float
-    ry: float
-    rz: float
+    rx: float | None  # Singapore マップで null が存在する
+    ry: float | None
+    rz: float | None
 
 class TrafficLightItem(BaseModel):
     color: str
@@ -100,7 +106,7 @@ class TrafficLight(BaseModel):
     token: UUID
     line_token: UUID
     traffic_light_type: str
-    from_road_block_token: UUID
+    from_road_block_token: OptionalToken  # "" が存在する
     items: list[TrafficLightItem]
     pose: Pose
 
@@ -118,6 +124,7 @@ class DubinsPath(BaseModel):
     shape: DubinsPathEnum
     radius: float
     segment_length: tuple[float, float, float]  # lengths of arc-line-arc segments
+
 class Connectivity(BaseModel):
     incoming: list[UUID]
     outgoing: list[UUID]

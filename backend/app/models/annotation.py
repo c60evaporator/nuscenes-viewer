@@ -39,14 +39,12 @@ class Instance(Base):
     nbr_annotations: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # 先頭・末尾アノテーションへの参照（SET NULL：アノテーション削除時も行は残す）
     first_annotation_token: Mapped[str | None] = mapped_column(
-        ForeignKey("sample_annotations.token", ondelete="SET NULL"),
+        ForeignKey("sample_annotations.token", ondelete="SET NULL", use_alter=True),  # 循環参照のため遅延定義
         nullable=True,
-        use_alter=True,  # 循環参照のため遅延定義
     )
     last_annotation_token: Mapped[str | None] = mapped_column(
-        ForeignKey("sample_annotations.token", ondelete="SET NULL"),
+        ForeignKey("sample_annotations.token", ondelete="SET NULL", use_alter=True),  # 循環参照のため遅延定義
         nullable=True,
-        use_alter=True,  # 循環参照のため遅延定義
     )
     # Relationships
     category:    Mapped["Category"]               = relationship(back_populates="instances")

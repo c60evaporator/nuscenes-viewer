@@ -28,3 +28,11 @@ export interface GeoJSONFeature<G = GeoJSONPoint, P = Record<string, unknown>> {
   geometry: G
   properties: P
 }
+
+// 全 GET リストエンドポイント共通のページネーションレスポンス
+export interface PaginatedResponse<T> {
+  items:  T[]
+  total:  number
+  limit:  number
+  offset: number
+}

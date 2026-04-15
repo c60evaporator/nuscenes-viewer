@@ -1,12 +1,27 @@
-from app.models.annotation import SampleAnnotation
+from app.models.annotation import Instance, SampleAnnotation
 from app.schemas.annotation import (
     AnnotationResponse,
     AttributeResponse,
+    InstanceResponse,
     VisibilityResponse,
 )
 
 
 class AnnotationConverter:
+    @staticmethod
+    def to_instance_response(inst: Instance) -> InstanceResponse:
+        """Instance ORM モデル → InstanceResponse スキーマに変換する。
+        inst.category リレーションシップが selectinload 済みであることを前提とする。
+        """
+        return InstanceResponse(
+            token=inst.token,
+            category_token=inst.category_token,
+            category_name=inst.category.name,
+            nbr_annotations=inst.nbr_annotations,
+            first_annotation_token=inst.first_annotation_token,
+            last_annotation_token=inst.last_annotation_token,
+        )
+
     @staticmethod
     def to_response(ann: SampleAnnotation) -> AnnotationResponse:
         return AnnotationResponse(

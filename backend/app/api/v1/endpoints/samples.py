@@ -3,14 +3,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.annotation import AnnotationConverter
+from app.converters.scene import SceneConverter
 from app.dependencies import get_db
 from app.models.scene import Sample
 from app.repositories.annotation import AnnotationRepository
+from app.repositories.scene import SceneRepository
 from app.repositories.sensor import SensorRepository
 from app.schemas.annotation import AnnotationResponse, SampleInstanceResponse
+from app.schemas.scene import SampleResponse
 from app.schemas.sensor import SensorDataBriefResponse
 
 router = APIRouter(prefix="/samples", tags=["samples"])
+
+
+@router.get("/{token}", response_model=SampleResponse)
+async def get_sample(token: str, db: AsyncSession = Depends(get_db)):
+    sample = await SceneRepository(db).get_sample_by_token(token)
+    if sample is None:
+        raise HTTPException(status_code=404, detail="Sample not found")
+    return SceneConverter.to_sample_response(sample)
 
 
 @router.get("/{token}/annotations", response_model=list[AnnotationResponse])

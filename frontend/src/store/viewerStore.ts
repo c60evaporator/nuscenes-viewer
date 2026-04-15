@@ -1,19 +1,30 @@
 import { create } from 'zustand'
 
 interface ViewerState {
-  currentSceneToken:  string | null
-  currentSampleToken: string | null
-  frame:              number
-  setScene:  (token: string) => void
-  setSample: (token: string) => void
-  setFrame:  (frame: number) => void
+  currentMapLocation:     string | null
+  currentSceneToken:      string | null
+  currentSampleToken:     string | null
+  currentInstanceToken:   string | null
+  currentAnnotationToken: string | null
+
+  setMapLocation: (location: string | null) => void
+  setScene:       (token: string | null) => void
+  setSample:      (token: string | null) => void
+  setInstance:    (token: string | null) => void
+  setAnnotation:  (token: string | null) => void
 }
 
 export const useViewerStore = create<ViewerState>((set) => ({
-  currentSceneToken:  null,
-  currentSampleToken: null,
-  frame:              0,
-  setScene:  (token) => set({ currentSceneToken: token, frame: 0 }),
-  setSample: (token) => set({ currentSampleToken: token }),
-  setFrame:  (frame) => set({ frame }),
+  currentMapLocation:     null,
+  currentSceneToken:      null,
+  currentSampleToken:     null,
+  currentInstanceToken:   null,
+  currentAnnotationToken: null,
+
+  setMapLocation: (location) => set({ currentMapLocation: location }),
+  // シーン変更時はサンプル選択をリセット
+  setScene:       (token)    => set({ currentSceneToken: token, currentSampleToken: null }),
+  setSample:      (token)    => set({ currentSampleToken: token }),
+  setInstance:    (token)    => set({ currentInstanceToken: token }),
+  setAnnotation:  (token)    => set({ currentAnnotationToken: token }),
 }))

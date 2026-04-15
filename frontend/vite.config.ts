@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),  # shadcn/uiが@/を要求する
+      '@': path.resolve(__dirname, './src'),
     },
   },
   server: {
@@ -14,9 +14,8 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://api:8000',  # Dockerサービス名で解決
+        target: 'http://api:8000',
         changeOrigin: true,
-        # URL書き換えなし（/api/v1/* → api:8000/api/v1/*）
       },
     },
   },

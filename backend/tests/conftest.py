@@ -279,6 +279,25 @@ async def real_instance_and_sample(db_session: AsyncSession) -> tuple[str, str]:
 
 
 @pytest.fixture
+async def real_instance_data(db_session: AsyncSession) -> tuple[str, str]:
+    """DB から 1 件の SampleAnnotation を選び (instance_token, scene_token) を返す。
+
+    GET /instances と GET /instances/{token} のフィルタテストで使用。
+    """
+    result = await db_session.execute(select(SampleAnnotation).limit(1))
+    ann = result.scalar_one_or_none()
+    if ann is None:
+        pytest.skip("No SampleAnnotation in DB")
+    sample_result = await db_session.execute(
+        select(Sample).where(Sample.token == ann.sample_token)
+    )
+    sample = sample_result.scalar_one_or_none()
+    if sample is None:
+        pytest.skip("No Sample found for the annotation")
+    return ann.instance_token, sample.scene_token
+
+
+@pytest.fixture
 async def sample_annotation(db_session: AsyncSession) -> SampleAnnotation:
     """テスト用の最小限のアノテーションレコード。
 

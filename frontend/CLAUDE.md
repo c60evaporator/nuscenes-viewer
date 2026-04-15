@@ -7,6 +7,20 @@ nuscenes-viewerのフロントエンド
 - リソース表示用画面はScene, Sample, Instance, Annotation, Map, Sample&Mapの6種類（各画面の詳細は後ほど記載）
 - Map上に表示されたポリゴン、ライン、ポイント、およびカメラやLiDAR画面上に表示されたアノテーション（バウンディングボックス）はクリックで選択できるようにする
 
+## Tech Stack
+- 描画:      Deck.gl 9.x
+- UI:        React 19 + TypeScript 5.x + Vite 6.x
+- スタイル:  Tailwind CSS 4.x + shadcn/ui
+- 状態管理:  Zustand 5.x
+- API通信:   TanStack Query（@tanstack/react-query）5.x
+- フォーム:  React Hook Form 7.x + Zod 3.x（アノテーション編集部分）
+- テスト:    Vitest 3.x
+
+## API
+- baseURL: /api/v1
+- クライアント: src/api/client.ts の apiFetch を必ず経由する
+- コンポーネントから直接fetchを呼ばない
+
 ## レイアウト共通仕様
 - 全体: 3ペイン構成（左280px固定 / 中央flex / 右280px固定）
 - ヘッダー: 上部固定バー（黒背景）
@@ -105,3 +119,82 @@ nuscenes-viewerのフロントエンド
 - メイン画面下側は左右2分割し、左側半分には先ほどのチェックボックスで選択したアノテーションを表示し、その上に左側のペインでクリック選択したSceneの全てのSampleのEgo poseの点を重ねて表示する
 - メイン画面下側の右側半分は、将来的なアノテーションツールのための予約スペース（現時点では何も表示なしでOK）
 - 右側のペインに、中央のメイン画面上側でクリックしたアノテーションの情報を表示（DBにおける各カラム情報＋ポリゴンなら面積。ラインなら長さ）
+
+## State Management（Zustand）
+### navigationStore
+画面遷移時のフィルタ引き継ぎを管理する。
+
+```typescript
+interface NavigationState {
+  // 画面遷移元からの固定フィルタ
+  lockedSceneToken:    string | null  // Scene→Sample/Instance/Sample&Map遷移時
+  lockedSampleToken:   string | null  // Sample→Annotation遷移時
+  lockedInstanceToken: string | null  // Instance→Annotation遷移時
+  lockedCategoryName:  string | null  // Sample→Instance遷移時
+
+  // ロック元画面（ロック解除の判定に使用）
+  lockSource: 'scene' | 'sample' | 'instance' | null
+}
+```
+
+### viewerStore（既存）
+- currentMapLocation: string | null
+- currentSceneToken:  string | null
+- currentSampleToken: string | null
+- currentInstanceToken: string | null
+- currentAnnotationToken: string | null
+
+## 描画方針
+### マップ画像上の点・線描画（Scene/Instance/Annotation画面）
+- HTMLCanvas（2D Context）を使用する
+- マップ画像をベースレイヤーとしてCanvasに描画し、その上にEgo poseの点を描画する
+- ズーム・パン機能が必要な場合はtransformで対応する
+
+### LiDAR点群 + BBox描画（Sample/Instance/Annotation画面）
+- バックエンドの GET /api/v1/sensor-data/{token}/pointcloud で
+  取得したJSON座標データをCanvasに描画する
+- BBoxはEgo座標系に変換してCanvasに2D投影して描画する
+- Three.jsやDeck.glは使用しない（Canvasで完結させる）
+
+### カメラ画像 + BBox描画（Sample/Instance/Annotation/Sample&Map画面）
+- <img>タグの上にCanvas（position:absolute）を重ねてBBoxを描画する
+- カメラ内部パラメータ（camera_intrinsic）を使って3D→2D投影する
+- 投影計算は src/lib/coordinateUtils.ts に集約する
+
+### Map Expansion描画（Map/Sample&Map画面）
+- Deck.glのGeoJsonLayerを使用する
+- センサー画像上へのMap Expansionオーバーレイも
+  Deck.glのBitmapLayer（ベース画像）+ GeoJsonLayerで実現する
+
+## Directory Structure
+src/
+├── types/          # 型定義（バックエンドschemas/と対応）
+├── api/            # TanStack Query hooks + apiFetch
+├── store/          # Zustand stores
+│   ├── viewerStore.ts
+│   └── navigationStore.ts
+├── layers/         # Deck.glレイヤー定義（Map/Sample&Map画面用）
+├── lib/
+│   ├── coordinateUtils.ts  # 3D→2D投影・座標変換
+│   ├── canvasUtils.ts      # Canvas描画ユーティリティ
+│   └── utils.ts            # shadcn/ui用cn関数
+└── components/
+    ├── ui/         # shadcn/uiコンポーネント（自動生成）
+    ├── layout/     # Header, MainLayout, LeftPane, RightPane
+    ├── common/     # MapCanvas, BBoxOverlay, EgoPoseMap等の共通描画コンポーネント
+    ├── scene/
+    ├── sample/
+    ├── instance/
+    ├── annotation/
+    ├── map/
+    └── sample-map/
+
+## 実装上の禁止事項
+- コンポーネント内に描画ロジック（座標変換・投影計算）を直接書かない
+  → coordinateUtils.ts / canvasUtils.ts に集約する
+- コンポーネント内から直接fetchを呼ばない
+  → api/ のTanStack Queryフックを経由する
+- LiDAR/カメラ描画にThree.jsを使わない
+  → Canvasで完結させる（Map/Sample&MapのみDeck.gl許可）
+- フィルタのロック状態をコンポーネントのlocalStateで管理しない
+  → navigationStoreで管理する

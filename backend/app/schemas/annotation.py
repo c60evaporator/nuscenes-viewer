@@ -54,6 +54,16 @@ class InstanceAnnotationResponse(AnnotationResponse):
     timestamp: int
 
 
+class InstanceResponse(BaseModel):
+    """GET /instances および GET /instances/{token} のレスポンス"""
+    token:                  str
+    category_token:         str
+    category_name:          str          # Instance.category.name リレーションシップから
+    nbr_annotations:        int
+    first_annotation_token: str | None
+    last_annotation_token:  str | None
+
+
 class AnnotationUpdate(BaseModel):
     """PATCH 用: 送ったフィールドだけ更新する"""
     translation: list[float] | None = None

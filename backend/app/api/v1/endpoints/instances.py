@@ -9,10 +9,43 @@ from app.models.annotation import Instance
 from app.models.sensor import SampleData
 from app.repositories.annotation import AnnotationRepository
 from app.repositories.sensor import SensorRepository
-from app.schemas.annotation import InstanceAnnotationResponse
+from app.schemas.annotation import InstanceAnnotationResponse, InstanceResponse
+from app.schemas.common import PaginatedResponse
 from app.schemas.sensor import BestCameraResponse
 
 router = APIRouter(prefix="/instances", tags=["instances"])
+
+
+# ── GET /instances ────────────────────────────────────────────────────────────
+
+@router.get("/", response_model=PaginatedResponse[InstanceResponse])
+async def list_instances(
+    scene_token:   str | None = Query(None, description="SceneでInstanceを絞り込む"),
+    category_name: str | None = Query(None, description="Category名で絞り込む（部分一致）"),
+    limit:         int        = Query(50, ge=1, le=500),
+    offset:        int        = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    repo = AnnotationRepository(db)
+    total, instances = await repo.get_all_instances(
+        limit, offset, scene_token, category_name
+    )
+    return PaginatedResponse(
+        total=total,
+        limit=limit,
+        offset=offset,
+        items=[AnnotationConverter.to_instance_response(i) for i in instances],
+    )
+
+
+# ── GET /instances/{token} ────────────────────────────────────────────────────
+
+@router.get("/{token}", response_model=InstanceResponse)
+async def get_instance(token: str, db: AsyncSession = Depends(get_db)):
+    inst = await AnnotationRepository(db).get_instance_by_token(token)
+    if inst is None:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    return AnnotationConverter.to_instance_response(inst)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

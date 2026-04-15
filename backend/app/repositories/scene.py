@@ -32,6 +32,12 @@ class SceneRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_sample_by_token(self, token: str) -> Sample | None:
+        result = await self.db.execute(
+            select(Sample).where(Sample.token == token)
+        )
+        return result.scalar_one_or_none()
+
     async def get_samples_by_scene(self, scene_token: str) -> list[Sample]:
         result = await self.db.execute(
             select(Sample)

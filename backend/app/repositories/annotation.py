@@ -78,6 +78,56 @@ class AnnotationRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_all_instances(
+        self,
+        limit: int,
+        offset: int,
+        scene_token: str | None = None,
+        category_name: str | None = None,
+    ) -> tuple[int, list[Instance]]:
+        """Instance 一覧を category_name 昇順・token 昇順で返す。
+
+        scene_token フィルタ:
+          SampleAnnotation → Sample → Scene の JOIN で絞り込む。
+          DISTINCT との ORDER BY 競合を避けるため IN subquery を使用。
+        category_name フィルタ: ILIKE 部分一致。
+        """
+        q = (
+            select(Instance)
+            .join(Category, Category.token == Instance.category_token)
+            .options(selectinload(Instance.category))
+            .order_by(Category.name, Instance.token)
+        )
+
+        if scene_token is not None:
+            # そのシーンに属するアノテーションが存在する instance_token の集合
+            scene_inst_subq = (
+                select(SampleAnnotation.instance_token)
+                .join(Sample, Sample.token == SampleAnnotation.sample_token)
+                .where(Sample.scene_token == scene_token)
+                .distinct()
+            )
+            q = q.where(Instance.token.in_(scene_inst_subq))
+
+        if category_name is not None:
+            q = q.where(Category.name.ilike(f"%{category_name}%"))
+
+        total = (
+            await self.db.execute(select(func.count()).select_from(q.subquery()))
+        ).scalar_one()
+        result = await self.db.execute(q.offset(offset).limit(limit))
+        return total, list(result.scalars().all())
+
+    async def get_instance_by_token(self, token: str) -> Instance | None:
+        """1件の Instance を category リレーションシップ付きで返す。"""
+        result = await self.db.execute(
+            select(Instance)
+            .join(Category, Category.token == Instance.category_token)
+            .options(selectinload(Instance.category))
+            .where(Instance.token == token)
+        )
+        return result.scalar_one_or_none()
+
     async def get_all_categories(self) -> list[Category]:
         result = await self.db.execute(select(Category).order_by(Category.name))
         return list(result.scalars().all())

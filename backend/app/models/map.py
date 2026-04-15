@@ -327,6 +327,8 @@ class LaneDivider(Base):
     # Relationships
     line: Mapped["MapLine"] = relationship()
 
+# ── Point Entities ───────────────────────────────
+
 class TrafficLight(Base):
     """Traffic light with position, type, and associated items (e.g. traffic_light_type: 'VERTICAL', items: [{'color': 'RED', 'shape': 'CIRCLE', 'rel_pos': [x, y], 'to_road_block_tokens': [...]}, ...])"""
     __tablename__ = "traffic_lights"

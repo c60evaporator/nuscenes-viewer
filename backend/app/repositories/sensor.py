@@ -95,3 +95,34 @@ class SensorRepository:
             .order_by(SampleData.timestamp)
         )
         return list(result.scalars().all())
+
+    async def get_sample_data_by_token(self, token: str) -> SampleData | None:
+        result = await self.db.execute(
+            select(SampleData).where(SampleData.token == token)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_camera_sample_data_by_sample(
+        self, sample_token: str
+    ) -> list[SampleData]:
+        """指定 Sample の全カメラ SampleData（is_key_frame=True）を返す。
+        calibrated_sensor.sensor + ego_pose を eager load。
+        """
+        result = await self.db.execute(
+            select(SampleData)
+            .options(
+                selectinload(SampleData.calibrated_sensor).selectinload(
+                    CalibratedSensor.sensor
+                ),
+                selectinload(SampleData.ego_pose),
+            )
+            .join(CalibratedSensor, SampleData.calibrated_sensor_token == CalibratedSensor.token)
+            .join(Sensor, CalibratedSensor.sensor_token == Sensor.token)
+            .where(
+                SampleData.sample_token == sample_token,
+                Sensor.modality == "camera",
+                SampleData.is_key_frame.is_(True),
+            )
+            .order_by(SampleData.timestamp)
+        )
+        return list(result.scalars().all())

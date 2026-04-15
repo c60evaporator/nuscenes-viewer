@@ -1,6 +1,26 @@
 from pydantic import BaseModel, ConfigDict
 
 
+class SampleEgoPoseResponse(BaseModel):
+    sample_token: str
+    timestamp: int
+    translation: list[float]   # [x, y, z]
+    rotation: list[float]      # [w, x, y, z]
+
+
+class SensorDataBriefResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    token: str
+    filename: str
+    fileformat: str
+
+
+class BestCameraResponse(BaseModel):
+    channel: str
+    sample_data_token: str
+
+
 class SensorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

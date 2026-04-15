@@ -43,6 +43,17 @@ class AnnotationResponse(BaseModel):
     visibility: VisibilityResponse | None
 
 
+class SampleInstanceResponse(BaseModel):
+    instance_token: str
+    category_name: str
+    nbr_annotations: int
+
+
+class InstanceAnnotationResponse(AnnotationResponse):
+    """instances/{token}/annotations 用: AnnotationResponse + timestamp"""
+    timestamp: int
+
+
 class AnnotationUpdate(BaseModel):
     """PATCH 用: 送ったフィールドだけ更新する"""
     translation: list[float] | None = None

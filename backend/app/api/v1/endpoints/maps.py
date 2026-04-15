@@ -1,7 +1,12 @@
+import re
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.geometry import to_geojson_feature_collection
+from app.core.config import settings
 from app.dependencies import get_db
 from app.repositories.map import MapRepository
 from app.schemas.common import PaginatedResponse
@@ -48,3 +53,15 @@ async def get_map_geojson(
 
     features = await repo.get_layer_features(m.location, layer)
     return to_geojson_feature_collection(features, layer_name=layer.value)
+
+
+# ── Basemap PNG ───────────────────────────────────────────────────────────────
+
+@router.get("/maps/{location}/basemap")
+async def get_map_basemap(location: str):
+    if not re.match(r'^[a-zA-Z0-9_-]+$', location):
+        raise HTTPException(status_code=400, detail="Invalid location name")
+    path = Path(settings.NUSCENES_DATAROOT) / "maps" / f"{location}.png"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Basemap not found")
+    return FileResponse(path, media_type="image/png")

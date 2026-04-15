@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import pytest
 from geoalchemy2.shape import from_shape
 from httpx import AsyncClient, ASGITransport
 from shapely.geometry import LineString, MultiPolygon, Polygon
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import selectinload
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
@@ -11,6 +15,7 @@ from app.main import app
 from app.models.annotation import Category, Instance, SampleAnnotation
 from app.models.map import DrivableArea, Lane, MapLine, MapMeta, MapPolygon, RoadDivider, RoadSegment
 from app.models.scene import Log, Sample, Scene
+from app.models.sensor import CalibratedSensor, EgoPose, SampleData, Sensor
 
 
 # ── マップテスト用定数 ────────────────────────────────────────────────────────
@@ -37,6 +42,18 @@ _POLY = Polygon([
 _MULTIPOLY_WKB = from_shape(MultiPolygon([_POLY]), srid=4326)
 _POLY_WKB = from_shape(_POLY, srid=4326)
 _LINE_WKB = from_shape(LineString([(-71.0100, 42.3360), (-71.0050, 42.3360)]), srid=4326)
+
+
+# ── log_and_scene テスト用定数 ────────────────────────────────────────────────
+
+_LGCAT_LOG_TOKEN     = "log-lgcat-001"
+_LGCAT_SCENE_TOKEN   = "scene-lgcat-001"
+_LGCAT_SENSOR_TOKEN  = "sensor-lgcat-001"
+_LGCAT_CS_TOKEN      = "cs-lgcat-001"
+_LGCAT_SAMPLE_TOKENS = ["sample-lgcat-001", "sample-lgcat-002", "sample-lgcat-003"]
+_LGCAT_EP_TOKENS     = ["ep-lgcat-001",     "ep-lgcat-002",     "ep-lgcat-003"]
+_LGCAT_SD_TOKENS     = ["sd-lgcat-001",     "sd-lgcat-002",     "sd-lgcat-003"]
+_LGCAT_TIMESTAMPS    = [1_100_000, 2_200_000, 3_300_000]
 
 
 # ── アノテーションテスト用定数 ────────────────────────────────────────────────
@@ -85,6 +102,180 @@ async def client(db_session: AsyncSession):
             yield ac
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def log_and_scene(db_session: AsyncSession) -> Scene:
+    """テスト用の Log / Scene / Sample×3 / EgoPose×3 / SampleData×3。
+
+    ego-poses エンドポイントと instances エンドポイントのテストで使用。
+    EgoPose は _LGCAT_TIMESTAMPS 昇順で 3 件。
+    SampleData は is_key_frame=True で各 Sample に 1 件ずつリンク。
+    db_session のロールバックにより、テスト終了後に全レコードが消える。
+    """
+    log = Log(
+        token=_LGCAT_LOG_TOKEN,
+        logfile="lgcat.log",
+        vehicle="test-vehicle-lgcat",
+        date_captured="2024-01-01",
+        location="boston-seaport",
+    )
+    db_session.add(log)
+    await db_session.flush()
+
+    scene = Scene(
+        token=_LGCAT_SCENE_TOKEN,
+        log_token=_LGCAT_LOG_TOKEN,
+        name="scene-lgcat-alpha",
+        description=None,
+        nbr_samples=3,
+        first_sample_token=_LGCAT_SAMPLE_TOKENS[0],
+        last_sample_token=_LGCAT_SAMPLE_TOKENS[2],
+    )
+    db_session.add(scene)
+    await db_session.flush()
+
+    sensor = Sensor(
+        token=_LGCAT_SENSOR_TOKEN,
+        channel="LIDAR_TOP",
+        modality="lidar",
+    )
+    db_session.add(sensor)
+    await db_session.flush()
+
+    cs = CalibratedSensor(
+        token=_LGCAT_CS_TOKEN,
+        sensor_token=_LGCAT_SENSOR_TOKEN,
+        translation=[0.0, 0.0, 1.8],
+        rotation=[1.0, 0.0, 0.0, 0.0],
+        camera_intrinsic=None,
+    )
+    db_session.add(cs)
+    await db_session.flush()
+
+    for i in range(3):
+        ep = EgoPose(
+            token=_LGCAT_EP_TOKENS[i],
+            timestamp=_LGCAT_TIMESTAMPS[i],
+            translation=[float(i), 0.0, 0.0],
+            rotation=[1.0, 0.0, 0.0, 0.0],
+        )
+        db_session.add(ep)
+    await db_session.flush()
+
+    for i in range(3):
+        sample = Sample(
+            token=_LGCAT_SAMPLE_TOKENS[i],
+            scene_token=_LGCAT_SCENE_TOKEN,
+            timestamp=_LGCAT_TIMESTAMPS[i],
+            prev=None,
+            next=None,
+        )
+        db_session.add(sample)
+    await db_session.flush()
+
+    for i in range(3):
+        sd = SampleData(
+            token=_LGCAT_SD_TOKENS[i],
+            sample_token=_LGCAT_SAMPLE_TOKENS[i],
+            calibrated_sensor_token=_LGCAT_CS_TOKEN,
+            ego_pose_token=_LGCAT_EP_TOKENS[i],
+            filename="samples/LIDAR_TOP/test.pcd.bin",
+            fileformat="pcd",
+            timestamp=_LGCAT_TIMESTAMPS[i],
+            is_key_frame=True,
+            width=None,
+            height=None,
+            prev=None,
+            next=None,
+        )
+        db_session.add(sd)
+    await db_session.flush()
+
+    return scene
+
+
+@pytest.fixture
+async def real_lidar_sample_data_token(db_session: AsyncSession) -> str:
+    """実際の .pcd.bin ファイルが存在する LIDAR_TOP SampleData のトークンを返す。
+
+    ファイルが存在しない環境では pytest.skip() でスキップする。
+    """
+    result = await db_session.execute(
+        select(SampleData)
+        .join(CalibratedSensor, SampleData.calibrated_sensor_token == CalibratedSensor.token)
+        .join(Sensor, CalibratedSensor.sensor_token == Sensor.token)
+        .where(
+            Sensor.modality == "lidar",
+            SampleData.is_key_frame.is_(True),
+        )
+        .limit(1)
+    )
+    sd = result.scalar_one_or_none()
+    if sd is None:
+        pytest.skip("No LiDAR SampleData in DB")
+    path = Path(settings.NUSCENES_DATAROOT) / sd.filename
+    if not path.exists():
+        pytest.skip(f"LiDAR file not found: {path}")
+    return sd.token
+
+
+@pytest.fixture
+async def real_camera_sample_data_token(db_session: AsyncSession) -> str:
+    """実際の jpg ファイルが存在する CAM_FRONT SampleData のトークンを返す。
+
+    ファイルが存在しない環境では pytest.skip() でスキップする。
+    """
+    result = await db_session.execute(
+        select(SampleData)
+        .join(CalibratedSensor, SampleData.calibrated_sensor_token == CalibratedSensor.token)
+        .join(Sensor, CalibratedSensor.sensor_token == Sensor.token)
+        .where(
+            Sensor.modality == "camera",
+            Sensor.channel == "CAM_FRONT",
+            SampleData.is_key_frame.is_(True),
+        )
+        .limit(1)
+    )
+    sd = result.scalar_one_or_none()
+    if sd is None:
+        pytest.skip("No CAM_FRONT SampleData in DB")
+    path = Path(settings.NUSCENES_DATAROOT) / sd.filename
+    if not path.exists():
+        pytest.skip(f"Camera file not found: {path}")
+    return sd.token
+
+
+@pytest.fixture
+async def real_keyframe_sample_token(db_session: AsyncSession) -> str:
+    """カメラ is_key_frame SampleData を持つ Sample のトークンを返す。
+
+    sensor-data エンドポイントのテストで使用。
+    """
+    result = await db_session.execute(
+        select(SampleData.sample_token)
+        .join(CalibratedSensor, SampleData.calibrated_sensor_token == CalibratedSensor.token)
+        .join(Sensor, CalibratedSensor.sensor_token == Sensor.token)
+        .where(
+            Sensor.modality == "camera",
+            SampleData.is_key_frame.is_(True),
+        )
+        .limit(1)
+    )
+    token = result.scalar_one_or_none()
+    if token is None:
+        pytest.skip("No key frame sample with camera SampleData in DB")
+    return token
+
+
+@pytest.fixture
+async def real_instance_and_sample(db_session: AsyncSession) -> tuple[str, str]:
+    """DB から 1 件の SampleAnnotation を選び (instance_token, sample_token) を返す。"""
+    result = await db_session.execute(select(SampleAnnotation).limit(1))
+    ann = result.scalar_one_or_none()
+    if ann is None:
+        pytest.skip("No SampleAnnotation in DB")
+    return ann.instance_token, ann.sample_token
 
 
 @pytest.fixture

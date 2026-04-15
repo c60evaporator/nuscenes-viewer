@@ -167,6 +167,12 @@ def wkb_to_geojson(wkb) -> dict:
 GET /api/v1/scenes?limit=50&offset=0
 ```
 
+### LiDAR点群の形式
+センサーデータ（LiDAR点群）はPotree形式に変換せず`.pcd.bin`バイナリ直接配信でよい
+- フォーマット: float32 × 5列（x, y, z, intensity, ring_index）
+- DBの fileformat カラム値: `pcd`
+- APIレスポンス: JSON形式 `{"points": [[x,y,z,intensity], ...], "num_points": N}`
+
 ## Docker構成
 ### コンテナ一覧
 プロジェクトルートの `docker-compose.yml` を参照。
@@ -188,7 +194,6 @@ make test     # pytest + vitest
 - テストDBは別コンテナ（postgresのみ、PostGIS不要）ではなく同一イメージを使う
 - NuScenesのデータパスは環境変数 NUSCENES_DATAROOT で渡す
 - map expansionのレイヤー（drivable_area, lane等）はGeoJSON形式でフロントに渡す
-- センサーデータ（LiDAR点群）はPotree形式に変換せずnpz直接配信でよい
 
 ## 行動原則
 - 3ステップ以上のタスクは必ずPlanモードで開始する

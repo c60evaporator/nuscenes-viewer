@@ -6,6 +6,7 @@ from app.dependencies import get_db
 from app.repositories.scene import SceneRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.scene import SceneResponse, SampleResponse
+from app.schemas.sensor import SampleEgoPoseResponse
 
 router = APIRouter(prefix="/scenes", tags=["scenes"])
 
@@ -38,3 +39,23 @@ async def get_scene(token: str, db: AsyncSession = Depends(get_db)):
 async def get_scene_samples(token: str, db: AsyncSession = Depends(get_db)):
     samples = await SceneRepository(db).get_samples_by_scene(token)
     return [SceneConverter.to_sample_response(s) for s in samples]
+
+
+@router.get("/{token}/ego-poses", response_model=list[SampleEgoPoseResponse])
+async def get_scene_ego_poses(token: str, db: AsyncSession = Depends(get_db)):
+    repo = SceneRepository(db)
+    scene = await repo.get_by_token(token)
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    sample_data_list = await repo.get_ego_poses_by_scene(token)
+    result = [
+        SampleEgoPoseResponse(
+            sample_token=sd.sample_token,
+            timestamp=sd.ego_pose.timestamp,
+            translation=sd.ego_pose.translation,
+            rotation=sd.ego_pose.rotation,
+        )
+        for sd in sample_data_list
+    ]
+    result.sort(key=lambda r: r.timestamp)
+    return result

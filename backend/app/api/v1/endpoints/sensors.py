@@ -1,7 +1,12 @@
+from pathlib import Path
+
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.sensor import SensorConverter
+from app.core.config import settings
 from app.dependencies import get_db
 from app.repositories.sensor import SensorRepository
 from app.schemas.common import PaginatedResponse
@@ -10,6 +15,8 @@ from app.schemas.sensor import (
     EgoPoseResponse,
     SensorResponse,
 )
+
+_IMAGE_FORMATS = {"jpg", "jpeg", "png"}
 
 router = APIRouter(tags=["sensors"])
 
@@ -84,3 +91,41 @@ async def get_ego_pose(token: str, db: AsyncSession = Depends(get_db)):
     if not pose:
         raise HTTPException(status_code=404, detail="EgoPose not found")
     return SensorConverter.to_ego_pose_response(pose)
+
+
+# ── SampleData image ──────────────────────────────────────────────────────────
+
+@router.get("/sensor-data/{token}/image")
+async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
+    sd = await SensorRepository(db).get_sample_data_by_token(token)
+    if not sd:
+        raise HTTPException(status_code=404, detail="SampleData not found")
+    if sd.fileformat.lower() not in _IMAGE_FORMATS:
+        raise HTTPException(status_code=400, detail=f"Not an image: {sd.fileformat}")
+    path = Path(settings.NUSCENES_DATAROOT) / sd.filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Image file not found")
+    media_type = "image/png" if sd.fileformat.lower() == "png" else "image/jpeg"
+    return FileResponse(path, media_type=media_type)
+
+
+# ── SampleData pointcloud ─────────────────────────────────────────────────────
+
+@router.get("/sensor-data/{token}/pointcloud")
+async def get_sensor_data_pointcloud(token: str, db: AsyncSession = Depends(get_db)):
+    sd = await SensorRepository(db).get_sample_data_by_token(token)
+    if not sd:
+        raise HTTPException(status_code=404, detail="SampleData not found")
+    if not sd.filename.endswith(".pcd.bin"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not a LiDAR pointcloud: fileformat={sd.fileformat}, filename={sd.filename}",
+        )
+    path = Path(settings.NUSCENES_DATAROOT) / sd.filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Pointcloud file not found")
+
+    pts = np.fromfile(str(path), dtype=np.float32).reshape(-1, 5)
+    # 列: x, y, z, intensity, ring_index → 先頭 4 列のみ返す
+    points = pts[:, :4].tolist()
+    return {"points": points, "num_points": len(points)}

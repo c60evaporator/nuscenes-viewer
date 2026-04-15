@@ -2,7 +2,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.annotation import Attribute, Instance, SampleAnnotation
+from app.models.annotation import Attribute, Category, Instance, SampleAnnotation
+from app.models.scene import Sample
 from app.schemas.annotation import AnnotationUpdate
 
 
@@ -46,6 +47,39 @@ class AnnotationRepository:
         result = await self.db.execute(
             _base_query().where(SampleAnnotation.sample_token == sample_token)
         )
+        return list(result.scalars().all())
+
+    async def get_by_instance(self, instance_token: str) -> list[SampleAnnotation]:
+        """Instance の全 Annotation を Sample.timestamp 昇順で返す。"""
+        result = await self.db.execute(
+            select(SampleAnnotation)
+            .options(
+                selectinload(SampleAnnotation.instance).selectinload(Instance.category),
+                selectinload(SampleAnnotation.visibility),
+                selectinload(SampleAnnotation.attributes),
+                selectinload(SampleAnnotation.sample),
+            )
+            .join(Sample, SampleAnnotation.sample_token == Sample.token)
+            .where(SampleAnnotation.instance_token == instance_token)
+            .order_by(Sample.timestamp)
+        )
+        return list(result.scalars().all())
+
+    async def get_by_instance_and_sample(
+        self, instance_token: str, sample_token: str
+    ) -> SampleAnnotation | None:
+        """特定 Sample での Instance の Annotation を 1 件取得。"""
+        result = await self.db.execute(
+            _base_query()
+            .where(
+                SampleAnnotation.instance_token == instance_token,
+                SampleAnnotation.sample_token == sample_token,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_all_categories(self) -> list[Category]:
+        result = await self.db.execute(select(Category).order_by(Category.name))
         return list(result.scalars().all())
 
     async def update(

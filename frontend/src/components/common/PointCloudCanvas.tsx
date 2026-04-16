@@ -10,6 +10,7 @@ interface PointCloudCanvasProps {
   annotations?:       Annotation[]
   egoPose?:           EgoPosePoint
   lidarCalibSensor?:  { translation: number[]; rotation: number[] }
+  highlightAnnToken?: string
   onBBoxClick?:       (token: string) => void
   className?:         string
 }
@@ -28,6 +29,7 @@ export default function PointCloudCanvas({
   annotations,
   egoPose,
   lidarCalibSensor,
+  highlightAnnToken,
   onBBoxClick,
   className,
 }: PointCloudCanvasProps) {
@@ -107,11 +109,12 @@ export default function PointCloudCanvas({
           maxY:  Math.max(...allY),
         })
 
-        drawBBox2D(ctx, corners2D, '#00FF88')
+        const color = ann.token === highlightAnnToken ? '#FFD700' : '#00FF88'
+        drawBBox2D(ctx, corners2D, color)
       }
     }
     bboxRectsRef.current = newBBoxRects
-  }, [data, annotations, egoPose, lidarCalibSensor])
+  }, [data, annotations, egoPose, lidarCalibSensor, highlightAnnToken])
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onBBoxClick) return

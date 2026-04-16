@@ -1,0 +1,13 @@
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from './client'
+import type { CalibratedSensor } from '../types/sensor'
+import type { PaginatedResponse } from '../types/common'
+
+export function useCalibratedSensors(params?: { limit?: number }) {
+  const limit = params?.limit ?? 100
+  return useQuery({
+    queryKey:  ['calibrated-sensors', limit],
+    queryFn:   () => apiFetch<PaginatedResponse<CalibratedSensor>>(`/calibrated-sensors?limit=${limit}`),
+    staleTime: 10 * 60 * 1000,  // センサー設定は変わらないので長めにキャッシュ
+  })
+}

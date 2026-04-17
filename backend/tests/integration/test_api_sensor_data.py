@@ -41,8 +41,17 @@ _ALL_LOCATIONS = [
 ]
 
 
+_BASEMAP_FILENAMES: dict[str, str] = {
+    "boston-seaport":           "36092f0b03a857c6a3403e25b4b7aab3.png",
+    "singapore-hollandvillage": "37819e65e09e5547b8a3ceaefba56bb2.png",
+    "singapore-onenorth":       "53992ee3023e5494b90c316c183be829.png",
+    "singapore-queenstown":     "93406b464a165eaba6d9de76ca09f5da.png",
+}
+
+
 def _basemap_path(location: str) -> Path:
-    return Path(settings.NUSCENES_DATAROOT) / "maps" / f"{location}.png"
+    filename = _BASEMAP_FILENAMES.get(location, f"{location}.png")
+    return Path(settings.NUSCENES_DATAROOT) / "maps" / filename
 
 
 def _skip_if_no_basemap(location: str) -> None:

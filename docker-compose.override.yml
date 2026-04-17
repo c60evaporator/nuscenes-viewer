@@ -1,0 +1,14 @@
+# 開発専用設定（docker compose up で自動読み込み）
+# make prod では -f を明示指定するためこのファイルは読み込まれない
+services:
+
+  frontend:
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  api:
+    volumes:
+      - ./backend:/app

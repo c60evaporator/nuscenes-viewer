@@ -4,15 +4,9 @@ services:
     image: nusc_viewer_frontend # Docker image name to be built
     build:
       context: ./frontend
-      target: ${APP_ENV:-development}   # dev/prod切り替え
-    ports:
-      - "3000:3000"                     # dev: Vite dev server
-      # - "3000:80"                     # prod: Nginx
+      target: ${APP_ENV:-development}
     networks:
-      - frontend-network 
-    volumes:
-      - ./frontend:/app                 # 開発時ホットリロード
-      - /app/node_modules               # node_modules は除外
+      - frontend-network
     depends_on:
       api:
         condition: service_started
@@ -28,7 +22,6 @@ services:
       - frontend-network
       - backend-network
     volumes:
-      - ./backend:/app
       - ${NUSCENES_DATAROOT}:/data/nuscenes:ro  # Data mount for NuScenes dataset (read-only)
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_APP_USER}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB} # Application user for FastAPI

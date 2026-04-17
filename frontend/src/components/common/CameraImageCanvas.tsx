@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { imageUrl } from '@/api/sensorData'
 import { project3DTo2D, bboxCornersToGlobal } from '@/lib/coordinateUtils'
 import { drawBBox2D } from '@/lib/canvasUtils'
@@ -33,10 +33,11 @@ export default function CameraImageCanvas({
   onBBoxClick,
   className,
 }: CameraImageCanvasProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const imgRef       = useRef<HTMLImageElement>(null)
-  const canvasRef    = useRef<HTMLCanvasElement>(null)
-  const bboxRectsRef = useRef<BBoxRect[]>([])
+  const containerRef  = useRef<HTMLDivElement>(null)
+  const imgRef        = useRef<HTMLImageElement>(null)
+  const canvasRef     = useRef<HTMLCanvasElement>(null)
+  const bboxRectsRef  = useRef<BBoxRect[]>([])
+  const drawBBoxesRef = useRef<(() => void) | null>(null)
   const [imgError, setImgError] = useState(false)
 
   const drawBBoxes = () => {
@@ -112,6 +113,14 @@ export default function CameraImageCanvas({
 
     bboxRectsRef.current = newBBoxRects
   }
+
+  drawBBoxesRef.current = drawBBoxes
+
+  useEffect(() => {
+    if (imgRef.current?.complete) {
+      drawBBoxesRef.current?.()
+    }
+  }, [annotations, egoPose, highlightToken, calibratedSensor])
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!onBBoxClick) return

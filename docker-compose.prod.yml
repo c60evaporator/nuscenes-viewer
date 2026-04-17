@@ -1,0 +1,17 @@
+# 本番環境オーバーレイ
+# 使用: docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+services:
+
+  frontend:
+    build:
+      target: production
+    ports:
+      - "3000:80"
+
+  api:
+    build:
+      target: production
+
+  pgadmin:
+    profiles:
+      - dev   # 本番では起動しない（make prod では --profile dev を付けない限り除外）

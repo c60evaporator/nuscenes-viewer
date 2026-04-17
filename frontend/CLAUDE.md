@@ -137,12 +137,23 @@ interface NavigationState {
 }
 ```
 
-### viewerStore（既存）
-- currentMapLocation: string | null
-- currentSceneToken:  string | null
-- currentSampleToken: string | null
-- currentInstanceToken: string | null
+### viewerStore
+- currentMapLocation:     string | null
+- currentSceneToken:      string | null
+- currentSampleToken:     string | null
+- currentInstanceToken:   string | null
 - currentAnnotationToken: string | null
+
+### mapLayerStore
+Map画面・Sample&Map画面のチェックボックス状態を管理する。
+- visibleLayers: Set\<string\> — デフォルトは `road_segment, lane, road_divider, lane_divider, ped_crossing`
+- toggle(layer): void
+- setVisible(layer, visible): void
+
+### layerStore
+Sample画面の点群・BBox等の可視性を管理する。
+- layers: Record\<string, boolean\> — `pointcloud, bbox3d, ego_trajectory, drivable_area, lane` 等
+- toggle(key): void
 
 ## 描画方針
 ### マップ画像上の点・線描画（Scene/Instance/Annotation画面）
@@ -169,25 +180,39 @@ interface NavigationState {
 ## Directory Structure
 src/
 ├── types/          # 型定義（バックエンドschemas/と対応）
+│   ├── annotation.ts, common.ts, map.ts, navigation.ts, scene.ts, sensor.ts
 ├── api/            # TanStack Query hooks + apiFetch
+│   ├── client.ts, annotations.ts, categories.ts, instances.ts, logs.ts
+│   ├── maps.ts, samples.ts, scenes.ts, sensorData.ts, sensors.ts
 ├── store/          # Zustand stores
-│   ├── viewerStore.ts
-│   └── navigationStore.ts
+│   ├── viewerStore.ts       # 選択状態（currentMapLocation, currentSceneToken, currentSampleToken, currentInstanceToken, currentAnnotationToken）
+│   ├── navigationStore.ts   # 画面遷移ロック（lockedSceneToken, lockedSampleToken 等）
+│   ├── mapLayerStore.ts     # Map/Sample&Map画面のレイヤー表示チェックボックス状態
+│   └── layerStore.ts        # Sample画面のレイヤー可視性（pointcloud, bbox3d, ego_trajectory 等）
 ├── layers/         # Deck.glレイヤー定義（Map/Sample&Map画面用）
+│   └── MapAnnotationLayers.ts
 ├── lib/
 │   ├── coordinateUtils.ts  # 3D→2D投影・座標変換
 │   ├── canvasUtils.ts      # Canvas描画ユーティリティ
 │   └── utils.ts            # shadcn/ui用cn関数
+├── pages/          # 各タブに対応するページコンポーネント
+│   ├── ScenePage.tsx, SamplePage.tsx, InstancePage.tsx
+│   ├── AnnotationPage.tsx, MapPage.tsx, SampleMapPage.tsx
 └── components/
     ├── ui/         # shadcn/uiコンポーネント（自動生成）
     ├── layout/     # Header, MainLayout, LeftPane, RightPane
-    ├── common/     # MapCanvas, BBoxOverlay, EgoPoseMap等の共通描画コンポーネント
+    ├── common/     # MapCanvas, PointCloudCanvas, CameraImageCanvas 等の共通描画コンポーネント
     ├── scene/
     ├── sample/
     ├── instance/
     ├── annotation/
     ├── map/
     └── sample-map/
+
+tests/
+└── unit/
+    ├── lib/        # coordinateUtils.test.ts, canvasUtils.test.ts
+    └── store/      # navigationStore.test.ts
 
 ## 実装上の禁止事項
 - コンポーネント内に描画ロジック（座標変換・投影計算）を直接書かない
@@ -198,3 +223,26 @@ src/
   → Canvasで完結させる（Map/Sample&MapのみDeck.gl許可）
 - フィルタのロック状態をコンポーネントのlocalStateで管理しない
   → navigationStoreで管理する
+
+## 実装済み設計メモ（仕様との差異・判断記録）
+
+### Annotations ボタンの遷移方式
+仕様では「別ウィンドウで遷移」と記載されているが、SPA では URL ベースの状態共有が未実装のため、
+**同一ウィンドウでタブ遷移**する実装とした（`onTabChange('annotation')` を呼び出す）。
+将来マルチウィンドウ対応が必要になった場合はこの箇所を変更する。
+
+### Annotation 画面のデータソース切り替え
+Instance 画面から遷移した場合（`lockSource === 'instance'`）は `useSampleAnnotations` ではなく
+`useInstanceAnnotations(lockedInstanceToken)` をデータソースとして使用する。
+サンプルが選択されていない状態でも全インスタンスアノテーションを取得できるため。
+
+### CameraImageCanvas の再描画パターン
+画像ロード後に props（annotations, egoPose, highlightToken）が変化した場合に再描画が必要。
+`drawBBoxesRef`（`useRef<(() => void) | null>`）に最新クロージャを保持し、
+`useEffect` から `imgRef.current?.complete` を確認して呼び出す。
+`useEffect` の依存配列に直接関数を含めると stale closure になるため、このパターンを採用。
+
+### Instance ドロップダウンのロック表示
+`instanceTokenLocked && selectedInstanceToken` かつ `instanceSummaries` が空の場合、
+shadcn Select に値をセットできないため styled `<div>` でトークンを截断表示する。
+（`useSampleInstances(null)` はサンプル未選択時に空配列を返すため）

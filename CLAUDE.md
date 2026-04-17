@@ -34,7 +34,7 @@ project-root/
 │       ├── db/
 │       │   ├── base.py                     # DeclarativeBase
 │       │   ├── session.py                  # AsyncSession ファクトリ
-│       │   └── postgis.py                  # PostGIS初期化・拡張確認
+│       │   └── poitgis.py                  # PostGIS初期化・拡張確認（ファイル名は typo だが変更禁止）
 │       ├── models/                         # ★手動作成・変更禁止ゾーン。SQLAlchemy ORMモデル（唯一の正）
 │       │   ├── __init__.py                 # Alembicがモデルを検出できるよう全importを記載
 │       │   ├── scene.py                    # Scene, Sample
@@ -47,11 +47,16 @@ project-root/
 │       │   ├── sensor.py                   # CalibratedSensorResponse, EgoPoseResponse
 │       │   ├── map.py                      # Map expansion (MapResponse, GeoJSONFeature)
 │       │   └── common.py                   # Point3D, Quaternion, Dimensions3D など共通型
-│       ├── converters/                     # DB → APIスキーマへの変換ロジック ※今回の肝
+│       ├── converters/                     # DB → APIスキーマへの変換ロジック
 │       │   ├── annotation.py               # SampleAnnotation → BoundingBox3D
 │       │   ├── scene.py                    # Scene → SceneResponse
 │       │   ├── sensor.py                   # EgoPose → 変換行列など
 │       │   └── geometry.py                 # GeoAlchemy2 → GeoJSON変換など
+│       ├── service/                        # ビジネスロジック層（Repository + Converter の組合せ）
+│       │   ├── annotation.py               # アノテーション取得・更新サービス
+│       │   ├── geometry.py                 # ジオメトリ計算サービス（面積・長さ等）
+│       │   ├── scene.py                    # シーン・サンプル関連サービス
+│       │   └── sensor.py                   # センサーデータ配信サービス
 │       ├── repositories/                   # DBアクセスの抽象化（クエリの責務）
 │       │   ├── scene.py                    # SceneRepository
 │       │   ├── annotation.py               # AnnotationRepository
@@ -61,15 +66,25 @@ project-root/
 │           └── v1/
 │               ├── router.py               # v1ルーターの集約
 │               └── endpoints/
-│                   ├── scenes.py           # GET /scenes, GET /scenes/{token}
-│                   ├── samples.py          # GET /samples/{token}/annotations
-│                   ├── annotations.py      # GET /annotations, PATCH /annotations/{token}
-│                   ├── sensors.py          # GET /calibrated-sensors, GET /ego-poses
-│                   └── maps.py             # GET /maps/{token}/geojson
+│                   ├── scenes.py           # GET /scenes, GET /scenes/{token}, GET /scenes/{token}/samples, GET /scenes/{token}/ego-poses
+│                   ├── samples.py          # GET /samples/{token}, GET /samples/{token}/annotations, GET /samples/{token}/sensor-data, GET /samples/{token}/instances
+│                   ├── annotations.py      # GET /annotations, GET /annotations/{token}, PATCH /annotations/{token}
+│                   ├── sensors.py          # GET /sensors, GET /calibrated-sensors, GET /ego-poses, GET /sensor-data/{token}/image, GET /sensor-data/{token}/pointcloud
+│                   ├── maps.py             # GET /maps, GET /maps/{token}, GET /maps/{token}/geojson, GET /maps/{location}/basemap
+│                   ├── categories.py       # GET /categories
+│                   ├── instances.py        # GET /instances, GET /instances/{token}, GET /instances/{token}/annotations, GET /instances/{token}/best-camera
+│                   └── logs.py             # GET /logs
 ├── frontend/
 │   ├── Dockerfile
+│   ├── vitest.config.ts
 │   └── src/
-│       └── component            # SceneViewer, MapLayer, Timeline
+│       ├── pages/               # ScenePage, SamplePage, InstancePage, AnnotationPage, MapPage, SampleMapPage
+│       ├── components/          # layout/, common/, scene/, sample/, instance/, annotation/, map/, sample-map/, ui/
+│       ├── api/                 # TanStack Query hooks (scenes, samples, annotations, instances, sensors, maps, categories, logs)
+│       ├── store/               # viewerStore, navigationStore, mapLayerStore, layerStore
+│       ├── types/               # annotation, scene, sensor, map, navigation, common
+│       ├── layers/              # MapAnnotationLayers.ts（Deck.gl レイヤー定義）
+│       └── lib/                 # coordinateUtils.ts, canvasUtils.ts, utils.ts
 └── db/
     └── initdb.d/
         ├── 01_init.sh
@@ -151,15 +166,37 @@ def wkb_to_geojson(wkb) -> dict:
 - エラーは `{"detail": "..."}`形式で返す
 
 ### エンドポイント構成
-各リソース（scenes / samples / maps / annotations）に対して以下を実装：
+実装済みリソース: **scenes / samples / annotations / sensors / maps / categories / instances / logs**
+
+主要エンドポイント一覧:
 
 | Method | Path | 用途 |
 |--------|------|------|
-| GET | `/api/v1/{resource}` | 一覧取得（ページネーション必須） |
-| GET | `/api/v1/{resource}/{token}` | 1件取得 |
-| POST | `/api/v1/{resource}` | 新規作成 |
-| PUT | `/api/v1/{resource}/{token}` | 全フィールド更新 |
-| DELETE | `/api/v1/{resource}/{token}` | 削除 |
+| GET | `/api/v1/scenes` | シーン一覧（limit/offset） |
+| GET | `/api/v1/scenes/{token}` | シーン1件 |
+| GET | `/api/v1/scenes/{token}/samples` | シーン内サンプル一覧 |
+| GET | `/api/v1/scenes/{token}/ego-poses` | シーン内全 Ego Pose |
+| GET | `/api/v1/samples/{token}` | サンプル1件 |
+| GET | `/api/v1/samples/{token}/annotations` | サンプルのアノテーション一覧 |
+| GET | `/api/v1/samples/{token}/sensor-data` | サンプルのセンサーデータマップ（channel→SensorDataBrief） |
+| GET | `/api/v1/samples/{token}/instances` | サンプル内インスタンスサマリ一覧 |
+| GET | `/api/v1/annotations` | アノテーション一覧（limit/offset） |
+| GET | `/api/v1/annotations/{token}` | アノテーション1件 |
+| PATCH | `/api/v1/annotations/{token}` | アノテーション部分更新 |
+| GET | `/api/v1/calibrated-sensors` | キャリブレーション済みセンサー一覧 |
+| GET | `/api/v1/sensor-data/{token}/image` | センサー画像バイナリ配信 |
+| GET | `/api/v1/sensor-data/{token}/pointcloud` | 点群 JSON 配信 |
+| GET | `/api/v1/maps` | マップ一覧 |
+| GET | `/api/v1/maps/{token}/geojson` | マップ GeoJSON |
+| GET | `/api/v1/maps/{location}/basemap` | ベースマップ画像バイナリ配信 |
+| GET | `/api/v1/categories` | カテゴリ一覧（全件・ページネーションなし） |
+| GET | `/api/v1/instances` | インスタンス一覧（scene_token/category_name フィルタ対応） |
+| GET | `/api/v1/instances/{token}/annotations` | インスタンスの全アノテーション（timestamp 昇順） |
+| GET | `/api/v1/instances/{token}/best-camera` | インスタンスが最もよく写るカメラチャンネルと sample_data_token |
+| GET | `/api/v1/logs` | ログ一覧（location フィルタ対応） |
+
+フルCRUD（POST/PUT/DELETE）は現時点では annotations の PATCH のみ実装。
+将来的に POST/PUT/DELETE を追加する場合は各エンドポイントファイルに追記すること。
 
 ### ページネーション
 ```python
@@ -200,6 +237,7 @@ make test     # pytest + vitest
 - コードを読まずに書かない。必ず既存コードを確認してから変更する
 
 ## よくある実装ミスの禁止事項
-- RouterにDB変換ロジックを書かない → services/geo_service.pyに集約
+- RouterにDB変換ロジックを書かない → app/service/ と app/converters/ に集約
 - Pydanticモデルをmodels/と独立して定義しない → schemas/はmodels/から派生
 - ジオメトリをWKBのままAPIレスポンスに含めない → 必ずGeoJSONに変換
+- 新リソース追加時は endpoints/ + service/ + repository/ + schemas/ をセットで追加する

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import LeftPane from '@/components/layout/LeftPane'
 import RightPane from '@/components/layout/RightPane'
+import { Button } from '@/components/ui/button'
 import InstanceFilter from '@/components/instance/InstanceFilter'
 import InstanceList from '@/components/instance/InstanceList'
 import InstanceSampleSlider from '@/components/instance/InstanceSampleSlider'
@@ -139,10 +140,20 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
         </LeftPane>
       }
       right={
-        <RightPane actions={null}>
+        <RightPane
+          actions={
+            <Button
+              className="w-full text-white text-xs"
+              style={{ backgroundColor: '#4A90D9' }}
+              disabled={!currentInstanceToken}
+              onClick={handleAnnotationsClick}
+            >
+              Annotations
+            </Button>
+          }
+        >
           <InstanceInfo
             instance={instances.find((i) => i.token === currentInstanceToken) ?? null}
-            onAnnotationsClick={handleAnnotationsClick}
           />
         </RightPane>
       }

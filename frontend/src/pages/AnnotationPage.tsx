@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import LeftPane from '@/components/layout/LeftPane'
 import RightPane from '@/components/layout/RightPane'
@@ -9,6 +9,7 @@ import AnnotationInfo from '@/components/annotation/AnnotationInfo'
 import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
 import { useSamples, useSampleAnnotations, useSampleInstances } from '@/api/samples'
+import { useInstanceAnnotations } from '@/api/instances'
 import { useCategories } from '@/api/categories'
 import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
@@ -72,14 +73,28 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     [samplesRaw],
   )
 
+  // Scene 変更時に selectedSampleToken をリセット（ロックされていない場合のみ）
+  const prevSceneRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (prevSceneRef.current !== null && prevSceneRef.current !== selectedSceneToken && !sampleTokenLocked) {
+      setSelectedSampleToken(null)
+    }
+    prevSceneRef.current = selectedSceneToken
+  }, [selectedSceneToken, sampleTokenLocked])
+
   // 有効なサンプルトークン
   const effectiveSampleToken = lockedSampleToken ?? selectedSampleToken
 
   // Instance サマリ（Sample に紐づく）
   const { data: instanceSummaries } = useSampleInstances(effectiveSampleToken)
 
-  // アノテーションソース
-  const { data: sampleAnnotationsRaw } = useSampleAnnotations(effectiveSampleToken)
+  // アノテーションソース: Instance 遷移時は全インスタンスアノテーション、それ以外はサンプル単位
+  const fromInstance = lockSource === 'instance'
+  const { data: instanceAnnotationsRaw } = useInstanceAnnotations(fromInstance ? lockedInstanceToken : null)
+  const { data: sampleAnnotationsRaw }   = useSampleAnnotations(fromInstance ? null : effectiveSampleToken)
+  const rawAnnotations = fromInstance
+    ? (instanceAnnotationsRaw ?? [])
+    : (sampleAnnotationsRaw   ?? [])
 
   // カテゴリ
   const { data: categoriesData } = useCategories()
@@ -91,17 +106,22 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     return m
   }, [categories])
 
-  // クライアント側フィルタリング
+  // クライアント側フィルタリング＆ソート（カテゴリ名 → トークン昇順）
   const filteredAnnotations = useMemo(() => {
-    let anns = sampleAnnotationsRaw ?? []
+    let anns = rawAnnotations
     if (selectedCategoryToken) {
       anns = anns.filter((a) => a.category_token === selectedCategoryToken)
     }
     if (selectedInstanceToken) {
       anns = anns.filter((a) => a.instance_token === selectedInstanceToken)
     }
-    return anns
-  }, [sampleAnnotationsRaw, selectedCategoryToken, selectedInstanceToken])
+    return [...anns].sort((a, b) => {
+      const catA = categoryMap[a.category_token] ?? a.category_token
+      const catB = categoryMap[b.category_token] ?? b.category_token
+      if (catA !== catB) return catA.localeCompare(catB)
+      return a.token.localeCompare(b.token)
+    })
+  }, [rawAnnotations, selectedCategoryToken, selectedInstanceToken, categoryMap])
 
   // 選択アノテーション
   const selectedAnnotation = useMemo(

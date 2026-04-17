@@ -133,26 +133,37 @@ export default function AnnotationFilter({
           <p className="text-gray-300 text-xs font-medium">Instance</p>
           {instanceTokenLocked && <span className="text-yellow-400 text-xs">🔒</span>}
         </div>
-        <Select
-          value={selectedInstanceToken ?? ALL}
-          onValueChange={(v) => onInstanceChange(v === ALL ? null : v)}
-          disabled={instanceTokenLocked}
-        >
-          <SelectTrigger
-            className="h-8 text-xs border-gray-500 text-white"
-            style={{ backgroundColor: instanceTokenLocked ? '#4a4a4a' : '#374151' }}
+        {instanceTokenLocked && selectedInstanceToken ? (
+          // ロック時: サンプル未選択で instanceSummaries が空のためテキスト表示
+          <div
+            className="h-8 flex items-center px-2 text-xs text-gray-300 rounded border border-gray-500 overflow-hidden"
+            style={{ backgroundColor: '#4a4a4a' }}
+            title={selectedInstanceToken}
           >
-            <SelectValue placeholder="すべて" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL} className="text-xs">すべて</SelectItem>
-            {instanceSummaries.map((inst) => (
-              <SelectItem key={inst.instance_token} value={inst.instance_token} className="text-xs">
-                {inst.category_name} ({inst.nbr_annotations})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <span className="truncate">{selectedInstanceToken}</span>
+          </div>
+        ) : (
+          <Select
+            value={selectedInstanceToken ?? ALL}
+            onValueChange={(v) => onInstanceChange(v === ALL ? null : v)}
+            disabled={instanceTokenLocked}
+          >
+            <SelectTrigger
+              className="h-8 text-xs border-gray-500 text-white"
+              style={{ backgroundColor: '#374151' }}
+            >
+              <SelectValue placeholder="すべて" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL} className="text-xs">すべて</SelectItem>
+              {instanceSummaries.map((inst) => (
+                <SelectItem key={inst.instance_token} value={inst.instance_token} className="text-xs">
+                  {inst.category_name} ({inst.nbr_annotations})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
     </div>
   )

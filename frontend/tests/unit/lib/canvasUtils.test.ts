@@ -38,28 +38,31 @@ describe('drawEgoPoses', () => {
 
   beforeEach(() => { ctx = makeCtx() })
 
+  const DISP: [number, number] = [1000, 1000]
+  const LOC = 'singapore-onenorth'
+
   it('does nothing when poses array is empty', () => {
-    drawEgoPoses(ctx, [], 0, { width: 100, height: 100 })
+    drawEgoPoses(ctx, [], 0, DISP, LOC)
     expect(ctx.beginPath).not.toHaveBeenCalled()
   })
 
   it('calls save/restore for state isolation', () => {
     const poses = [makePose(0, 0), makePose(1, 1)]
-    drawEgoPoses(ctx, poses, -1, { width: 200, height: 200 })
+    drawEgoPoses(ctx, poses, -1, DISP, LOC)
     expect(ctx.save).toHaveBeenCalledOnce()
     expect(ctx.restore).toHaveBeenCalledOnce()
   })
 
   it('draws arc for each pose point', () => {
     const poses = [makePose(0, 0), makePose(1, 0), makePose(2, 0)]
-    drawEgoPoses(ctx, poses, -1, { width: 300, height: 300 })
+    drawEgoPoses(ctx, poses, -1, DISP, LOC)
     // One arc call per point
     expect(ctx.arc).toHaveBeenCalledTimes(3)
   })
 
   it('renders Start/End labels when showStartEnd=true (default)', () => {
     const poses = [makePose(0, 0), makePose(10, 10)]
-    drawEgoPoses(ctx, poses, -1, { width: 200, height: 200 })
+    drawEgoPoses(ctx, poses, -1, DISP, LOC)
     expect(ctx.fillText).toHaveBeenCalledTimes(2)
     const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls
     expect(calls[0][0]).toBe('Start')
@@ -68,13 +71,13 @@ describe('drawEgoPoses', () => {
 
   it('does not render Start/End labels when showStartEnd=false', () => {
     const poses = [makePose(0, 0), makePose(10, 10)]
-    drawEgoPoses(ctx, poses, -1, { width: 200, height: 200 }, false)
+    drawEgoPoses(ctx, poses, -1, DISP, LOC, false)
     expect(ctx.fillText).not.toHaveBeenCalled()
   })
 
   it('highlights the current index point with larger arc radius', () => {
     const poses = [makePose(0, 0), makePose(5, 5), makePose(10, 10)]
-    drawEgoPoses(ctx, poses, 1, { width: 300, height: 300 })
+    drawEgoPoses(ctx, poses, 1, DISP, LOC)
     const arcCalls = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls
     // currentIndex=1 gets radius 7, others get radius 3 or 5
     const radii = arcCalls.map((c) => c[2])

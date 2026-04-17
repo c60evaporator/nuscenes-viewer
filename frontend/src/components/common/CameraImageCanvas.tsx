@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { imageUrl } from '@/api/sensorData'
+import { useEffect, useRef } from 'react'
+import { useSensorImage } from '@/api/sensorData'
 import { project3DTo2D, bboxCornersToGlobal } from '@/lib/coordinateUtils'
 import { drawBBox2D } from '@/lib/canvasUtils'
 import type { Annotation } from '@/types/annotation'
@@ -34,30 +34,30 @@ export default function CameraImageCanvas({
   className,
 }: CameraImageCanvasProps) {
   const containerRef  = useRef<HTMLDivElement>(null)
-  const imgRef        = useRef<HTMLImageElement>(null)
-  const canvasRef     = useRef<HTMLCanvasElement>(null)
+  const imgCanvasRef  = useRef<HTMLCanvasElement>(null)
+  const bboxCanvasRef = useRef<HTMLCanvasElement>(null)
   const bboxRectsRef  = useRef<BBoxRect[]>([])
   const drawBBoxesRef = useRef<(() => void) | null>(null)
-  const [imgError, setImgError] = useState(false)
+  const bitmapRef     = useRef<ImageBitmap | null>(null)
+
+  const { data: bitmap, isError } = useSensorImage(sampleDataToken)
 
   const drawBBoxes = () => {
-    const img    = imgRef.current
-    const canvas = canvasRef.current
-    if (!img || !canvas) return
+    const imgCanvas  = imgCanvasRef.current
+    const bboxCanvas = bboxCanvasRef.current
+    if (!imgCanvas || !bboxCanvas) return
 
-    // レンダリングサイズに合わせる
-    const { width, height } = img.getBoundingClientRect()
-    canvas.width  = width
-    canvas.height = height
+    const { width, height } = imgCanvas.getBoundingClientRect()
+    bboxCanvas.width  = width
+    bboxCanvas.height = height
 
-    const ctx = canvas.getContext('2d')
+    const ctx = bboxCanvas.getContext('2d')
     if (!ctx) return
 
     ctx.clearRect(0, 0, width, height)
 
     if (!annotations || !egoPose || !calibratedSensor.camera_intrinsic) return
 
-    // CalibratedSensor: Point3D/Quaternion 構造体 → 配列形式に変換
     const calibArray = {
       translation: [
         calibratedSensor.translation.x,
@@ -72,9 +72,10 @@ export default function CameraImageCanvas({
       ],
     }
 
-    // 自然サイズとレンダリングサイズの比（座標スケーリング用）
-    const scaleX = width  / img.naturalWidth
-    const scaleY = height / img.naturalHeight
+    const naturalWidth  = bitmapRef.current?.width  ?? 1
+    const naturalHeight = bitmapRef.current?.height ?? 1
+    const scaleX = width  / naturalWidth
+    const scaleY = height / naturalHeight
 
     const intrinsic = calibratedSensor.camera_intrinsic
     const newBBoxRects: BBoxRect[] = []
@@ -86,14 +87,12 @@ export default function CameraImageCanvas({
       for (const corner of globalCorners) {
         const px = project3DTo2D(corner, intrinsic, egoPose, calibArray)
         if (px !== null) {
-          // 自然座標 → レンダリングサイズ座標
           corners2D.push([px[0] * scaleX, px[1] * scaleY])
         }
       }
 
       if (corners2D.length < 4) continue
 
-      // 8頂点に満たない場合は残りを補完（最後の点で埋める）
       while (corners2D.length < 8) corners2D.push(corners2D[corners2D.length - 1])
 
       const allX = corners2D.map((c) => c[0])
@@ -106,8 +105,7 @@ export default function CameraImageCanvas({
         maxY:  Math.max(...allY),
       })
 
-      const isHighlighted = ann.token === highlightToken
-      const color = isHighlighted ? '#FFFF00' : '#00AAFF'
+      const color = ann.token === highlightToken ? '#FFFF00' : '#00AAFF'
       drawBBox2D(ctx, corners2D, color)
     }
 
@@ -116,8 +114,29 @@ export default function CameraImageCanvas({
 
   drawBBoxesRef.current = drawBBoxes
 
+  // bitmap が届いたら画像 canvas に描画して BBox も重ねる
   useEffect(() => {
-    if (imgRef.current?.complete) {
+    bitmapRef.current = bitmap ?? null
+    const imgCanvas = imgCanvasRef.current
+    if (!imgCanvas) return
+
+    const ctx = imgCanvas.getContext('2d')
+    if (!ctx) return
+
+    if (!bitmap) {
+      ctx.clearRect(0, 0, imgCanvas.width, imgCanvas.height)
+      return
+    }
+
+    imgCanvas.width  = bitmap.width
+    imgCanvas.height = bitmap.height
+    ctx.drawImage(bitmap, 0, 0)
+    drawBBoxesRef.current?.()
+  }, [bitmap])
+
+  // annotations / egoPose / highlight 変化時に BBox を再描画
+  useEffect(() => {
+    if (bitmapRef.current) {
       drawBBoxesRef.current?.()
     }
   }, [annotations, egoPose, highlightToken, calibratedSensor])
@@ -136,7 +155,7 @@ export default function CameraImageCanvas({
     }
   }
 
-  if (imgError) {
+  if (isError) {
     return (
       <div className={className} style={{ background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f55', fontSize: 12 }}>
         Failed to load image
@@ -151,16 +170,12 @@ export default function CameraImageCanvas({
       style={{ position: 'relative', display: 'inline-block', width: '100%' }}
       onClick={handleClick}
     >
-      <img
-        ref={imgRef}
-        src={imageUrl(sampleDataToken)}
-        alt="Camera view"
+      <canvas
+        ref={imgCanvasRef}
         style={{ width: '100%', display: 'block' }}
-        onLoad={drawBBoxes}
-        onError={() => setImgError(true)}
       />
       <canvas
-        ref={canvasRef}
+        ref={bboxCanvasRef}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
       />
     </div>

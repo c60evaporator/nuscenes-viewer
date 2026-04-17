@@ -52,32 +52,39 @@ describe('project3DTo2D', () => {
 })
 
 describe('egoPoseToPixel', () => {
-  const ORIGIN: [number, number] = [0, 0]
-  const SCALE = 10  // 10 px/m
+  // singapore-onenorth: canvasEdge=[1585.6, 2025.0], dispSize=[1000, 1000]
+  const LOC  = 'singapore-onenorth'
+  const DISP: [number, number] = [1000, 1000]
 
-  it('converts positive x to positive px', () => {
-    const [px, py] = egoPoseToPixel([5, 0, 0], ORIGIN, SCALE)
-    expect(px).toBeCloseTo(50)
-    expect(py).toBeCloseTo(0)
+  it('converts x proportionally to dispW', () => {
+    // px = (600 / 1585.6) * 1000 ≈ 378.4
+    const [px] = egoPoseToPixel([600, 0, 0], LOC, DISP)
+    expect(px).toBeCloseTo(600 / 1585.6 * 1000, 1)
   })
 
-  it('inverts y axis (positive y → negative py)', () => {
-    const [px, py] = egoPoseToPixel([0, 3, 0], ORIGIN, SCALE)
-    expect(px).toBeCloseTo(0)
-    expect(py).toBeCloseTo(-30)
+  it('inverts y axis (positive y → py < dispH)', () => {
+    // py = (1 - 900 / 2025.0) * 1000 ≈ 555.6
+    const [, py] = egoPoseToPixel([0, 900, 0], LOC, DISP)
+    expect(py).toBeCloseTo((1 - 900 / 2025.0) * 1000, 1)
   })
 
   it('ignores z coordinate', () => {
-    const [px1, py1] = egoPoseToPixel([1, 1, 0], ORIGIN, SCALE)
-    const [px2, py2] = egoPoseToPixel([1, 1, 999], ORIGIN, SCALE)
+    const [px1, py1] = egoPoseToPixel([100, 100, 0],   LOC, DISP)
+    const [px2, py2] = egoPoseToPixel([100, 100, 999], LOC, DISP)
     expect(px1).toBeCloseTo(px2)
     expect(py1).toBeCloseTo(py2)
   })
 
-  it('origin at (0,0,0) maps to pixel (0,0)', () => {
-    const [px, py] = egoPoseToPixel([0, 0, 0], ORIGIN, SCALE)
+  it('origin (0,0,0) maps to top-left (0, dispH)', () => {
+    // x=0 → px=0; y=0 → py=(1-0)*dispH=dispH
+    const [px, py] = egoPoseToPixel([0, 0, 0], LOC, DISP)
     expect(px).toBeCloseTo(0)
-    expect(py).toBeCloseTo(0)
+    expect(py).toBeCloseTo(1000)
+  })
+
+  it('returns [0,0] for unknown location', () => {
+    const result = egoPoseToPixel([100, 100, 0], 'unknown-place', DISP)
+    expect(result).toEqual([0, 0])
   })
 })
 

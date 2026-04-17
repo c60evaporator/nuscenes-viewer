@@ -1,8 +1,10 @@
+import io
 import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.geometry import to_geojson_feature_collection
@@ -75,4 +77,17 @@ async def get_map_basemap(location: str):
     path = Path(settings.NUSCENES_DATAROOT) / "maps" / filename
     if not path.exists():
         raise HTTPException(status_code=404, detail="Basemap not found")
-    return FileResponse(path, media_type="image/png")
+
+    Image.MAX_IMAGE_PIXELS = None  # trusted local files from NuScenes dataset
+    img = Image.open(path)
+    img.thumbnail((4096, 4096), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )

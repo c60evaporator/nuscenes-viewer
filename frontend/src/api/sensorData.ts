@@ -2,11 +2,20 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from './client'
 import type { PointCloud } from '../types/sensor'
 
-const BASE = () => (import.meta.env.VITE_API_BASE_PATH as string | undefined) ?? '/api/v1'
-
-// カメラ画像 URL を返す（<img src={imageUrl(token)} /> で使用）
-export const imageUrl = (token: string): string =>
-  `${BASE()}/sensor-data/${token}/image`
+export function useSensorImage(token: string | null) {
+  return useQuery({
+    queryKey: ['sensor-image', token],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/sensor-data/${token}/image`)
+      if (!res.ok) throw new Error('image fetch failed')
+      const blob = await res.blob()
+      return createImageBitmap(blob)
+    },
+    enabled:   !!token,
+    staleTime: Infinity,
+    gcTime:    Infinity,
+  })
+}
 
 export function usePointCloud(token: string | null) {
   return useQuery({

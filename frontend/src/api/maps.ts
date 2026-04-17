@@ -3,11 +3,20 @@ import { apiFetch } from './client'
 import type { MapMeta, MapLayer, GeoJSONFeatureCollection } from '../types/map'
 import type { PaginatedResponse } from '../types/common'
 
-const BASE = () => (import.meta.env.VITE_API_BASE_PATH as string | undefined) ?? '/api/v1'
-
-// マップ画像 URL を返す（<img src={basemapUrl(location)} /> で使用）
-export const basemapUrl = (location: string): string =>
-  `${BASE()}/maps/${location}/basemap`
+export function useBasemap(location: string | null) {
+  return useQuery({
+    queryKey: ['basemap', location],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/maps/${location}/basemap`)
+      if (!res.ok) throw new Error('basemap fetch failed')
+      const blob = await res.blob()
+      return createImageBitmap(blob)
+    },
+    enabled:   !!location,
+    staleTime: Infinity,
+    gcTime:    Infinity,
+  })
+}
 
 export function useMaps(params?: { limit?: number; offset?: number }) {
   const limit  = params?.limit  ?? 100

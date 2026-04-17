@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Select,
   SelectContent,
@@ -27,6 +28,7 @@ interface HeaderProps {
 }
 
 export default function Header({ activeTab, onTabChange }: HeaderProps) {
+  const queryClient        = useQueryClient()
   const { data: logsData } = useLogs({ limit: 500 })
   const currentMapLocation = useViewerStore(s => s.currentMapLocation)
   const setMapLocation     = useViewerStore(s => s.setMapLocation)
@@ -38,12 +40,26 @@ export default function Header({ activeTab, onTabChange }: HeaderProps) {
     [logsData],
   )
 
-  // データ取得後に初期 location をセット
+  const handleLocationChange = (location: string) => {
+    setMapLocation(location)
+    queryClient.prefetchQuery({
+      queryKey: ['basemap', location],
+      queryFn: async () => {
+        const res = await fetch(`/api/v1/maps/${location}/basemap`)
+        if (!res.ok) throw new Error('basemap fetch failed')
+        const blob = await res.blob()
+        return createImageBitmap(blob)
+      },
+      staleTime: Infinity,
+    })
+  }
+
+  // データ取得後に初期 location をセット（プリフェッチも実行）
   useEffect(() => {
     if (!currentMapLocation && locations.length > 0) {
-      setMapLocation(locations[0])
+      handleLocationChange(locations[0])
     }
-  }, [locations, currentMapLocation, setMapLocation])
+  }, [locations, currentMapLocation])
 
   const handleTabChange = (tab: TabId) => {
     unlock()
@@ -56,7 +72,7 @@ export default function Header({ activeTab, onTabChange }: HeaderProps) {
       <div className="flex-shrink-0 w-48">
         <Select
           value={currentMapLocation ?? ''}
-          onValueChange={setMapLocation}
+          onValueChange={handleLocationChange}
         >
           <SelectTrigger className="h-8 text-xs bg-gray-800 border-gray-600 text-white">
             <SelectValue placeholder="Map Selection" />

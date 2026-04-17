@@ -1,4 +1,5 @@
 pandas
+Pillow>=10.0.0
 sqlalchemy
 geoalchemy2
 shapely

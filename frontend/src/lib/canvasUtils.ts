@@ -3,50 +3,22 @@
  * コンポーネント内に描画ロジックを書かず、この関数群を経由する
  */
 import type { EgoPosePoint } from '../types/sensor'
+import { egoPoseToPixel } from './coordinateUtils'
 
 // ── Ego Pose 描画 ────────────────────────────────────────────────────────────
 
-/**
- * マップ Canvas 上に Ego Pose の軌跡を描画する
- *
- * @param ctx           CanvasRenderingContext2D
- * @param poses         EgoPosePoint の配列（timestamp 昇順）
- * @param currentIndex  強調する点のインデックス（-1 で強調なし）
- * @param mapImageSize  マップ画像サイズ { width, height }（ピクセル）
- *
- * Canvas の座標系は左上が原点のため、y 軸は反転して描画する。
- * poses の translation は ENU メートル単位。
- * マップ全体の範囲に収まるよう自動スケーリングする。
- */
 export function drawEgoPoses(
-  ctx:          CanvasRenderingContext2D,
-  poses:        EgoPosePoint[],
+  ctx:         CanvasRenderingContext2D,
+  poses:       EgoPosePoint[],
   currentIndex: number,
-  mapImageSize: { width: number; height: number },
+  displaySize: [number, number],
+  location:    string,
   showStartEnd: boolean = true,
 ): void {
   if (poses.length === 0) return
 
-  // 座標範囲を計算してスケーリング係数を求める
-  const xs = poses.map((p) => p.translation[0])
-  const ys = poses.map((p) => p.translation[1])
-  const minX = Math.min(...xs)
-  const maxX = Math.max(...xs)
-  const minY = Math.min(...ys)
-  const maxY = Math.max(...ys)
-
-  const rangeX = maxX - minX || 1
-  const rangeY = maxY - minY || 1
-  const padding = 40  // px
-
-  const scaleX = (mapImageSize.width  - padding * 2) / rangeX
-  const scaleY = (mapImageSize.height - padding * 2) / rangeY
-  const scale  = Math.min(scaleX, scaleY)
-
-  const toPixel = (tx: number, ty: number): [number, number] => [
-    padding + (tx - minX) * scale,
-    mapImageSize.height - padding - (ty - minY) * scale,  // y 軸反転
-  ]
+  const toPixel = (t: number[]): [number, number] =>
+    egoPoseToPixel(t, location, displaySize)
 
   ctx.save()
 
@@ -55,7 +27,7 @@ export function drawEgoPoses(
   ctx.strokeStyle = 'rgba(100, 160, 255, 0.6)'
   ctx.lineWidth   = 1.5
   poses.forEach((pose, i) => {
-    const [px, py] = toPixel(pose.translation[0], pose.translation[1])
+    const [px, py] = toPixel(pose.translation)
     if (i === 0) ctx.moveTo(px, py)
     else         ctx.lineTo(px, py)
   })
@@ -63,7 +35,7 @@ export function drawEgoPoses(
 
   // 各点
   poses.forEach((pose, i) => {
-    const [px, py] = toPixel(pose.translation[0], pose.translation[1])
+    const [px, py] = toPixel(pose.translation)
     const isCurrent = i === currentIndex
     const isFirst   = i === 0
     const isLast    = i === poses.length - 1

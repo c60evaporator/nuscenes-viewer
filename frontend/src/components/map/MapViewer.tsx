@@ -5,7 +5,7 @@ import { MapView } from '@deck.gl/core'
 import type { MapViewState } from '@deck.gl/core'
 import { BitmapLayer } from '@deck.gl/layers'
 import { apiFetch } from '@/api/client'
-import { basemapUrl } from '@/api/maps'
+import { useBasemap } from '@/api/maps'
 import { useMapLayerStore, ALL_MAP_LAYERS } from '@/store/mapLayerStore'
 import { createGeoJsonLayer } from '@/layers/MapAnnotationLayers'
 import MapLegend from './MapLegend'
@@ -55,6 +55,7 @@ export default function MapViewer({ mapToken, location, onFeatureClick }: MapVie
     main: { longitude: 0, latitude: 0, zoom: 1, pitch: 0, bearing: 0 },
   })
   const [viewInitialized, setViewInitialized] = useState(false)
+  const { data: basemapBitmap } = useBasemap(location)
 
   // 全 12 レイヤーを並列フェッチ（有効なもののみ実行）
   const results = useQueries({
@@ -124,10 +125,10 @@ export default function MapViewer({ mapToken, location, onFeatureClick }: MapVie
   // BitmapLayer（bounds が確定している場合のみ表示）
   const allCollections = Object.values(layerData) as GeoJSONFeatureCollection[]
   const bounds = computeBounds(allCollections)
-  const bitmapLayer = bounds && location
+  const bitmapLayer = bounds && basemapBitmap
     ? new BitmapLayer({
         id:     'basemap',
-        image:  basemapUrl(location),
+        image:  basemapBitmap,
         bounds: bounds,
       })
     : null

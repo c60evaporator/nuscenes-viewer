@@ -32,6 +32,13 @@ function vecSub(a: number[], b: number[]): number[] {
 
 // ── 公開 API ─────────────────────────────────────────────────────────────────
 
+export const NUSCENES_MAP_META: Record<string, { canvasEdge: [number, number] }> = {
+  'boston-seaport':           { canvasEdge: [2979.5, 2118.1] },
+  'singapore-onenorth':       { canvasEdge: [1585.6, 2025.0] },
+  'singapore-hollandvillage': { canvasEdge: [2808.3, 2922.9] },
+  'singapore-queenstown':     { canvasEdge: [3228.6, 3687.1] },
+}
+
 /**
  * グローバル3D座標をカメラの2Dピクセル座標に投影する（ピンホールカメラモデル）
  *
@@ -77,26 +84,31 @@ export function project3DTo2D(
 }
 
 /**
- * グローバル座標（ENU）をマップ画像のピクセル座標に変換する
+ * グローバル座標（ENU）をマップ表示画像のピクセル座標に変換する
  *
- * @param translation    自車グローバル座標 [x, y, z]（z は無視）
- * @param mapOrigin      マップ基準点の [longitude, latitude]（WGS84）
- * @param pixelsPerMeter ピクセル/メートル比（canvas_edge から計算）
- * @returns              ピクセル座標 [px, py]
+ * @param translation  自車グローバル座標 [x, y, z]（z は無視）
+ * @param location     マップロケーション名（'singapore-onenorth' 等）
+ * @param displaySize  表示画像サイズ [width_px, height_px]
+ * @returns            表示画像上のピクセル座標 [px, py]
  *
- * nuScenes の ENU 座標は mapOrigin を原点とするメートル単位オフセット。
- * x → East（経度方向）、y → North（緯度方向）
+ * SDK の BitMap.render が extent=[0, canvasW, 0, canvasH] で画像全体を
+ * メートル空間に引き伸ばして表示するため、元画像ピクセルサイズは不要。
+ * NuScenes のマップ座標系は左下原点（ENU）のため Y 軸を反転する。
  */
 export function egoPoseToPixel(
-  translation:    number[],
-  mapOrigin:      [number, number],
-  pixelsPerMeter: number,
+  translation: number[],
+  location:    string,
+  displaySize: [number, number],
 ): [number, number] {
-  // ENU 座標はすでにメートル単位のオフセットとして使えるため mapOrigin は参照のみ
-  // px = x * scale,  py = -y * scale（画像座標は y 軸反転）
-  void mapOrigin  // mapOrigin は将来の WGS84 変換に備えて引数として受け取る
-  const px =  translation[0] * pixelsPerMeter
-  const py = -translation[1] * pixelsPerMeter
+  const meta = NUSCENES_MAP_META[location]
+  if (!meta) return [0, 0]
+
+  const [canvasW, canvasH] = meta.canvasEdge
+  const [dispW, dispH]     = displaySize
+
+  const px =  (translation[0] / canvasW) * dispW
+  const py = (1 - translation[1] / canvasH) * dispH  // Y軸反転
+
   return [px, py]
 }
 

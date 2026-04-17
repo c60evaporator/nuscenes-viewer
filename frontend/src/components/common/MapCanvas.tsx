@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { basemapUrl } from '@/api/maps'
+import { useBasemap } from '@/api/maps'
 import { drawEgoPoses } from '@/lib/canvasUtils'
+import { egoPoseToPixel, NUSCENES_MAP_META } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
 
 interface MapCanvasProps {
@@ -20,58 +21,56 @@ export default function MapCanvas({
   showStartEnd  = true,
   className,
 }: MapCanvasProps) {
-  const imgRef    = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [zoom, setZoom] = useState(1)
+  const { data: bitmap } = useBasemap(location)
 
-  const draw = () => {
-    const img    = imgRef.current
+  // basemap + ego poses を単一 canvas に描画
+  useEffect(() => {
     const canvas = canvasRef.current
-    if (!img || !canvas || !img.naturalWidth) return
+    if (!canvas || !bitmap) return
 
-    canvas.width  = img.naturalWidth
-    canvas.height = img.naturalHeight
+    const displaySize: [number, number] = [bitmap.width, bitmap.height]
+
+    if (egoPoses.length > 0) {
+      const meta = NUSCENES_MAP_META[location]
+      console.log('[MapCanvas] location:', location)
+      console.log('[MapCanvas] canvasEdge:', meta?.canvasEdge)
+      console.log('[MapCanvas] displaySize:', displaySize)
+      console.log('[MapCanvas] first translation:', egoPoses[0].translation)
+      console.log('[MapCanvas] first pixel:', egoPoseToPixel(egoPoses[0].translation, location, displaySize))
+    }
+
+    canvas.width  = bitmap.width
+    canvas.height = bitmap.height
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    drawEgoPoses(
-      ctx,
-      egoPoses,
-      currentIndex,
-      { width: canvas.width, height: canvas.height },
-      showStartEnd,
-    )
-  }
-
-  // ego pose / currentIndex が変わるたびに再描画
-  useEffect(() => { draw() }, [egoPoses, currentIndex, showStartEnd])
+    ctx.drawImage(bitmap, 0, 0)
+    drawEgoPoses(ctx, egoPoses, currentIndex, displaySize, location, showStartEnd)
+  }, [bitmap, egoPoses, currentIndex, showStartEnd, location])
 
   // cropToContent のズーム倍率を計算
   useEffect(() => {
-    if (!cropToContent || egoPoses.length === 0) {
+    if (!cropToContent || egoPoses.length === 0 || !bitmap) {
       setZoom(1)
       return
     }
-    const img = imgRef.current
-    if (!img || !img.naturalWidth) return
 
-    const xs = egoPoses.map((p) => p.translation[0])
-    const ys = egoPoses.map((p) => p.translation[1])
-    const rangeX = Math.max(...xs) - Math.min(...xs) || 1
-    const rangeY = Math.max(...ys) - Math.min(...ys) || 1
+    const displaySize: [number, number] = [bitmap.width, bitmap.height]
+    const pixels = egoPoses.map((p) => egoPoseToPixel(p.translation, location, displaySize))
+    const pxs    = pixels.map(([px]) => px)
+    const pys    = pixels.map(([, py]) => py)
+    const rangeX = (Math.max(...pxs) - Math.min(...pxs)) || 1
+    const rangeY = (Math.max(...pys) - Math.min(...pys)) || 1
 
-    // 簡易推定: pose 範囲がマップ全体に占める割合でズーム
     const padding = 40
-    const scaleX = (img.naturalWidth  - padding * 2) / rangeX
-    const scaleY = (img.naturalHeight - padding * 2) / rangeY
-    const scale  = Math.min(scaleX, scaleY)
+    const scaleX  = (bitmap.width  - padding * 2) / rangeX
+    const scaleY  = (bitmap.height - padding * 2) / rangeY
 
-    // マップ画像 1px = 1m と仮定したズーム比
-    const estZoom = Math.min(scale, 5)
-    setZoom(estZoom > 1 ? estZoom : 1)
-  }, [cropToContent, egoPoses])
+    setZoom(Math.min(Math.min(scaleX, scaleY), 5))
+  }, [cropToContent, egoPoses, bitmap, location])
 
   return (
     <div
@@ -90,21 +89,11 @@ export default function MapCanvas({
         >−</button>
       </div>
 
-      {/* マップ画像 + Canvas オーバーレイ */}
       <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', transition: 'transform 0.1s' }}>
-        <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
-          <img
-            ref={imgRef}
-            src={basemapUrl(location)}
-            alt={`Map: ${location}`}
-            style={{ width: '100%', display: 'block' }}
-            onLoad={draw}
-          />
-          <canvas
-            ref={canvasRef}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-          />
-        </div>
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', display: 'block' }}
+        />
       </div>
     </div>
   )

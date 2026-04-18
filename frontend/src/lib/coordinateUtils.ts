@@ -32,11 +32,14 @@ function vecSub(a: number[], b: number[]): number[] {
 
 // ── 公開 API ─────────────────────────────────────────────────────────────────
 
-export const NUSCENES_MAP_META: Record<string, { canvasEdge: [number, number] }> = {
-  'boston-seaport':           { canvasEdge: [2979.5, 2118.1] },
-  'singapore-onenorth':       { canvasEdge: [1585.6, 2025.0] },
-  'singapore-hollandvillage': { canvasEdge: [2808.3, 2922.9] },
-  'singapore-queenstown':     { canvasEdge: [3228.6, 3687.1] },
+export const NUSCENES_MAP_META: Record<string, {
+  canvasEdge: [number, number]
+  resolution: number             // m/px（固定 0.1）
+}> = {
+  'boston-seaport':           { canvasEdge: [2979.5, 2118.1], resolution: 0.1 },
+  'singapore-onenorth':       { canvasEdge: [1585.6, 2025.0], resolution: 0.1 },
+  'singapore-hollandvillage': { canvasEdge: [2808.3, 2922.9], resolution: 0.1 },
+  'singapore-queenstown':     { canvasEdge: [3228.6, 3687.1], resolution: 0.1 },
 }
 
 /**
@@ -110,6 +113,61 @@ export function egoPoseToPixel(
   const py = (1 - translation[1] / canvasH) * dispH  // Y軸反転
 
   return [px, py]
+}
+
+/**
+ * グローバルメートル座標 → マップ元画像ピクセル座標
+ * devkit の MapMask.to_pixel_coords() と同じ変換
+ *   px =  x / resolution
+ *   py = -y / resolution + canvasH_px
+ */
+export function globalToMapPixel(
+  x:        number,
+  y:        number,
+  location: string,
+): [number, number] | null {
+  const meta = NUSCENES_MAP_META[location]
+  if (!meta) return null
+  const { canvasEdge, resolution } = meta
+  const canvasH_px = canvasEdge[1] / resolution
+  return [
+    x / resolution,
+    -y / resolution + canvasH_px,
+  ]
+}
+
+/**
+ * BEV 表示範囲に対応する basemap の切り出し領域を計算する
+ *
+ * @param egoPose        自車グローバル座標 [x, y, z]
+ * @param bevRangeMeters BEV 表示の半径（メートル）
+ * @param location       マップロケーション名
+ * @param bitmapSize     basemap 画像サイズ [width, height]
+ * @returns              切り出し領域 {sx, sy, sw, sh}、ロケーション不明なら null
+ */
+export function calcBasemapCrop(
+  egoPose:        number[],
+  bevRangeMeters: number,
+  location:       string,
+  bitmapSize:     [number, number],
+): { sx: number; sy: number; sw: number; sh: number } | null {
+  const meta = NUSCENES_MAP_META[location]
+  if (!meta) return null
+
+  const [canvasW, canvasH] = meta.canvasEdge
+  const [bmpW, bmpH]       = bitmapSize
+
+  const [cx, cy] = egoPoseToPixel(egoPose, location, bitmapSize)
+
+  const rangeX = bevRangeMeters * (bmpW / canvasW)
+  const rangeY = bevRangeMeters * (bmpH / canvasH)
+
+  return {
+    sx: Math.round(cx - rangeX),
+    sy: Math.round(cy - rangeY),
+    sw: Math.round(rangeX * 2),
+    sh: Math.round(rangeY * 2),
+  }
 }
 
 /**

@@ -55,22 +55,27 @@ export default function SensorCell({
     }
 
     // ── LIDAR / RADAR ──────────────────────────────────────────────────────
-    if (channel === 'LIDAR_TOP' || channel === 'FUSED_RADER') {
+    if (channel === 'LIDAR_TOP' || channel.startsWith('RADAR_')) {
       const brief = sampleDataMap[channel]
       if (!brief) return <Placeholder text={`No ${channel}`} />
 
-      const calibSensor = calibSensorMap[channel]
+      const calibSensor = brief.calibrated_sensor_token
+        ? calibSensorMap[brief.calibrated_sensor_token]
+        : undefined
       const lidarCalibArray = calibSensor ? {
         translation: [calibSensor.translation.x, calibSensor.translation.y, calibSensor.translation.z],
         rotation:    [calibSensor.rotation.w, calibSensor.rotation.x, calibSensor.rotation.y, calibSensor.rotation.z],
       } : undefined
 
+      const isRadar = channel.startsWith('RADAR_')
       return (
         <PointCloudCanvas
           sampleDataToken={brief.token}
-          annotations={annotations}
+          annotations={isRadar ? [] : annotations}
           egoPose={currentEgoPose}
           lidarCalibSensor={lidarCalibArray}
+          location={location}
+          pointSize={isRadar ? 4 : 2}
           onBBoxClick={onBBoxClick}
           className="w-full h-full"
         />
@@ -82,7 +87,9 @@ export default function SensorCell({
       const brief = sampleDataMap[channel]
       if (!brief) return <Placeholder text={`No ${channel}`} />
 
-      const calibSensor = calibSensorMap[channel]
+      const calibSensor = brief.calibrated_sensor_token
+        ? calibSensorMap[brief.calibrated_sensor_token]
+        : undefined
       if (!calibSensor) return <Placeholder text="No calib" />
 
       return (

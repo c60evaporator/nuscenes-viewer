@@ -55,9 +55,10 @@ export interface SampleData {
 
 // GET /api/v1/samples/{token}/sensor-data レスポンスの各エントリ（SensorDataBriefResponse に対応）
 export interface SensorDataBrief {
-  token:      string
-  filename:   string
-  fileformat: string
+  token:                   string
+  filename:                string
+  fileformat:              string
+  calibrated_sensor_token: string
 }
 
 // GET /api/v1/samples/{token}/sensor-data レスポンス全体

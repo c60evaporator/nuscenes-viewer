@@ -57,14 +57,27 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scenesData, locationLogTokens])
 
+  // location 変更時にリセット
+  useEffect(() => {
+    if (!lockedSceneToken) {
+      setSelectedSceneToken(null)
+      setSelectedSampleToken(null)
+      setSelectedInstanceToken(null)
+      setAnnotation(null)
+    }
+  }, [currentMapLocation])
+
   // 初期 Scene の設定
   useEffect(() => {
     if (lockedSceneToken) {
       setSelectedSceneToken(lockedSceneToken)
-    } else if (!selectedSceneToken && locationScenes.length > 0) {
+      return
+    }
+    const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
+    if (!isValidScene && locationScenes.length > 0) {
       setSelectedSceneToken(locationScenes[0].token)
     }
-  }, [lockedSceneToken, locationScenes, selectedSceneToken])
+  }, [lockedSceneToken, locationScenes])
 
   // Sample リスト（Scene に紐づく）
   const { data: samplesRaw } = useSamples(selectedSceneToken)

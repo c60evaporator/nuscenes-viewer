@@ -116,16 +116,96 @@ async def get_sensor_data_pointcloud(token: str, db: AsyncSession = Depends(get_
     sd = await SensorRepository(db).get_sample_data_by_token(token)
     if not sd:
         raise HTTPException(status_code=404, detail="SampleData not found")
-    if not sd.filename.endswith(".pcd.bin"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not a LiDAR pointcloud: fileformat={sd.fileformat}, filename={sd.filename}",
-        )
-    path = Path(settings.NUSCENES_DATAROOT) / sd.filename
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Pointcloud file not found")
 
-    pts = np.fromfile(str(path), dtype=np.float32).reshape(-1, 5)
-    # 列: x, y, z, intensity, ring_index → 先頭 4 列のみ返す
-    points = pts[:, :4].tolist()
-    return {"points": points, "num_points": len(points)}
+    path = Path(settings.NUSCENES_DATAROOT) / sd.filename
+
+    # ── LiDAR（.pcd.bin）──────────────────────────────────────────
+    if sd.filename.endswith(".pcd.bin"):
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="Pointcloud file not found")
+        pts = np.fromfile(str(path), dtype=np.float32).reshape(-1, 5)
+        points = pts[:, :4].tolist()
+        return {"points": points, "num_points": len(points)}
+
+    # ── RADAR（.pcd）──────────────────────────────────────────────
+    if sd.filename.endswith(".pcd") and sd.fileformat.lower() == "pcd":
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="Pointcloud file not found")
+        points = _parse_pcd(path)
+        return {"points": points, "num_points": len(points)}
+
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unsupported pointcloud format: {sd.fileformat}, {sd.filename}",
+    )
+
+
+def _parse_pcd(path: Path) -> list[list[float]]:
+    """標準PCD形式（ASCIIまたはbinary）をパースしてx,y,z,intensityのリストを返す"""
+    with open(path, "rb") as f:
+        content = f.read()
+
+    header_end = content.find(b"DATA ")
+    if header_end == -1:
+        return []
+
+    header = content[:header_end].decode("utf-8", errors="ignore")
+    data_type = ""
+    fields: list[str] = []
+    size:   list[int] = []
+    count:  list[int] = []
+    num_points = 0
+
+    for line in header.splitlines():
+        if line.startswith("FIELDS"):
+            fields = line.split()[1:]
+        elif line.startswith("SIZE"):
+            size = [int(s) for s in line.split()[1:]]
+        elif line.startswith("COUNT"):
+            count = [int(c) for c in line.split()[1:]]
+        elif line.startswith("POINTS"):
+            num_points = int(line.split()[1])
+        elif line.startswith("DATA"):
+            data_type = line.split()[1]
+
+    data_start = header_end + len(b"DATA ") + len(data_type.encode()) + 1
+
+    if data_type == "ascii":
+        lines = content[data_start:].decode("utf-8", errors="ignore").strip().splitlines()
+        points = []
+        for line in lines:
+            vals = [float(v) for v in line.split()]
+            if len(vals) >= 3:
+                intensity = vals[3] if len(vals) > 3 else 0.0
+                points.append([vals[0], vals[1], vals[2], intensity])
+        return points
+
+    if data_type == "binary":
+        if not size or not count or not fields:
+            return []
+        point_step = sum(s * c for s, c in zip(size, count))
+        data = content[data_start:]
+        points = []
+        for i in range(num_points):
+            offset = i * point_step
+            if offset + point_step > len(data):
+                break
+            vals: list[float] = []
+            field_offset = 0
+            for s, c in zip(size, count):
+                for _ in range(c):
+                    chunk = data[offset + field_offset: offset + field_offset + s]
+                    if s == 4:
+                        val = float(np.frombuffer(chunk, dtype=np.float32)[0])
+                    elif s == 8:
+                        val = float(np.frombuffer(chunk, dtype=np.float64)[0])
+                    else:
+                        val = float(np.frombuffer(chunk, dtype=np.uint8)[0])
+                    vals.append(val)
+                    field_offset += s
+            if len(vals) >= 3:
+                intensity = vals[3] if len(vals) > 3 else 0.0
+                points.append([vals[0], vals[1], vals[2], intensity])
+        return points
+
+    return []

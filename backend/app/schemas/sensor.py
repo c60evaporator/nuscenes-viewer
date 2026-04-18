@@ -11,9 +11,10 @@ class SampleEgoPoseResponse(BaseModel):
 class SensorDataBriefResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    token: str
-    filename: str
-    fileformat: str
+    token:                   str
+    filename:                str
+    fileformat:              str
+    calibrated_sensor_token: str
 
 
 class BestCameraResponse(BaseModel):

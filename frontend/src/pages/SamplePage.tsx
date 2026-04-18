@@ -49,14 +49,25 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scenesData, locationLogTokens])
 
+  // location 変更時にリセット
+  useEffect(() => {
+    if (!lockedSceneToken) {
+      setSelectedSceneToken(null)
+      setSample(null)
+    }
+  }, [currentMapLocation])
+
   // 初期 Scene の設定（lockedSceneToken → 最初の Scene）
   useEffect(() => {
     if (lockedSceneToken) {
       setSelectedSceneToken(lockedSceneToken)
-    } else if (!selectedSceneToken && locationScenes.length > 0) {
+      return
+    }
+    const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
+    if (!isValidScene && locationScenes.length > 0) {
       setSelectedSceneToken(locationScenes[0].token)
     }
-  }, [lockedSceneToken, locationScenes, selectedSceneToken])
+  }, [lockedSceneToken, locationScenes])
 
   // サンプルリスト（timestamp 昇順）
   const { data: samplesRaw } = useSamples(selectedSceneToken)
@@ -76,7 +87,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
   const calibSensorMap = useMemo<Record<string, CalibratedSensor>>(() => {
     const map: Record<string, CalibratedSensor> = {}
     calibSensorsData?.items.forEach((cs) => {
-      map[cs.sensor_channel] = cs
+      map[cs.token] = cs
     })
     return map
   }, [calibSensorsData])

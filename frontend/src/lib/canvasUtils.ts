@@ -131,21 +131,23 @@ export interface BevViewParams {
   offsetY: number   // 画面中心の y オフセット (m)
 }
 
-/**
- * 点群を真上から見た BEV（Bird's Eye View）で Canvas に描画する
- *
- * @param ctx        CanvasRenderingContext2D
- * @param points     各点: [x, y, z, intensity, ...]（z は使用しない）
- * @param viewParams ビューパラメータ
- *
- * intensity（0–255 想定）に応じて青→白のグラデーションで色付けする。
- */
 export function drawPointCloud(
   ctx:        CanvasRenderingContext2D,
   points:     number[][],
   viewParams: BevViewParams,
+  options?: {
+    pointSize?: number
+    colorMode?: 'intensity' | 'height' | 'flat'
+    baseColor?: string
+  },
 ): void {
   if (points.length === 0) return
+
+  const {
+    pointSize = 2,
+    colorMode = 'intensity',
+    baseColor = '#00FFFF',
+  } = options ?? {}
 
   const { width, height, scale, offsetX, offsetY } = viewParams
   const cx = width  / 2
@@ -153,23 +155,33 @@ export function drawPointCloud(
 
   ctx.save()
 
-  for (const pt of points) {
-    const [x, y, , intensity = 128] = pt
+  for (const p of points) {
+    const [x, y, z, intensity] = p
 
-    // BEV 変換: x=前方(上), y=左(右), z=上（無視）
-    const px = cx + (y - offsetY) * scale   // 左が画面右
-    const py = cy - (x - offsetX) * scale   // 前方が画面上
+    const px = cx + (y - offsetY) * scale
+    const py = cy - (x - offsetX) * scale
 
-    if (px < 0 || px >= width || py < 0 || py >= height) continue
+    if (px < 0 || px > width || py < 0 || py > height) continue
 
-    // intensity → 色（0=暗い青, 255=白）
-    const t = Math.max(0, Math.min(1, intensity / 255))
-    const r = Math.round(t * 255)
-    const g = Math.round(t * 220)
-    const b = Math.round(50 + t * 205)
+    let color: string
+    if (colorMode === 'intensity') {
+      const normalized = Math.min((intensity ?? 0) / 255, 1)
+      const r = Math.round(normalized * 200)
+      const g = Math.round(100 + normalized * 155)
+      const b = Math.round(200 + normalized * 55)
+      color = `rgb(${r},${g},${b})`
+    } else if (colorMode === 'height') {
+      const normalized = Math.min(Math.max((z + 3) / 6, 0), 1)
+      const r = Math.round(normalized * 255)
+      const g = 100
+      const b = Math.round((1 - normalized) * 255)
+      color = `rgb(${r},${g},${b})`
+    } else {
+      color = baseColor
+    }
 
-    ctx.fillStyle = `rgb(${r},${g},${b})`
-    ctx.fillRect(px, py, 1, 1)
+    ctx.fillStyle = color
+    ctx.fillRect(px - pointSize / 2, py - pointSize / 2, pointSize, pointSize)
   }
 
   ctx.restore()

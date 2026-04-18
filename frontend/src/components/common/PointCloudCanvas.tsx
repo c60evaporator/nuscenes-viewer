@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { usePointCloud } from '@/api/sensorData'
+import { useBasemap } from '@/api/maps'
 import { drawPointCloud, drawBBox2D, type BevViewParams } from '@/lib/canvasUtils'
-import { bboxCornersToGlobal, globalToSensor } from '@/lib/coordinateUtils'
+import { bboxCornersToGlobal, globalToSensor, globalToMapPixel, NUSCENES_MAP_META } from '@/lib/coordinateUtils'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -12,6 +13,8 @@ interface PointCloudCanvasProps {
   lidarCalibSensor?:  { translation: number[]; rotation: number[] }
   highlightAnnToken?: string
   onBBoxClick?:       (token: string) => void
+  location?:          string | null
+  pointSize?:         number
   className?:         string
 }
 
@@ -31,12 +34,15 @@ export default function PointCloudCanvas({
   lidarCalibSensor,
   highlightAnnToken,
   onBBoxClick,
+  location,
+  pointSize,
   className,
 }: PointCloudCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const bboxRectsRef = useRef<BBoxRect[]>([])
 
   const { data, isLoading, isError } = usePointCloud(sampleDataToken)
+  const { data: bitmap } = useBasemap(location ?? null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -49,35 +55,83 @@ export default function PointCloudCanvas({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    ctx.clearRect(0, 0, size, size)
+    // 黒背景
+    ctx.fillStyle = '#111'
+    ctx.fillRect(0, 0, size, size)
 
     const points = data.points
 
-    // BEV 描画パラメータ: 点群の x/y 範囲から計算
-    let viewParams: BevViewParams
-    if (points.length > 0) {
-      const xs = points.map((p) => p[0])
-      const ys = points.map((p) => p[1])
-      const minX = Math.min(...xs)
-      const maxX = Math.max(...xs)
-      const minY = Math.min(...ys)
-      const maxY = Math.max(...ys)
-      const rangeX = maxX - minX || 1
-      const rangeY = maxY - minY || 1
-      const padding = 20
-      const scale = Math.min((size - padding * 2) / rangeX, (size - padding * 2) / rangeY)
-      viewParams = {
-        width:   size,
-        height:  size,
-        scale,
-        offsetX: (minX + maxX) / 2,
-        offsetY: (minY + maxY) / 2,
-      }
-    } else {
-      viewParams = { width: size, height: size, scale: 10, offsetX: 0, offsetY: 0 }
+    // devkit の axes_limit=40 相当の固定表示範囲
+    const axesLimitMeters = 40
+    const viewParams: BevViewParams = {
+      width:   size,
+      height:  size,
+      scale:   size / (axesLimitMeters * 2),
+      offsetX: 0,
+      offsetY: 0,
     }
 
-    drawPointCloud(ctx, points, viewParams)
+    // basemap 切り出し・回転描画（devkit の render_ego_centric_map() 相当）
+    if (bitmap && egoPose && location) {
+      const meta = NUSCENES_MAP_META[location]
+      if (meta) {
+        const { resolution } = meta
+        const axesLimitPx = axesLimitMeters / resolution   // 400px
+
+        const centerPixel = globalToMapPixel(
+          egoPose.translation[0], egoPose.translation[1], location,
+        )
+        if (centerPixel) {
+          const [cx_map, cy_map] = centerPixel
+
+          // bitmap はリサイズ済みの可能性があるためスケール係数を計算
+          const origW  = meta.canvasEdge[0] / resolution
+          const origH  = meta.canvasEdge[1] / resolution
+          const scaleX = bitmap.width  / origW
+          const scaleY = bitmap.height / origH
+
+          // √2 倍の範囲を切り出す（回転後のクリッピング防止）
+          const cropSize = Math.ceil(axesLimitPx * Math.sqrt(2))
+
+          const offscreen = new OffscreenCanvas(cropSize * 2, cropSize * 2)
+          const offCtx    = offscreen.getContext('2d')!
+          offCtx.drawImage(
+            bitmap,
+            (cx_map - cropSize) * scaleX, (cy_map - cropSize) * scaleY,
+            cropSize * 2 * scaleX,        cropSize * 2 * scaleY,
+            0, 0,
+            cropSize * 2, cropSize * 2,
+          )
+
+          // yaw 角で回転（車両前方が上になるように）
+          const [w, qx, qy, qz] = egoPose.rotation
+          const yaw = Math.atan2(2 * (w * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
+
+          const rotCanvas = new OffscreenCanvas(cropSize * 2, cropSize * 2)
+          const rotCtx    = rotCanvas.getContext('2d')!
+          rotCtx.translate(cropSize, cropSize)
+          // NuScenes X軸（前方正）→ Canvas X軸（右正）のまま
+          rotCtx.rotate(yaw)
+          rotCtx.translate(-cropSize, -cropSize)
+          rotCtx.drawImage(offscreen, 0, 0)
+
+          // 中央から axesLimitPx 範囲を再切り出してメイン canvas に半透明で描画
+          ctx.globalAlpha = 0.5
+          ctx.drawImage(
+            rotCanvas,
+            cropSize - axesLimitPx, cropSize - axesLimitPx,
+            axesLimitPx * 2,        axesLimitPx * 2,
+            0, 0, size, size,
+          )
+          ctx.globalAlpha = 1.0
+        }
+      }
+    }
+
+    drawPointCloud(ctx, points, viewParams, {
+      pointSize: pointSize ?? 2,
+      colorMode: 'intensity',
+    })
 
     // BBox 描画（egoPose と lidarCalibSensor が揃っている場合のみ）
     const newBBoxRects: BBoxRect[] = []
@@ -87,12 +141,11 @@ export default function PointCloudCanvas({
       const cy = height / 2
 
       const toPixel = (x: number, y: number): [number, number] => [
-        cx + (y - offsetY) * scale,   // y → 画面 x
-        cy - (x - offsetX) * scale,   // x → 画面 y（反転）
+        cx + (y - offsetY) * scale,
+        cy - (x - offsetX) * scale,
       ]
 
       for (const ann of annotations) {
-        // グローバル8頂点 → センサー系 → BEV ピクセル
         const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
         const corners2D = globalCorners.map((corner) => {
           const sensorPt = globalToSensor(corner, egoPose, lidarCalibSensor)
@@ -114,7 +167,7 @@ export default function PointCloudCanvas({
       }
     }
     bboxRectsRef.current = newBBoxRects
-  }, [data, annotations, egoPose, lidarCalibSensor, highlightAnnToken])
+  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightAnnToken, location, pointSize])
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onBBoxClick) return

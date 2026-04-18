@@ -5,7 +5,7 @@ import type { CalibratedSensor, EgoPosePoint, SensorDataMap } from '@/types/sens
 export type GridConfig = string[][]
 
 export const DEFAULT_GRID_CONFIG: GridConfig = [
-  ['EGO_POSE',       'LIDAR_TOP',   'FUSED_RADER'      ],
+  ['EGO_POSE',       'LIDAR_TOP',   'RADAR_FRONT'      ],
   ['CAM_FRONT_LEFT', 'CAM_FRONT',   'CAM_FRONT_RIGHT'  ],
   ['CAM_BACK_LEFT',  'CAM_BACK',    'CAM_BACK_RIGHT'   ],
 ]

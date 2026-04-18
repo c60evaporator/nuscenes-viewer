@@ -15,6 +15,7 @@ interface PointCloudCanvasProps {
   onBBoxClick?:       (token: string) => void
   location?:          string | null
   pointSize?:         number
+  refSensorToken?:    string | null
   className?:         string
 }
 
@@ -36,12 +37,13 @@ export default function PointCloudCanvas({
   onBBoxClick,
   location,
   pointSize,
+  refSensorToken,
   className,
 }: PointCloudCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const bboxRectsRef = useRef<BBoxRect[]>([])
 
-  const { data, isLoading, isError } = usePointCloud(sampleDataToken)
+  const { data, isLoading, isError } = usePointCloud(sampleDataToken, refSensorToken)
   const { data: bitmap } = useBasemap(location ?? null)
 
   useEffect(() => {
@@ -110,8 +112,9 @@ export default function PointCloudCanvas({
           const rotCanvas = new OffscreenCanvas(cropSize * 2, cropSize * 2)
           const rotCtx    = rotCanvas.getContext('2d')!
           rotCtx.translate(cropSize, cropSize)
-          // NuScenes X軸（前方正）→ Canvas X軸（右正）のまま
+          // 画像中心を回転中心にして ego yaw を適用
           rotCtx.rotate(yaw)
+          // 原点を左上に戻して回転後の画像を描画
           rotCtx.translate(-cropSize, -cropSize)
           rotCtx.drawImage(offscreen, 0, 0)
 
@@ -127,7 +130,10 @@ export default function PointCloudCanvas({
         }
       }
     }
-
+    // 点群描画（Y軸反転して地図の座標系に合わせる）
+    ctx.save()
+    ctx.translate(0, size)   // Y軸の基点を下端に移動
+    ctx.scale(1, -1)         // Y軸反転
     drawPointCloud(ctx, points, viewParams, {
       pointSize: pointSize ?? 2,
       colorMode: 'intensity',
@@ -166,6 +172,7 @@ export default function PointCloudCanvas({
         drawBBox2D(ctx, corners2D, color)
       }
     }
+    ctx.restore()  // 点群、BBox 描画後に restore して点群描画の座標系を元に戻す
     bboxRectsRef.current = newBBoxRects
   }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightAnnToken, location, pointSize])
 

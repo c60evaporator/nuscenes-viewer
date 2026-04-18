@@ -17,10 +17,13 @@ export function useSensorImage(token: string | null) {
   })
 }
 
-export function usePointCloud(token: string | null) {
+export function usePointCloud(token: string | null, refSensorToken?: string | null) {
   return useQuery({
-    queryKey: ['pointcloud', token],
-    queryFn:  () => apiFetch<PointCloud>(`/sensor-data/${token}/pointcloud`),
-    enabled:  !!token,
+    queryKey: ['pointcloud', token, refSensorToken ?? null],
+    queryFn: () => {
+      const params = refSensorToken ? `?ref_sensor_token=${refSensorToken}` : ''
+      return apiFetch<PointCloud>(`/sensor-data/${token}/pointcloud${params}`)
+    },
+    enabled: !!token,
   })
 }

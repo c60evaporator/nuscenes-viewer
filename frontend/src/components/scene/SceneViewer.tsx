@@ -34,7 +34,10 @@ export default function SceneViewer({ sceneToken, location }: SceneViewerProps) 
   }
 
   const centerPoint: [number, number] | null = egoPoses && egoPoses.length > 0
-    ? [egoPoses[0].translation[0], egoPoses[0].translation[1]]
+    ? (() => {
+        const mid = egoPoses[Math.floor(egoPoses.length / 2)]
+        return [mid.translation[0], mid.translation[1]] as [number, number]
+      })()
     : null
 
   return (

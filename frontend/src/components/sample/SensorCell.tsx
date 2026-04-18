@@ -40,7 +40,10 @@ export default function SensorCell({
         ? egoPoses.findIndex((p) => p.sample_token === sampleToken)
         : -1
       const centerPoint: [number, number] | null = egoPoses.length > 0
-        ? [egoPoses[0].translation[0], egoPoses[0].translation[1]]
+        ? (() => {
+            const mid = egoPoses[Math.floor(egoPoses.length / 2)]
+            return [mid.translation[0], mid.translation[1]] as [number, number]
+          })()
         : null
       return (
         <MapCanvas
@@ -68,12 +71,25 @@ export default function SensorCell({
       } : undefined
 
       const isRadar = channel.startsWith('RADAR_')
+
+      // RADAR の場合は LIDAR_TOP 座標系に変換するための token を取得
+      const lidarBrief      = isRadar ? sampleDataMap['LIDAR_TOP'] : null
+      const lidarCalibToken = lidarBrief?.calibrated_sensor_token ?? null
+
+      // RADAR BEV の BBox 投影には LIDAR_TOP のキャリブを使う
+      const lidarTopCalib = lidarCalibToken ? calibSensorMap[lidarCalibToken] : undefined
+      const lidarTopCalibArray = lidarTopCalib ? {
+        translation: [lidarTopCalib.translation.x, lidarTopCalib.translation.y, lidarTopCalib.translation.z],
+        rotation:    [lidarTopCalib.rotation.w, lidarTopCalib.rotation.x, lidarTopCalib.rotation.y, lidarTopCalib.rotation.z],
+      } : undefined
+
       return (
         <PointCloudCanvas
           sampleDataToken={brief.token}
           annotations={isRadar ? [] : annotations}
           egoPose={currentEgoPose}
-          lidarCalibSensor={lidarCalibArray}
+          lidarCalibSensor={isRadar ? lidarTopCalibArray : lidarCalibArray}
+          refSensorToken={isRadar ? lidarCalibToken : null}
           location={location}
           pointSize={isRadar ? 4 : 2}
           onBBoxClick={onBBoxClick}

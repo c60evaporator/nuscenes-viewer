@@ -112,7 +112,11 @@ async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
 # ── SampleData pointcloud ─────────────────────────────────────────────────────
 
 @router.get("/sensor-data/{token}/pointcloud")
-async def get_sensor_data_pointcloud(token: str, db: AsyncSession = Depends(get_db)):
+async def get_sensor_data_pointcloud(
+    token: str,
+    ref_sensor_token: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
     sd = await SensorRepository(db).get_sample_data_by_token(token)
     if not sd:
         raise HTTPException(status_code=404, detail="SampleData not found")
@@ -132,6 +136,10 @@ async def get_sensor_data_pointcloud(token: str, db: AsyncSession = Depends(get_
         if not path.exists():
             raise HTTPException(status_code=404, detail="Pointcloud file not found")
         points = _parse_pcd(path)
+        if ref_sensor_token and points:
+            points = await _transform_to_ref_sensor(
+                points, sd.calibrated_sensor_token, ref_sensor_token, db,
+            )
         return {"points": points, "num_points": len(points)}
 
     raise HTTPException(
@@ -140,40 +148,100 @@ async def get_sensor_data_pointcloud(token: str, db: AsyncSession = Depends(get_
     )
 
 
+def _quat_to_rot(q: list[float]) -> np.ndarray:
+    w, x, y, z = q
+    return np.array([
+        [1 - 2*(y*y + z*z),  2*(x*y - z*w),    2*(x*z + y*w)],
+        [2*(x*y + z*w),      1 - 2*(x*x + z*z), 2*(y*z - x*w)],
+        [2*(x*z - y*w),      2*(y*z + x*w),    1 - 2*(x*x + y*y)],
+    ])
+
+
+async def _transform_to_ref_sensor(
+    points:           list[list[float]],
+    src_sensor_token: str,
+    ref_sensor_token: str,
+    db:               AsyncSession,
+) -> list[list[float]]:
+    """点群を src センサー座標系から ref センサー座標系に変換する（RADAR → LIDAR_TOP）"""
+    src_cs = await SensorRepository(db).get_calibrated_sensor_by_token(src_sensor_token)
+    ref_cs = await SensorRepository(db).get_calibrated_sensor_by_token(ref_sensor_token)
+    if not src_cs or not ref_cs:
+        return points
+
+    R_src     = _quat_to_rot(src_cs.rotation)
+    src_trans = np.array(src_cs.translation)
+    R_ref     = _quat_to_rot(ref_cs.rotation)
+    ref_trans = np.array(ref_cs.translation)
+
+    pts = np.array([p[:3] for p in points], dtype=np.float64)   # (N, 3)
+    pts = (R_src @ pts.T).T + src_trans                          # src → Ego
+    pts = (R_ref.T @ (pts - ref_trans).T).T                      # Ego → ref
+
+    return [
+        [float(pts[i, 0]), float(pts[i, 1]), float(pts[i, 2]),
+         float(points[i][3]) if len(points[i]) > 3 else 0.0]
+        for i in range(len(points))
+    ]
+
+
 def _parse_pcd(path: Path) -> list[list[float]]:
-    """標準PCD形式（ASCIIまたはbinary）をパースしてx,y,z,intensityのリストを返す"""
+    """標準PCD形式（binary）をパースしてx,y,z,intensityのリストを返す"""
     with open(path, "rb") as f:
         content = f.read()
 
-    header_end = content.find(b"DATA ")
-    if header_end == -1:
-        return []
-
-    header = content[:header_end].decode("utf-8", errors="ignore")
+    # ヘッダーを行単位で読み、DATA行の直後からデータ開始
+    header_lines = []
+    pos = 0
     data_type = ""
+    while pos < len(content):
+        end = content.find(b"\n", pos)
+        if end == -1:
+            break
+        line = content[pos:end].decode("utf-8", errors="ignore").strip()
+        header_lines.append(line)
+        pos = end + 1
+        if line.startswith("DATA"):
+            data_type = line.split()[1]
+            break
+
+    data_start = pos
+
     fields: list[str] = []
     size:   list[int] = []
+    types:  list[str] = []
     count:  list[int] = []
     num_points = 0
 
-    for line in header.splitlines():
+    for line in header_lines:
         if line.startswith("FIELDS"):
             fields = line.split()[1:]
         elif line.startswith("SIZE"):
             size = [int(s) for s in line.split()[1:]]
+        elif line.startswith("TYPE"):
+            types = line.split()[1:]
         elif line.startswith("COUNT"):
             count = [int(c) for c in line.split()[1:]]
         elif line.startswith("POINTS"):
             num_points = int(line.split()[1])
-        elif line.startswith("DATA"):
-            data_type = line.split()[1]
 
-    data_start = header_end + len(b"DATA ") + len(data_type.encode()) + 1
+    if not fields or not size or not types or not count:
+        return []
+
+    def get_dtype(s: int, t: str):
+        if t == "F":
+            return {4: np.float32, 8: np.float64}.get(s, np.float32)
+        elif t == "I":
+            return {1: np.int8, 2: np.int16, 4: np.int32, 8: np.int64}.get(s, np.int32)
+        else:  # "U"
+            return {1: np.uint8, 2: np.uint16, 4: np.uint32, 8: np.uint64}.get(s, np.uint32)
+
+    dtypes = [get_dtype(s, t) for s, t in zip(size, types)]
 
     if data_type == "ascii":
         lines = content[data_start:].decode("utf-8", errors="ignore").strip().splitlines()
         points = []
-        for line in lines:
+        for line in lines[:num_points]:
             vals = [float(v) for v in line.split()]
             if len(vals) >= 3:
                 intensity = vals[3] if len(vals) > 3 else 0.0
@@ -181,27 +249,19 @@ def _parse_pcd(path: Path) -> list[list[float]]:
         return points
 
     if data_type == "binary":
-        if not size or not count or not fields:
-            return []
         point_step = sum(s * c for s, c in zip(size, count))
         data = content[data_start:]
         points = []
         for i in range(num_points):
-            offset = i * point_step
-            if offset + point_step > len(data):
+            base = i * point_step
+            if base + point_step > len(data):
                 break
             vals: list[float] = []
             field_offset = 0
-            for s, c in zip(size, count):
+            for s, c, dtype in zip(size, count, dtypes):
                 for _ in range(c):
-                    chunk = data[offset + field_offset: offset + field_offset + s]
-                    if s == 4:
-                        val = float(np.frombuffer(chunk, dtype=np.float32)[0])
-                    elif s == 8:
-                        val = float(np.frombuffer(chunk, dtype=np.float64)[0])
-                    else:
-                        val = float(np.frombuffer(chunk, dtype=np.uint8)[0])
-                    vals.append(val)
+                    chunk = data[base + field_offset: base + field_offset + s]
+                    vals.append(float(np.frombuffer(chunk, dtype=dtype)[0]))
                     field_offset += s
             if len(vals) >= 3:
                 intensity = vals[3] if len(vals) > 3 else 0.0

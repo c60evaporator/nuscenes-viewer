@@ -33,11 +33,16 @@ export default function SceneViewer({ sceneToken, location }: SceneViewerProps) 
     )
   }
 
+  const centerPoint: [number, number] | null = egoPoses && egoPoses.length > 0
+    ? [egoPoses[0].translation[0], egoPoses[0].translation[1]]
+    : null
+
   return (
     <MapCanvas
       location={location}
       egoPoses={egoPoses ?? []}
       showStartEnd={true}
+      centerPoint={centerPoint}
       className="flex-1 w-full h-full"
     />
   )

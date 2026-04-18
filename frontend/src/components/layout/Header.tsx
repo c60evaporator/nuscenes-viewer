@@ -42,6 +42,7 @@ export default function Header({ activeTab, onTabChange }: HeaderProps) {
 
   const handleLocationChange = (location: string) => {
     setMapLocation(location)
+    unlock()
     queryClient.prefetchQuery({
       queryKey: ['basemap', location],
       queryFn: async () => {

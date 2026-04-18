@@ -21,7 +21,13 @@ export const useViewerStore = create<ViewerState>((set) => ({
   currentInstanceToken:   null,
   currentAnnotationToken: null,
 
-  setMapLocation: (location) => set({ currentMapLocation: location }),
+  setMapLocation: (location) => set({
+    currentMapLocation:     location,
+    currentSceneToken:      null,
+    currentSampleToken:     null,
+    currentInstanceToken:   null,
+    currentAnnotationToken: null,
+  }),
   // シーン変更時はサンプル選択をリセット
   setScene:       (token)    => set({ currentSceneToken: token, currentSampleToken: null }),
   setSample:      (token)    => set({ currentSampleToken: token }),

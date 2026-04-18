@@ -122,6 +122,7 @@ export default function InstanceViewer({
               egoPoses={[currentEgoPose]}
               currentIndex={0}
               showStartEnd={false}
+              centerPoint={[currentEgoPose.translation[0], currentEgoPose.translation[1]]}
               className="w-full h-full"
             />
           ) : (

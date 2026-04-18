@@ -39,12 +39,16 @@ export default function SensorCell({
       const currentIndex = sampleToken
         ? egoPoses.findIndex((p) => p.sample_token === sampleToken)
         : -1
+      const centerPoint: [number, number] | null = egoPoses.length > 0
+        ? [egoPoses[0].translation[0], egoPoses[0].translation[1]]
+        : null
       return (
         <MapCanvas
           location={location}
           egoPoses={egoPoses}
           currentIndex={currentIndex}
           showStartEnd={false}
+          centerPoint={centerPoint}
           className="w-full h-full"
         />
       )

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import MapCanvas from '@/components/common/MapCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
@@ -7,12 +8,14 @@ import type { InstanceAnnotation } from '@/types/annotation'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 
 interface InstanceViewerProps {
-  instanceToken:    string | null
-  currentAnnotation: InstanceAnnotation | null  // slider で選択中
-  allAnnotations:   InstanceAnnotation[]        // 全インスタンスアノテーション
-  location:         string | null
-  calibSensorMap:   Record<string, CalibratedSensor>
-  sceneEgoPoses:    EgoPosePoint[]
+  instanceToken:     string | null
+  currentAnnotation: InstanceAnnotation | null
+  allAnnotations:    InstanceAnnotation[]
+  location:          string | null
+  calibSensorMap:    Record<string, CalibratedSensor>
+  sceneEgoPoses:     EgoPosePoint[]
+  highlightAnnToken?: string | null
+  onBBoxClick?:       (annToken: string) => void
 }
 
 function Placeholder({ text }: { text: string }) {
@@ -30,6 +33,8 @@ export default function InstanceViewer({
   location,
   calibSensorMap,
   sceneEgoPoses,
+  highlightAnnToken,
+  onBBoxClick,
 }: InstanceViewerProps) {
   const sampleToken = currentAnnotation?.sample_token ?? null
 
@@ -52,15 +57,28 @@ export default function InstanceViewer({
   )
 
   // LiDAR
-  const lidarBrief   = sampleDataMap?.['LIDAR_TOP']
-  const lidarCalib   = calibSensorMap['LIDAR_TOP']
+  const lidarBrief = sampleDataMap?.['LIDAR_TOP']
+  const lidarCalib = lidarBrief?.calibrated_sensor_token
+    ? calibSensorMap[lidarBrief.calibrated_sensor_token]
+    : undefined
   const lidarCalibArray = lidarCalib ? {
     translation: lidarCalib.translation,
     rotation:    lidarCalib.rotation,
   } : undefined
 
   // Camera
-  const cameraCalib  = bestCamera ? calibSensorMap[bestCamera.channel] : undefined
+  const cameraBrief = bestCamera ? sampleDataMap?.[bestCamera.channel] : undefined
+  const cameraCalib = cameraBrief?.calibrated_sensor_token
+    ? calibSensorMap[cameraBrief.calibrated_sensor_token]
+    : undefined
+
+  // highlightAnnToken → instance_token（canvas の highlightInstanceToken 用）
+  const highlightInstanceToken = useMemo(() => {
+    const effectiveAnnToken = highlightAnnToken ?? currentAnnotation?.token
+    if (!effectiveAnnToken) return undefined
+    const ann = (sampleAnnotations ?? []).find((a) => a.token === effectiveAnnToken)
+    return ann?.instance_token
+  }, [highlightAnnToken, currentAnnotation?.token, sampleAnnotations])
 
   if (!currentAnnotation) {
     return (
@@ -83,7 +101,8 @@ export default function InstanceViewer({
               annotations={sampleAnnotations ?? []}
               egoPose={currentEgoPose}
               lidarCalibSensor={lidarCalibArray}
-              highlightAnnToken={currentAnnotation.token}
+              highlightInstanceToken={highlightInstanceToken}
+              onBBoxClick={onBBoxClick}
               className="w-full h-full"
             />
           ) : (
@@ -102,7 +121,8 @@ export default function InstanceViewer({
               calibratedSensor={cameraCalib}
               egoPose={currentEgoPose}
               annotations={sampleAnnotations ?? []}
-              highlightToken={currentAnnotation.token}
+              highlightInstanceToken={highlightInstanceToken}
+              onBBoxClick={onBBoxClick}
               className="w-full h-full"
             />
           ) : (

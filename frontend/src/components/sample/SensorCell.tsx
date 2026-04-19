@@ -108,10 +108,6 @@ export default function SensorCell({
     // ── カメラ ──────────────────────────────────────────────────────────────
     if (channel.startsWith('CAM_')) {
       const brief = sampleDataMap[channel]
-      console.log('[Camera] channel:', channel)
-      console.log('[Camera] camBrief?.token:', brief?.token)
-      console.log('[Camera] camEgoPose:', camEgoPose?.translation)
-      console.log('[Camera] using egoPose:', (camEgoPose ?? currentEgoPose)?.translation)
       if (!brief) return <Placeholder text={`No ${channel}`} />
 
       const calibSensor = brief.calibrated_sensor_token

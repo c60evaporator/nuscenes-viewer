@@ -68,8 +68,6 @@ export default function CameraImageCanvas({
       translation: calibratedSensor.translation,
       rotation:    calibratedSensor.rotation,
     }
-    console.log('[BBox] egoPose.translation:', egoPose?.translation)
-
     const naturalWidth  = bitmapRef.current?.width  ?? 1
     const naturalHeight = bitmapRef.current?.height ?? 1
 
@@ -82,20 +80,6 @@ export default function CameraImageCanvas({
 
     for (const ann of annotations) {
       const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
-
-      if (ann === annotations[0]) {
-        console.log('[Debug] channel:', calibratedSensor.channel)
-        console.log('[Debug] ann.translation:', ann.translation)
-        console.log('[Debug] ann.rotation:', ann.rotation)
-        console.log('[Debug] ann.size:', ann.size)
-        console.log('[Debug] globalCorners[0]:', globalCorners[0])
-        console.log('[Debug] egoPose.translation:', egoPose?.translation)
-        console.log('[Debug] egoPose.rotation:', egoPose?.rotation)
-        console.log('[Debug] calibArray.translation:', calibArray.translation)
-        console.log('[Debug] calibArray.rotation:', calibArray.rotation)
-        const px = project3DTo2D(globalCorners[0], intrinsic, egoPose!, calibArray)
-        console.log('[Debug] projected corner0:', px)
-      }
 
       const corners2D: [number, number][] = []
       for (const corner of globalCorners) {

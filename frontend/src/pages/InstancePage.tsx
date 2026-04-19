@@ -11,6 +11,7 @@ import InstanceInfo from '@/components/instance/InstanceInfo'
 import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
 import { useInstances, useInstanceAnnotations } from '@/api/instances'
+import { useSampleAnnotations } from '@/api/samples'
 import { useCategories } from '@/api/categories'
 import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
@@ -34,6 +35,7 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
   const [selectedSceneToken,   setSelectedSceneToken]   = useState<string | null>(lockedSceneToken ?? null)
   const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(lockedCategoryName ?? null)
   const [currentAnnotationIndex, setCurrentAnnotationIndex] = useState(0)
+  const [highlightAnnToken, setHighlightAnnToken] = useState<string | null>(null)
 
   // ロケーション内のシーンリスト
   const { data: logsData   } = useLogsByLocation(currentMapLocation)
@@ -101,11 +103,30 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
 
   const currentAnnotation = allAnnotations[currentAnnotationIndex] ?? null
 
+  // 現在サンプルの全アノテーション（BBox クリック時の instance_token 逆引き用）
+  const { data: sampleAnnotations } = useSampleAnnotations(currentAnnotation?.sample_token ?? null)
+
+  // annotation が切り替わったらハイライトをリセット
+  useEffect(() => {
+    setHighlightAnnToken(null)
+  }, [currentAnnotation?.token])
+
+  const handleBBoxClick = (annToken: string) => {
+    setHighlightAnnToken(annToken)
+  }
+
+  // highlightAnnToken → instance_token（サンプル全アノテーションから逆引き）
+  const highlightInstanceToken = useMemo(() => {
+    if (!highlightAnnToken) return currentInstanceToken
+    const ann = (sampleAnnotations ?? []).find((a) => a.token === highlightAnnToken)
+    return ann?.instance_token ?? currentInstanceToken
+  }, [highlightAnnToken, sampleAnnotations, currentInstanceToken])
+
   // Calibrated Sensors
   const { data: calibSensorsData } = useCalibratedSensors()
   const calibSensorMap = useMemo<Record<string, CalibratedSensor>>(() => {
     const map: Record<string, CalibratedSensor> = {}
-    calibSensorsData?.items.forEach((cs) => { map[cs.channel] = cs })
+    calibSensorsData?.items.forEach((cs) => { map[cs.token] = cs })
     return map
   }, [calibSensorsData])
 
@@ -143,6 +164,7 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
             instances={instances}
             currentInstanceToken={currentInstanceToken}
             onSelect={setInstance}
+            highlightInstanceToken={highlightInstanceToken}
           />
           <InstanceSampleSlider
             annotations={allAnnotations}
@@ -177,6 +199,8 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
         location={currentMapLocation}
         calibSensorMap={calibSensorMap}
         sceneEgoPoses={egoPoses ?? []}
+        highlightAnnToken={highlightAnnToken}
+        onBBoxClick={handleBBoxClick}
       />
     </MainLayout>
   )

@@ -31,10 +31,17 @@ export default function MapCanvas({
   const [isDragging, setIsDragging]   = useState(false)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
   const { data: bitmap } = useBasemap(location)
+  const [pendingReset, setPendingReset] = useState(false)
 
   // zoom を ref でも保持（centerPoint effect から stale closure なしで参照するため）
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
+
+  // basemap 全体がコンテナに収まる最小ズームを計算
+  const calcMinZoom = () => {
+    if (!bitmap || containerSize.w === 0 || containerSize.h === 0) return 0.05
+    return Math.min(containerSize.w / bitmap.width, containerSize.h / bitmap.height)
+  }
 
   // コンテナサイズを ResizeObserver で監視
   useEffect(() => {
@@ -75,15 +82,6 @@ export default function MapCanvas({
     if (egoPoses.length === 0) return
 
     const displaySize: [number, number] = [bitmap.width, bitmap.height]
-
-    if (egoPoses.length > 0) {
-      const meta = NUSCENES_MAP_META[location]
-      console.log('[MapCanvas] location:', location)
-      console.log('[MapCanvas] canvasEdge:', meta?.canvasEdge)
-      console.log('[MapCanvas] displaySize:', displaySize)
-      console.log('[MapCanvas] first translation:', egoPoses[0].translation)
-      console.log('[MapCanvas] first pixel:', egoPoseToPixel(egoPoses[0].translation, location, displaySize))
-    }
 
     drawEgoPoses(ctx, egoPoses, currentIndex, displaySize, location, showStartEnd)
   }, [bitmap, egoPoses, currentIndex, showStartEnd, location])
@@ -132,11 +130,20 @@ export default function MapCanvas({
     })
   }, [centerPoint, bitmap, location, cropToContent, containerSize])
 
-  // location 変更時にズーム・オフセットをリセット
+  // location 変更時にリセットフラグを立てる
   useEffect(() => {
-    setOffset({ x: 0, y: 0 })
-    setZoom(1)
+    setPendingReset(true)
   }, [location])
+
+  // bitmap と containerSize が揃ったらリセットを実行
+  useEffect(() => {
+    if (!pendingReset) return
+    if (containerSize.w === 0 || !bitmap) return
+    const minZoom = calcMinZoom()
+    setOffset({ x: 0, y: 0 })
+    setZoom(minZoom)
+    setPendingReset(false)
+  }, [pendingReset, containerSize, bitmap])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true)
@@ -152,7 +159,8 @@ export default function MapCanvas({
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
-    const newZoom = Math.min(Math.max(zoom * (e.deltaY > 0 ? 0.9 : 1.1), 0.5), 10)
+    const minZoom = calcMinZoom()
+    const newZoom = Math.min(Math.max(zoom * (e.deltaY > 0 ? 0.9 : 1.1), minZoom), 10)
     const rect    = e.currentTarget.getBoundingClientRect()
     applyZoom(newZoom, e.clientX - rect.left, e.clientY - rect.top)
   }
@@ -160,7 +168,8 @@ export default function MapCanvas({
   const zoomAtCenter = (delta: number) => {
     const container = containerRef.current
     if (!container) return
-    const newZoom = Math.min(Math.max(zoom * delta, 0.5), 10)
+    const minZoom = calcMinZoom()
+    const newZoom = Math.min(Math.max(zoom * delta, minZoom), 10)
     applyZoom(newZoom, container.clientWidth / 2, container.clientHeight / 2)
   }
 

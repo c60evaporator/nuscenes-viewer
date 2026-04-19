@@ -146,7 +146,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const { data: calibSensorsData } = useCalibratedSensors()
   const calibSensorMap = useMemo<Record<string, CalibratedSensor>>(() => {
     const map: Record<string, CalibratedSensor> = {}
-    calibSensorsData?.items.forEach((cs) => { map[cs.sensor_channel] = cs })
+    calibSensorsData?.items.forEach((cs) => { map[cs.channel] = cs })
     return map
   }, [calibSensorsData])
 

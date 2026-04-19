@@ -4,7 +4,7 @@ import type { CalibratedSensor } from '../types/sensor'
 import type { PaginatedResponse } from '../types/common'
 
 export function useCalibratedSensors(params?: { limit?: number }) {
-  const limit = params?.limit ?? 100
+  const limit = params?.limit ?? 500
   return useQuery({
     queryKey:  ['calibrated-sensors', limit],
     queryFn:   () => apiFetch<PaginatedResponse<CalibratedSensor>>(`/calibrated-sensors?limit=${limit}`),

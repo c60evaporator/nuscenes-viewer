@@ -93,6 +93,16 @@ async def get_ego_pose(token: str, db: AsyncSession = Depends(get_db)):
     return SensorConverter.to_ego_pose_response(pose)
 
 
+# ── SampleData ego-pose ───────────────────────────────────────────────────────
+
+@router.get("/sensor-data/{token}/ego-pose", response_model=EgoPoseResponse)
+async def get_sensor_data_ego_pose(token: str, db: AsyncSession = Depends(get_db)):
+    pose = await SensorRepository(db).get_ego_pose_by_sample_data_token(token)
+    if not pose:
+        raise HTTPException(status_code=404, detail="EgoPose not found")
+    return SensorConverter.to_ego_pose_response(pose)
+
+
 # ── SampleData image ──────────────────────────────────────────────────────────
 
 @router.get("/sensor-data/{token}/image")

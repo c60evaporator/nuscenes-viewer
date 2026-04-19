@@ -1,6 +1,7 @@
 import MapCanvas from '@/components/common/MapCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
+import { useSensorDataEgoPose } from '@/api/sensorData'
 import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor, EgoPosePoint, SensorDataMap } from '@/types/sensor'
 
@@ -27,10 +28,15 @@ export default function SensorCell({
   onBBoxClick,
   highlightAnnToken,
 }: SensorCellProps) {
-  // 現在サンプルの ego pose
-  const currentEgoPose = sampleToken
-    ? egoPoses.find((p) => p.sample_token === sampleToken) ?? egoPoses[0]
-    : undefined
+  // devkit 準拠: LIDAR_TOP の ego_pose を全センサーの基準とする
+  const lidarBriefForEgo = sampleDataMap['LIDAR_TOP']
+  const currentEgoPose = lidarBriefForEgo?.ego_pose
+    ?? (sampleToken ? egoPoses.find((p) => p.sample_token === sampleToken) : undefined)
+    ?? egoPoses[0]
+
+  // カメラチャンネルの場合のみ、そのカメラ自身の ego_pose を取得
+  const camBrief = channel.startsWith('CAM_') ? sampleDataMap[channel] : null
+  const { data: camEgoPose } = useSensorDataEgoPose(camBrief?.token ?? null)
 
   const renderContent = () => {
     // ── EGO_POSE ───────────────────────────────────────────────────────────
@@ -66,8 +72,8 @@ export default function SensorCell({
         ? calibSensorMap[brief.calibrated_sensor_token]
         : undefined
       const lidarCalibArray = calibSensor ? {
-        translation: [calibSensor.translation.x, calibSensor.translation.y, calibSensor.translation.z],
-        rotation:    [calibSensor.rotation.w, calibSensor.rotation.x, calibSensor.rotation.y, calibSensor.rotation.z],
+        translation: calibSensor.translation,
+        rotation:    calibSensor.rotation,
       } : undefined
 
       const isRadar = channel.startsWith('RADAR_')
@@ -79,14 +85,14 @@ export default function SensorCell({
       // RADAR BEV の BBox 投影には LIDAR_TOP のキャリブを使う
       const lidarTopCalib = lidarCalibToken ? calibSensorMap[lidarCalibToken] : undefined
       const lidarTopCalibArray = lidarTopCalib ? {
-        translation: [lidarTopCalib.translation.x, lidarTopCalib.translation.y, lidarTopCalib.translation.z],
-        rotation:    [lidarTopCalib.rotation.w, lidarTopCalib.rotation.x, lidarTopCalib.rotation.y, lidarTopCalib.rotation.z],
+        translation: lidarTopCalib.translation,
+        rotation:    lidarTopCalib.rotation,
       } : undefined
 
       return (
         <PointCloudCanvas
           sampleDataToken={brief.token}
-          annotations={isRadar ? [] : annotations}
+          annotations={annotations}
           egoPose={currentEgoPose}
           lidarCalibSensor={isRadar ? lidarTopCalibArray : lidarCalibArray}
           refSensorToken={isRadar ? lidarCalibToken : null}
@@ -101,6 +107,10 @@ export default function SensorCell({
     // ── カメラ ──────────────────────────────────────────────────────────────
     if (channel.startsWith('CAM_')) {
       const brief = sampleDataMap[channel]
+      console.log('[Camera] channel:', channel)
+      console.log('[Camera] camBrief?.token:', brief?.token)
+      console.log('[Camera] camEgoPose:', camEgoPose?.translation)
+      console.log('[Camera] using egoPose:', (camEgoPose ?? currentEgoPose)?.translation)
       if (!brief) return <Placeholder text={`No ${channel}`} />
 
       const calibSensor = brief.calibrated_sensor_token
@@ -112,7 +122,7 @@ export default function SensorCell({
         <CameraImageCanvas
           sampleDataToken={brief.token}
           calibratedSensor={calibSensor}
-          egoPose={currentEgoPose}
+          egoPose={camEgoPose ?? currentEgoPose}
           annotations={annotations}
           highlightToken={highlightAnnToken}
           onBBoxClick={onBBoxClick}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { usePointCloud } from '@/api/sensorData'
 import { useBasemap } from '@/api/maps'
 import { drawPointCloud, drawBBox2D, type BevViewParams } from '@/lib/canvasUtils'
@@ -40,8 +40,21 @@ export default function PointCloudCanvas({
   refSensorToken,
   className,
 }: PointCloudCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const canvasRef    = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const bboxRectsRef = useRef<BBoxRect[]>([])
+  const [canvasSize, setCanvasSize] = useState(400)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect
+      setCanvasSize(Math.min(width, height))
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
 
   const { data, isLoading, isError } = usePointCloud(sampleDataToken, refSensorToken)
   const { data: bitmap } = useBasemap(location ?? null)
@@ -192,9 +205,19 @@ export default function PointCloudCanvas({
     }
   }
 
+  const containerStyle: React.CSSProperties = {
+    display:        'flex',
+    alignItems:     'center',
+    justifyContent: 'center',
+    width:          '100%',
+    height:         '100%',
+    background:     '#111',
+    overflow:       'hidden',
+  }
+
   if (isLoading) {
     return (
-      <div className={className} style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#888', fontSize: 12 }}>
+      <div ref={containerRef} className={className} style={{ ...containerStyle, color: '#888', fontSize: 12 }}>
         Loading point cloud...
       </div>
     )
@@ -202,18 +225,25 @@ export default function PointCloudCanvas({
 
   if (isError) {
     return (
-      <div className={className} style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#f55', fontSize: 12 }}>
+      <div ref={containerRef} className={className} style={{ ...containerStyle, color: '#f55', fontSize: 12 }}>
         Failed to load point cloud
       </div>
     )
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={className}
-      style={{ aspectRatio: '1', width: '100%', background: '#111', display: 'block' }}
-      onClick={handleClick}
-    />
+    <div ref={containerRef} className={className} style={containerStyle}>
+      <canvas
+        ref={canvasRef}
+        style={{
+          width:      canvasSize,
+          height:     canvasSize,
+          display:    'block',
+          background: '#111',
+          flexShrink: 0,
+        }}
+        onClick={handleClick}
+      />
+    </div>
   )
 }

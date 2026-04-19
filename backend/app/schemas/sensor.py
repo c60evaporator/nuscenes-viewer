@@ -8,6 +8,13 @@ class SampleEgoPoseResponse(BaseModel):
     rotation: list[float]      # [w, x, y, z]
 
 
+class EgoPoseMinimalResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    translation: list[float]   # [x, y, z]
+    rotation:    list[float]   # [w, x, y, z]
+
+
 class SensorDataBriefResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -15,6 +22,7 @@ class SensorDataBriefResponse(BaseModel):
     filename:                str
     fileformat:              str
     calibrated_sensor_token: str
+    ego_pose:                EgoPoseMinimalResponse
 
 
 class BestCameraResponse(BaseModel):

@@ -82,6 +82,9 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
   const { data: instances     } = useSampleInstances(currentSampleToken)
   const { data: egoPoses      } = useSceneEgoPoses(selectedSceneToken)
 
+  console.log('[SamplePage] currentSampleToken:', currentSampleToken)
+  console.log('[SamplePage] sensorDataMap CAM_FRONT token:', sensorDataMap?.['CAM_FRONT']?.token)
+
   // Calibrated Sensors（チャンネル名でインデックス化）
   const { data: calibSensorsData } = useCalibratedSensors()
   const calibSensorMap = useMemo<Record<string, CalibratedSensor>>(() => {

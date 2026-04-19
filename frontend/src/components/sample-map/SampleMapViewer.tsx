@@ -38,8 +38,8 @@ export default function SampleMapViewer({
   const isLidar      = selectedChannel === 'LIDAR_TOP' || selectedChannel === 'FUSED_RADER'
 
   const lidarCalibArray = lidarCalib ? {
-    translation: [lidarCalib.translation.x, lidarCalib.translation.y, lidarCalib.translation.z],
-    rotation:    [lidarCalib.rotation.w,    lidarCalib.rotation.x,    lidarCalib.rotation.y,    lidarCalib.rotation.z],
+    translation: lidarCalib.translation,
+    rotation:    lidarCalib.rotation,
   } : undefined
 
   return (

@@ -178,8 +178,8 @@ export function calcBasemapCrop(
  * @param size         [width, length, height]（nuScenes 定義）
  * @returns            8頂点のグローバル座標（各頂点は [x, y, z]）
  *
- * 頂点順（ローカル座標系）:
- *   0-3: 下面（z = -h/2）、4-7: 上面（z = +h/2）
+ * 頂点順は devkit Box.corners() と同じ:
+ *   0-3: 上面（z = +h/2）、4-7: 下面（z = -h/2）
  *   各面は [前右, 前左, 後左, 後右] の順（x=前方, y=左方向）
  */
 export function bboxCornersToGlobal(
@@ -192,17 +192,11 @@ export function bboxCornersToGlobal(
   const hl = l / 2
   const hh = h / 2
 
-  // ローカル座標での8頂点（nuScenes: x=前, y=左, z=上）
-  const localCorners: number[][] = [
-    [ hl,  hw, -hh],
-    [ hl, -hw, -hh],
-    [-hl, -hw, -hh],
-    [-hl,  hw, -hh],
-    [ hl,  hw,  hh],
-    [ hl, -hw,  hh],
-    [-hl, -hw,  hh],
-    [-hl,  hw,  hh],
-  ]
+  // devkit Box.corners() と完全に同じ頂点順序
+  const xs = [ hl,  hl,  hl,  hl, -hl, -hl, -hl, -hl]
+  const ys = [ hw, -hw, -hw,  hw,  hw, -hw, -hw,  hw]
+  const zs = [ hh,  hh, -hh, -hh,  hh,  hh, -hh, -hh]
+  const localCorners: number[][] = xs.map((x, i) => [x, ys[i], zs[i]])
 
   const R = quatToRotMat(rotation)
 

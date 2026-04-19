@@ -55,8 +55,8 @@ export default function InstanceViewer({
   const lidarBrief   = sampleDataMap?.['LIDAR_TOP']
   const lidarCalib   = calibSensorMap['LIDAR_TOP']
   const lidarCalibArray = lidarCalib ? {
-    translation: [lidarCalib.translation.x, lidarCalib.translation.y, lidarCalib.translation.z],
-    rotation:    [lidarCalib.rotation.w,    lidarCalib.rotation.x,    lidarCalib.rotation.y,    lidarCalib.rotation.z],
+    translation: lidarCalib.translation,
+    rotation:    lidarCalib.rotation,
   } : undefined
 
   // Camera

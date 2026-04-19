@@ -3,12 +3,12 @@ import { useSensorImage } from '@/api/sensorData'
 import { project3DTo2D, bboxCornersToGlobal } from '@/lib/coordinateUtils'
 import { drawBBox2D } from '@/lib/canvasUtils'
 import type { Annotation } from '@/types/annotation'
-import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
+import type { CalibratedSensor } from '@/types/sensor'
 
 interface CameraImageCanvasProps {
   sampleDataToken:  string
   calibratedSensor: CalibratedSensor
-  egoPose?:         EgoPosePoint
+  egoPose?:         { translation: number[]; rotation: number[] }
   annotations?:     Annotation[]
   highlightToken?:  string
   onBBoxClick?:     (token: string) => void
@@ -47,41 +47,55 @@ export default function CameraImageCanvas({
     const bboxCanvas = bboxCanvasRef.current
     if (!imgCanvas || !bboxCanvas) return
 
-    const { width, height } = imgCanvas.getBoundingClientRect()
-    bboxCanvas.width  = width
-    bboxCanvas.height = height
+    // imgCanvas の実際の CSS 表示サイズを取得
+    const imgRect = imgCanvas.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+
+    bboxCanvas.width        = imgRect.width  * dpr
+    bboxCanvas.height       = imgRect.height * dpr
+    bboxCanvas.style.width  = imgRect.width  + 'px'
+    bboxCanvas.style.height = imgRect.height + 'px'
 
     const ctx = bboxCanvas.getContext('2d')
     if (!ctx) return
 
-    ctx.clearRect(0, 0, width, height)
+    ctx.scale(dpr, dpr)
+    ctx.clearRect(0, 0, imgRect.width, imgRect.height)
 
     if (!annotations || !egoPose || !calibratedSensor.camera_intrinsic) return
 
     const calibArray = {
-      translation: [
-        calibratedSensor.translation.x,
-        calibratedSensor.translation.y,
-        calibratedSensor.translation.z,
-      ],
-      rotation: [
-        calibratedSensor.rotation.w,
-        calibratedSensor.rotation.x,
-        calibratedSensor.rotation.y,
-        calibratedSensor.rotation.z,
-      ],
+      translation: calibratedSensor.translation,
+      rotation:    calibratedSensor.rotation,
     }
+    console.log('[BBox] egoPose.translation:', egoPose?.translation)
 
     const naturalWidth  = bitmapRef.current?.width  ?? 1
     const naturalHeight = bitmapRef.current?.height ?? 1
-    const scaleX = width  / naturalWidth
-    const scaleY = height / naturalHeight
+
+    // 元画像 → bboxCanvas（imgCanvas の CSS 表示サイズ）へのスケール
+    const scaleX = imgRect.width  / naturalWidth
+    const scaleY = imgRect.height / naturalHeight
 
     const intrinsic = calibratedSensor.camera_intrinsic
     const newBBoxRects: BBoxRect[] = []
 
     for (const ann of annotations) {
       const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
+
+      if (ann === annotations[0]) {
+        console.log('[Debug] channel:', calibratedSensor.channel)
+        console.log('[Debug] ann.translation:', ann.translation)
+        console.log('[Debug] ann.rotation:', ann.rotation)
+        console.log('[Debug] ann.size:', ann.size)
+        console.log('[Debug] globalCorners[0]:', globalCorners[0])
+        console.log('[Debug] egoPose.translation:', egoPose?.translation)
+        console.log('[Debug] egoPose.rotation:', egoPose?.rotation)
+        console.log('[Debug] calibArray.translation:', calibArray.translation)
+        console.log('[Debug] calibArray.rotation:', calibArray.rotation)
+        const px = project3DTo2D(globalCorners[0], intrinsic, egoPose!, calibArray)
+        console.log('[Debug] projected corner0:', px)
+      }
 
       const corners2D: [number, number][] = []
       for (const corner of globalCorners) {
@@ -113,6 +127,19 @@ export default function CameraImageCanvas({
   }
 
   drawBBoxesRef.current = drawBBoxes
+
+  // リサイズ時に BBox を再描画
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const observer = new ResizeObserver(() => {
+      if (bitmapRef.current) {
+        drawBBoxesRef.current?.()
+      }
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
 
   // bitmap が届いたら画像 canvas に描画して BBox も重ねる
   useEffect(() => {

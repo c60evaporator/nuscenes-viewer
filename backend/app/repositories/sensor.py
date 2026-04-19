@@ -102,6 +102,16 @@ class SensorRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_ego_pose_by_sample_data_token(
+        self, sample_data_token: str
+    ) -> EgoPose | None:
+        result = await self.db.execute(
+            select(EgoPose)
+            .join(SampleData, SampleData.ego_pose_token == EgoPose.token)
+            .where(SampleData.token == sample_data_token)
+        )
+        return result.scalar_one_or_none()
+
     async def get_camera_sample_data_by_sample(
         self, sample_token: str
     ) -> list[SampleData]:

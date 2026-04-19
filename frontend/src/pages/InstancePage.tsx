@@ -105,7 +105,7 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
   const { data: calibSensorsData } = useCalibratedSensors()
   const calibSensorMap = useMemo<Record<string, CalibratedSensor>>(() => {
     const map: Record<string, CalibratedSensor> = {}
-    calibSensorsData?.items.forEach((cs) => { map[cs.sensor_channel] = cs })
+    calibSensorsData?.items.forEach((cs) => { map[cs.channel] = cs })
     return map
   }, [calibSensorsData])
 

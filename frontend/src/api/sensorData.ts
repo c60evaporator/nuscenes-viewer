@@ -17,6 +17,16 @@ export function useSensorImage(token: string | null) {
   })
 }
 
+export function useSensorDataEgoPose(token: string | null) {
+  return useQuery({
+    queryKey: ['sensor-data-ego-pose', token],
+    queryFn: () =>
+      apiFetch<{ translation: number[]; rotation: number[] }>(`/sensor-data/${token}/ego-pose`),
+    enabled:   !!token,
+    staleTime: Infinity,
+  })
+}
+
 export function usePointCloud(token: string | null, refSensorToken?: string | null) {
   return useQuery({
     queryKey: ['pointcloud', token, refSensorToken ?? null],

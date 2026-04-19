@@ -1,5 +1,5 @@
 // バックエンドの schemas/sensor.py と対応
-import type { Point3D, Quaternion, GeoJSONPoint } from './common'
+import type { GeoJSONPoint } from './common'
 
 // センサーの種類
 export type SensorModality = 'camera' | 'lidar' | 'radar'
@@ -14,9 +14,10 @@ export interface Sensor {
 export interface CalibratedSensor {
   token:            string
   sensor_token:     string
-  sensor_channel:   string
-  translation:      Point3D
-  rotation:         Quaternion
+  channel:          string              // 'CAM_FRONT', 'LIDAR_TOP' など
+  modality:         string              // 'camera', 'lidar', 'radar'
+  translation:      number[]            // [x, y, z]
+  rotation:         number[]            // [w, x, y, z]
   camera_intrinsic: number[][] | null   // カメラのみ 3x3行列、LiDARはnull
 }
 
@@ -59,6 +60,7 @@ export interface SensorDataBrief {
   filename:                string
   fileformat:              string
   calibrated_sensor_token: string
+  ego_pose:                { translation: number[]; rotation: number[] }
 }
 
 // GET /api/v1/samples/{token}/sensor-data レスポンス全体

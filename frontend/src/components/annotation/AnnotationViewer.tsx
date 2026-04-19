@@ -3,14 +3,15 @@ import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
 import { useSampleSensorData, useSampleAnnotations } from '@/api/samples'
 import { useInstanceBestCamera } from '@/api/instances'
-import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 
 interface AnnotationViewerProps {
-  annotation:    Annotation | null
+  sampleToken:   string | null
+  instanceToken: string | null
   location:      string | null
   calibSensorMap: Record<string, CalibratedSensor>
   sceneEgoPoses: EgoPosePoint[]
+  onBBoxClick?:  (instanceToken: string) => void
 }
 
 function Placeholder({ text }: { text: string }) {
@@ -22,22 +23,19 @@ function Placeholder({ text }: { text: string }) {
 }
 
 export default function AnnotationViewer({
-  annotation,
+  sampleToken,
+  instanceToken,
   location,
   calibSensorMap,
   sceneEgoPoses,
+  onBBoxClick,
 }: AnnotationViewerProps) {
-  const sampleToken   = annotation?.sample_token ?? null
-  const instanceToken = annotation?.instance_token ?? null
-
   const { data: sampleDataMap }     = useSampleSensorData(sampleToken)
   const { data: sampleAnnotations } = useSampleAnnotations(sampleToken)
   const { data: bestCamera }        = useInstanceBestCamera(instanceToken, sampleToken)
 
-  // 現在サンプルの ego pose
-  const currentEgoPose = sampleToken
-    ? sceneEgoPoses.find((p) => p.sample_token === sampleToken)
-    : undefined
+  const currentEgoPose = sampleDataMap?.['LIDAR_TOP']?.ego_pose
+    ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)
 
   // LiDAR
   const lidarBrief = sampleDataMap?.['LIDAR_TOP']
@@ -48,12 +46,19 @@ export default function AnnotationViewer({
   } : undefined
 
   // Camera
-  const cameraCalib = bestCamera ? calibSensorMap[bestCamera.channel] : undefined
+  const cameraBrief  = bestCamera ? sampleDataMap?.[bestCamera.channel] : undefined
+  const cameraCalib  = bestCamera ? calibSensorMap[bestCamera.channel] : undefined
+  const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
 
-  if (!annotation) {
+  const handleBBoxClick = (annToken: string) => {
+    const ann = (sampleAnnotations ?? []).find((a) => a.token === annToken)
+    if (ann?.instance_token) onBBoxClick?.(ann.instance_token)
+  }
+
+  if (!sampleToken) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-        アノテーションを選択してください
+        サンプルまたはインスタンスを選択してください
       </div>
     )
   }
@@ -71,7 +76,8 @@ export default function AnnotationViewer({
               annotations={sampleAnnotations ?? []}
               egoPose={currentEgoPose}
               lidarCalibSensor={lidarCalibArray}
-              highlightAnnToken={annotation.token}
+              highlightInstanceToken={instanceToken ?? undefined}
+              onBBoxClick={handleBBoxClick}
               className="w-full h-full"
             />
           ) : (
@@ -88,9 +94,10 @@ export default function AnnotationViewer({
             <CameraImageCanvas
               sampleDataToken={bestCamera.sample_data_token}
               calibratedSensor={cameraCalib}
-              egoPose={currentEgoPose}
+              egoPose={cameraEgoPose}
               annotations={sampleAnnotations ?? []}
-              highlightToken={annotation.token}
+              highlightInstanceToken={instanceToken ?? undefined}
+              onBBoxClick={handleBBoxClick}
               className="w-full h-full"
             />
           ) : (
@@ -107,9 +114,10 @@ export default function AnnotationViewer({
           {location && currentEgoPose ? (
             <MapCanvas
               location={location}
-              egoPoses={[currentEgoPose]}
-              currentIndex={0}
+              egoPoses={sceneEgoPoses.length > 0 ? sceneEgoPoses : [currentEgoPose]}
+              currentIndex={sceneEgoPoses.findIndex((p) => p.sample_token === sampleToken)}
               showStartEnd={false}
+              centerPoint={[currentEgoPose.translation[0], currentEgoPose.translation[1]]}
               className="w-full h-full"
             />
           ) : (

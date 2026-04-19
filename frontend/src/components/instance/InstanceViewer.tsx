@@ -42,10 +42,9 @@ export default function InstanceViewer({
   const { data: sampleAnnotations } = useSampleAnnotations(sampleToken)
   const { data: bestCamera }      = useInstanceBestCamera(instanceToken, sampleToken)
 
-  // 現在サンプルの ego pose
-  const currentEgoPose = sampleToken
-    ? sceneEgoPoses.find((p) => p.sample_token === sampleToken)
-    : undefined
+  // 現在サンプルの ego pose（devkit 準拠: LIDAR_TOP の ego_pose を優先）
+  const currentEgoPose = sampleDataMap?.['LIDAR_TOP']?.ego_pose
+    ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)
 
   // インスタンス全サンプルの ego pose（底部右地図用）
   const instanceEgoPoses: EgoPosePoint[] = allAnnotations
@@ -71,6 +70,7 @@ export default function InstanceViewer({
   const cameraCalib = cameraBrief?.calibrated_sensor_token
     ? calibSensorMap[cameraBrief.calibrated_sensor_token]
     : undefined
+  const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
 
   // highlightAnnToken → instance_token（canvas の highlightInstanceToken 用）
   const highlightInstanceToken = useMemo(() => {
@@ -119,7 +119,7 @@ export default function InstanceViewer({
             <CameraImageCanvas
               sampleDataToken={bestCamera.sample_data_token}
               calibratedSensor={cameraCalib}
-              egoPose={currentEgoPose}
+              egoPose={cameraEgoPose}
               annotations={sampleAnnotations ?? []}
               highlightInstanceToken={highlightInstanceToken}
               onBBoxClick={onBBoxClick}
@@ -133,14 +133,14 @@ export default function InstanceViewer({
 
       {/* 下 1/3: 地図 × 2 */}
       <div className="flex min-h-0" style={{ flex: '1 0 0', borderTop: '1px solid #374151' }}>
-        {/* 左: 全体地図（現在 ego pose のみ） */}
+        {/* 左: Scene全軌跡地図（現在 ego pose を強調） */}
         <div className="flex-1 min-w-0 relative overflow-hidden" style={{ borderRight: '1px solid #374151' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>EGO POSE (current)</div>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>EGO POSE (scene)</div>
           {location && currentEgoPose ? (
             <MapCanvas
               location={location}
-              egoPoses={[currentEgoPose]}
-              currentIndex={0}
+              egoPoses={sceneEgoPoses.length > 0 ? sceneEgoPoses : [currentEgoPose]}
+              currentIndex={sceneEgoPoses.findIndex((p) => p.sample_token === sampleToken)}
               showStartEnd={false}
               centerPoint={[currentEgoPose.translation[0], currentEgoPose.translation[1]]}
               className="w-full h-full"
@@ -158,7 +158,6 @@ export default function InstanceViewer({
               location={location}
               egoPoses={instanceEgoPoses}
               currentIndex={currentInstanceEgoPoseIndex}
-              cropToContent={true}
               showStartEnd={false}
               className="w-full h-full"
             />

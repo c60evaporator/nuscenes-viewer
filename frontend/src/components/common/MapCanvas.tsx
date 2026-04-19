@@ -130,20 +130,56 @@ export default function MapCanvas({
     })
   }, [centerPoint, bitmap, location, cropToContent, containerSize])
 
-  // location 変更時にリセットフラグを立てる
+  // location または軌跡（先頭 ego pose）が変わったらリセット
+  const trajectoryKey = egoPoses[0]?.sample_token ?? ''
   useEffect(() => {
     setPendingReset(true)
-  }, [location])
+  }, [location, trajectoryKey])
 
   // bitmap と containerSize が揃ったらリセットを実行
   useEffect(() => {
     if (!pendingReset) return
     if (containerSize.w === 0 || !bitmap) return
-    const minZoom = calcMinZoom()
-    setOffset({ x: 0, y: 0 })
-    setZoom(minZoom)
+
+    // cropToContent モードは cropToContent effect に委ねる
+    if (cropToContent) {
+      setOffset({ x: 0, y: 0 })
+      setZoom(calcMinZoom())
+      setPendingReset(false)
+      return
+    }
+
+    // 複数点がなければ全体表示（centerPoint effect がオフセットを担う）
+    if (egoPoses.length < 2) {
+      if (!centerPoint) setOffset({ x: 0, y: 0 })
+      setZoom(calcMinZoom())
+      setPendingReset(false)
+      return
+    }
+
+    // 軌跡の最大スパンの 3 倍がコンテナ幅になるズームに設定
+    const displaySize: [number, number] = [bitmap.width, bitmap.height]
+    const pixels = egoPoses.map((p) => egoPoseToPixel(p.translation, location, displaySize))
+    const pxs    = pixels.map(([px]) => px)
+    const pys    = pixels.map(([, py]) => py)
+    const minX = Math.min(...pxs), maxX = Math.max(...pxs)
+    const minY = Math.min(...pys), maxY = Math.max(...pys)
+    const maxRange = Math.max((maxX - minX) || 1, (maxY - minY) || 1)
+    const newZoom  = Math.min(
+      Math.max(containerSize.w / (maxRange * 3), calcMinZoom()),
+      5,
+    )
+    // centerPoint が指定されていればそこを中心に、なければ軌跡の重心
+    const [cx, cy] = centerPoint
+      ? egoPoseToPixel([centerPoint[0], centerPoint[1], 0], location, displaySize)
+      : [(minX + maxX) / 2, (minY + maxY) / 2]
+    setZoom(newZoom)
+    setOffset({
+      x: containerSize.w / 2 - cx * newZoom,
+      y: containerSize.h / 2 - cy * newZoom,
+    })
     setPendingReset(false)
-  }, [pendingReset, containerSize, bitmap])
+  }, [pendingReset, containerSize, bitmap, egoPoses, location, cropToContent, centerPoint])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true)

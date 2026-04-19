@@ -159,17 +159,19 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
               onCategoryChange={setSelectedCategoryName}
             />
           }
+          footer={
+            <InstanceSampleSlider
+              annotations={allAnnotations}
+              selectedIndex={currentAnnotationIndex}
+              onIndexChange={setCurrentAnnotationIndex}
+            />
+          }
         >
           <InstanceList
             instances={instances}
             currentInstanceToken={currentInstanceToken}
             onSelect={setInstance}
             highlightInstanceToken={highlightInstanceToken}
-          />
-          <InstanceSampleSlider
-            annotations={allAnnotations}
-            selectedIndex={currentAnnotationIndex}
-            onIndexChange={setCurrentAnnotationIndex}
           />
         </LeftPane>
       }

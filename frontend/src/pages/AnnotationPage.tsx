@@ -3,18 +3,20 @@ import MainLayout from '@/components/layout/MainLayout'
 import LeftPane from '@/components/layout/LeftPane'
 import RightPane from '@/components/layout/RightPane'
 import AnnotationFilter from '@/components/annotation/AnnotationFilter'
-import AnnotationList from '@/components/annotation/AnnotationList'
+import SampleList from '@/components/sample/SampleList'
+import InstanceList from '@/components/instance/InstanceList'
 import AnnotationViewer from '@/components/annotation/AnnotationViewer'
 import AnnotationInfo from '@/components/annotation/AnnotationInfo'
 import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
-import { useSamples, useSampleAnnotations, useSampleInstances } from '@/api/samples'
+import { useSamples, useSampleInstances } from '@/api/samples'
 import { useInstanceAnnotations } from '@/api/instances'
 import { useCategories } from '@/api/categories'
 import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import type { CalibratedSensor } from '@/types/sensor'
+import type { Instance } from '@/types/annotation'
 import type { TabId } from '@/components/layout/Header'
 
 interface AnnotationPageProps {
@@ -24,8 +26,6 @@ interface AnnotationPageProps {
 
 export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPageProps) {
   const currentMapLocation      = useViewerStore((s) => s.currentMapLocation)
-  const currentAnnotationToken  = useViewerStore((s) => s.currentAnnotationToken)
-  const setAnnotation           = useViewerStore((s) => s.setAnnotation)
   const lockedSceneToken        = useNavigationStore((s) => s.lockedSceneToken)
   const lockedSampleToken       = useNavigationStore((s) => s.lockedSampleToken)
   const lockedInstanceToken     = useNavigationStore((s) => s.lockedInstanceToken)
@@ -37,9 +37,13 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const [selectedCategoryToken, setSelectedCategoryToken] = useState<string | null>(null)
   const [selectedInstanceToken, setSelectedInstanceToken] = useState<string | null>(lockedInstanceToken ?? null)
 
+  // リスト選択 state（左ペインのリストで選択した値）
+  const [listSelectedSampleToken,   setListSelectedSampleToken]   = useState<string | null>(null)
+  const [listSelectedInstanceToken, setListSelectedInstanceToken] = useState<string | null>(null)
+
   // ロック判定
   const sceneTokenLocked    = !!lockedSceneToken
-  const sampleTokenLocked   = lockSource === 'sample'  && !!lockedSampleToken
+  const sampleTokenLocked   = lockSource === 'sample'   && !!lockedSampleToken
   const instanceTokenLocked = lockSource === 'instance' && !!lockedInstanceToken
 
   // ロケーション内のシーンリスト
@@ -63,7 +67,8 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       setSelectedSceneToken(null)
       setSelectedSampleToken(null)
       setSelectedInstanceToken(null)
-      setAnnotation(null)
+      setListSelectedSampleToken(null)
+      setListSelectedInstanceToken(null)
     }
   }, [currentMapLocation])
 
@@ -91,56 +96,63 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   useEffect(() => {
     if (prevSceneRef.current !== null && prevSceneRef.current !== selectedSceneToken && !sampleTokenLocked) {
       setSelectedSampleToken(null)
+      setListSelectedSampleToken(null)
+      setListSelectedInstanceToken(null)
     }
     prevSceneRef.current = selectedSceneToken
   }, [selectedSceneToken, sampleTokenLocked])
 
-  // 有効なサンプルトークン
+  // 有効なサンプルトークン（フィルタ）
   const effectiveSampleToken = lockedSampleToken ?? selectedSampleToken
 
   // Instance サマリ（Sample に紐づく）
   const { data: instanceSummaries } = useSampleInstances(effectiveSampleToken)
 
-  // アノテーションソース: Instance 遷移時は全インスタンスアノテーション、それ以外はサンプル単位
-  const fromInstance = lockSource === 'instance'
-  const { data: instanceAnnotationsRaw } = useInstanceAnnotations(fromInstance ? lockedInstanceToken : null)
-  const { data: sampleAnnotationsRaw }   = useSampleAnnotations(fromInstance ? null : effectiveSampleToken)
-  const rawAnnotations = fromInstance
-    ? (instanceAnnotationsRaw ?? [])
-    : (sampleAnnotationsRaw   ?? [])
+  // Instance アノテーション（Instance フィルタが有効な場合に取得）
+  const effectiveInstanceToken = lockedInstanceToken ?? selectedInstanceToken
+  const { data: instanceAnnotationsRaw } = useInstanceAnnotations(effectiveInstanceToken)
 
   // カテゴリ
   const { data: categoriesData } = useCategories()
   const categories = categoriesData ?? []
 
-  const categoryMap = useMemo<Record<string, string>>(() => {
-    const m: Record<string, string> = {}
-    categories.forEach((c) => { m[c.token] = c.name })
-    return m
-  }, [categories])
+  // 表示モード
+  const hasSampleFilter   = !!effectiveSampleToken
+  const hasInstanceFilter = !!effectiveInstanceToken
+  const displayMode = hasSampleFilter ? 'instanceList'
+    : hasInstanceFilter ? 'sampleList'
+    : 'empty'
 
-  // クライアント側フィルタリング＆ソート（カテゴリ名 → トークン昇順）
-  const filteredAnnotations = useMemo(() => {
-    let anns = rawAnnotations
-    if (selectedCategoryToken) {
-      anns = anns.filter((a) => a.category_token === selectedCategoryToken)
-    }
-    if (selectedInstanceToken) {
-      anns = anns.filter((a) => a.instance_token === selectedInstanceToken)
-    }
-    return [...anns].sort((a, b) => {
-      const catA = categoryMap[a.category_token] ?? a.category_token
-      const catB = categoryMap[b.category_token] ?? b.category_token
-      if (catA !== catB) return catA.localeCompare(catB)
-      return a.token.localeCompare(b.token)
-    })
-  }, [rawAnnotations, selectedCategoryToken, selectedInstanceToken, categoryMap])
-
-  // 選択アノテーション
-  const selectedAnnotation = useMemo(
-    () => filteredAnnotations.find((a) => a.token === currentAnnotationToken) ?? null,
-    [filteredAnnotations, currentAnnotationToken],
+  // Case 2: Instance フィルタ → Instance を含む Sample リスト
+  const instanceSampleTokenSet = useMemo(
+    () => new Set((instanceAnnotationsRaw ?? []).map((a) => a.sample_token)),
+    [instanceAnnotationsRaw],
   )
+  const samplesForInstance = useMemo(
+    () => samples.filter((s) => instanceSampleTokenSet.has(s.token)),
+    [samples, instanceSampleTokenSet],
+  )
+
+  // Instance フィルタ変更時にリスト選択をリセット
+  useEffect(() => {
+    setListSelectedSampleToken(null)
+    setListSelectedInstanceToken(null)
+  }, [effectiveInstanceToken])
+
+  // Sample フィルタ変更時にリスト選択をリセット
+  useEffect(() => {
+    setListSelectedInstanceToken(null)
+  }, [effectiveSampleToken])
+
+  // Viewer に渡す sampleToken / instanceToken
+  const viewSampleToken   = hasSampleFilter ? effectiveSampleToken   : listSelectedSampleToken
+  const viewInstanceToken = hasInstanceFilter ? effectiveInstanceToken : listSelectedInstanceToken
+
+  // BBox クリックハンドラ（Instance フィルタ有効時は無視）
+  const handleBBoxClick = (instToken: string) => {
+    if (hasInstanceFilter) return
+    setListSelectedInstanceToken(instToken)
+  }
 
   // Calibrated Sensors
   const { data: calibSensorsData } = useCalibratedSensors()
@@ -152,6 +164,19 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
 
   // Ego Poses
   const { data: egoPoses } = useSceneEgoPoses(selectedSceneToken)
+
+  // Case 3 用: InstanceSummary → Instance 型マッピング
+  const instanceListItems = useMemo<Instance[]>(
+    () => (instanceSummaries ?? []).map((is) => ({
+      token:                  is.instance_token,
+      category_token:         '',
+      category_name:          is.category_name,
+      nbr_annotations:        is.nbr_annotations,
+      first_annotation_token: null,
+      last_annotation_token:  null,
+    })),
+    [instanceSummaries],
+  )
 
   return (
     <MainLayout
@@ -173,34 +198,50 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
               selectedCategoryToken={selectedCategoryToken}
               onCategoryChange={setSelectedCategoryToken}
               instanceSummaries={instanceSummaries ?? []}
-              selectedInstanceToken={selectedInstanceToken}
+              selectedInstanceToken={effectiveInstanceToken}
               onInstanceChange={setSelectedInstanceToken}
               instanceTokenLocked={instanceTokenLocked}
             />
           }
         >
-          <AnnotationList
-            annotations={filteredAnnotations}
-            currentAnnotationToken={currentAnnotationToken}
-            onSelect={setAnnotation}
-            categoryMap={categoryMap}
-          />
+          {displayMode === 'empty' && (
+            <div className="p-4 text-center text-gray-400 text-xs">
+              Please select Sample or Instance
+            </div>
+          )}
+          {displayMode === 'sampleList' && (
+            <SampleList
+              samples={samplesForInstance}
+              currentSampleToken={listSelectedSampleToken}
+              onSelect={setListSelectedSampleToken}
+            />
+          )}
+          {displayMode === 'instanceList' && (
+            <InstanceList
+              instances={instanceListItems}
+              currentInstanceToken={listSelectedInstanceToken}
+              onSelect={setListSelectedInstanceToken}
+              highlightInstanceToken={listSelectedInstanceToken}
+            />
+          )}
         </LeftPane>
       }
       right={
         <RightPane>
           <AnnotationInfo
-            annotation={selectedAnnotation}
-            categoryMap={categoryMap}
+            annotation={null}
+            categoryMap={{}}
           />
         </RightPane>
       }
     >
       <AnnotationViewer
-        annotation={selectedAnnotation}
+        sampleToken={viewSampleToken}
+        instanceToken={viewInstanceToken}
         location={currentMapLocation}
         calibSensorMap={calibSensorMap}
         sceneEgoPoses={egoPoses ?? []}
+        onBBoxClick={handleBBoxClick}
       />
     </MainLayout>
   )

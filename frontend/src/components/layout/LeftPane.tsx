@@ -2,10 +2,11 @@ import type { ReactNode } from 'react'
 
 interface LeftPaneProps {
   filter?:  ReactNode   // 上部フィルタ群（bg: #606060）
-  children: ReactNode   // 下部リスト（白背景）
+  footer?:  ReactNode   // 下部固定フッター（スライダー等）
+  children: ReactNode   // スクロールリスト（白背景）
 }
 
-export default function LeftPane({ filter, children }: LeftPaneProps) {
+export default function LeftPane({ filter, footer, children }: LeftPaneProps) {
   return (
     <div className="flex flex-col h-full">
       {filter && (
@@ -16,9 +17,14 @@ export default function LeftPane({ filter, children }: LeftPaneProps) {
           {filter}
         </div>
       )}
-      <div className="flex-1 overflow-y-auto bg-white">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-white">
         {children}
       </div>
+      {footer && (
+        <div style={{ flexShrink: 0, borderTop: '1px solid #e5e7eb' }}>
+          {footer}
+        </div>
+      )}
     </div>
   )
 }

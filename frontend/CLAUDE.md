@@ -50,7 +50,7 @@ nuscenes-viewerのフロントエンド
 - 左側のペインにSampleの一覧をリスト表示（ソートはtimestamp昇順）。クリックで特定のSampleを選択できるようにする
 - 左側のペイン上側にプルダウンメニューのSceneフィルタを設置し、リスト表示対象のSampleを絞れるようにする。デフォルト値は最初のScene。Scene画面から`Samples`ボタンで遷移した場合、このフィルタは変更できないようにする（操作するためには一度画面上側のタブで別画面に遷移する必要がある）
 - 中央のメイン画面に、左側のペインでクリック選択したSampleのアノテーションを表示
-- 中央のメイン画面に表示するのはEGO_POINT, LIDAR_TOP, FUSED_RADER, CAM_FRONT_LEFT, CAM_FRONT, CAM_FRONT_RIGHT, CAM_BACK_LEFT, CAM_BACK, CAM_BACK_RIGHT。全部で9種類の情報があるので、3x3の9分割で表示する
+- 中央のメイン画面に表示するのはEGO_POSE, LIDAR_TOP, FUSED_RADER, CAM_FRONT_LEFT, CAM_FRONT, CAM_FRONT_RIGHT, CAM_BACK_LEFT, CAM_BACK, CAM_BACK_RIGHT。全部で9種類の情報があるので、3x3の9分割で表示する
 - EGO_POSEは上段左に表示、Scene画面の地図上に表示したEgo poseの集合と基本的には同様の表示で、そのサンプルに該当する点を大きくして色も変えて強調する
 - LIDAR_TOPは上段中に表示。上から見たLiDAR点群上にアノテーションのバウンディングボックスを重ねて表示（nuscenes-devkitの`render_sample_data(sample['data']['LIDAR_TOP'], nsweeps=変数, underlay_map=True)`メソッドと同様の表示）。nsweepsに相当する変数は設定として外出ししておく
 - FUSED_RADERは上段中に表示。上から見たLiDAR点群上にアノテーションのバウンディングボックスを重ねて表示（nuscenes-devkitの`render_sample_data(sample['data']['FUSED_RADER'], nsweeps=変数, underlay_map=True)`メソッドと同様の表示）。nsweepsに相当する変数は設定として外出ししておく
@@ -75,8 +75,8 @@ nuscenes-viewerのフロントエンド
 - 左側のペイン下部には、選択インスタンスを含むサンプルを選択するためのSliderを設置（サンプルは時間順で並び替える）。このSliderで選択されたサンプルのアノテーションを、中央のメイン画面で表示する
 - 中央のメイン画面は上3分の2と下3分の1で2分割する。上側には、左側のペインでクリック選択したインスタンスの、最初or真ん中or最後のサンプルのアノテーションを表示
 - サンプルのアノテーション表示は左右均等2分割し、左側にはLIDAR_TOP上に重ねて表示、右側には最もよく写っているカメラ画像上に重ねて表示する（nuscenes-devkitの`nusc.render_instance()`メソッドと同様の表示）。
-- 中央のメイン画面下側は左右2分割し、左側半分には、地図の画像（`$NUSCENES_DATAROOT/maps`直下の対応するpng）全体上に、上側でアノテーションを表示しているサンプルのEgo poseを赤い点で表示
-- メイン画面下側の右側半分は、選択インスタンスを含む全サンプルのEgo poseの点を、地図の画像（`$NUSCENES_DATAROOT/maps`直下の対応するpng）上に点の集合として、点が存在する範囲のみを切り出して表示。上側でアノテーションを表示しているサンプルのEgo poseは強調表示する。
+- 中央のメイン画面下側は左右2分割し、左側半分には、地図の画像（`$NUSCENES_DATAROOT/maps`直下の対応するpng）全体上に、Sample画面のEGO_POSEと同様にSceneのEgo pose全点を表示した上で、上側でアノテーションを表示しているサンプルのEgo poseは強調表示する
+- メイン画面下側の右側半分は、選択インスタンスを含む全サンプルのEgo poseの点を、地図の画像（`$NUSCENES_DATAROOT/maps`直下の対応するpng）上に点の集合として、点が存在する範囲のみを切り出して表示。上側でアノテーションを表示しているサンプルのEgo poseは強調表示する
 - 右側のペインに、左側のペインで選択したSampleの情報を表示（category_token, nbr_annotations等のAPIのフィールド情報、およびカテゴリ名）
 - 右側のペイン下部に`Annotations`ボタンを設置し、押すとSceneとInstanceでフィルタをかけた「Annotations」画面に別ウィンドウで遷移するようにする
 

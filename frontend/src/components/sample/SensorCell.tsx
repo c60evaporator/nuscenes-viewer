@@ -13,8 +13,8 @@ interface SensorCellProps {
   egoPoses:          EgoPosePoint[]
   calibSensorMap:    Record<string, CalibratedSensor>
   location:          string | null
-  onBBoxClick:       (annToken: string) => void
-  highlightAnnToken?: string
+  onBBoxClick:              (annToken: string) => void
+  highlightInstanceToken?:  string
 }
 
 export default function SensorCell({
@@ -26,7 +26,7 @@ export default function SensorCell({
   calibSensorMap,
   location,
   onBBoxClick,
-  highlightAnnToken,
+  highlightInstanceToken,
 }: SensorCellProps) {
   // devkit 準拠: LIDAR_TOP の ego_pose を全センサーの基準とする
   const lidarBriefForEgo = sampleDataMap['LIDAR_TOP']
@@ -99,6 +99,7 @@ export default function SensorCell({
           location={location}
           pointSize={isRadar ? 4 : 2}
           onBBoxClick={onBBoxClick}
+          highlightInstanceToken={highlightInstanceToken}
           className="w-full h-full"
         />
       )
@@ -124,7 +125,7 @@ export default function SensorCell({
           calibratedSensor={calibSensor}
           egoPose={camEgoPose ?? currentEgoPose}
           annotations={annotations}
-          highlightToken={highlightAnnToken}
+          highlightInstanceToken={highlightInstanceToken}
           onBBoxClick={onBBoxClick}
           className="w-full h-full"
         />

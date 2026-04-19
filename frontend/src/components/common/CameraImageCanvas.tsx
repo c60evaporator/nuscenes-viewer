@@ -10,7 +10,7 @@ interface CameraImageCanvasProps {
   calibratedSensor: CalibratedSensor
   egoPose?:         { translation: number[]; rotation: number[] }
   annotations?:     Annotation[]
-  highlightToken?:  string
+  highlightInstanceToken?: string
   onBBoxClick?:     (token: string) => void
   className?:       string
 }
@@ -29,7 +29,7 @@ export default function CameraImageCanvas({
   calibratedSensor,
   egoPose,
   annotations,
-  highlightToken,
+  highlightInstanceToken,
   onBBoxClick,
   className,
 }: CameraImageCanvasProps) {
@@ -119,7 +119,7 @@ export default function CameraImageCanvas({
         maxY:  Math.max(...allY),
       })
 
-      const color = ann.token === highlightToken ? '#FFFF00' : '#00AAFF'
+      const color = ann.instance_token === highlightInstanceToken ? '#FFFF00' : '#00AAFF'
       drawBBox2D(ctx, corners2D, color)
     }
 
@@ -166,7 +166,7 @@ export default function CameraImageCanvas({
     if (bitmapRef.current) {
       drawBBoxesRef.current?.()
     }
-  }, [annotations, egoPose, highlightToken, calibratedSensor])
+  }, [annotations, egoPose, highlightInstanceToken, calibratedSensor])
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!onBBoxClick) return

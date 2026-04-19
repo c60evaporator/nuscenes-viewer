@@ -32,7 +32,12 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
   const [selectedSceneToken, setSelectedSceneToken] = useState<string | null>(
     lockedSceneToken ?? null,
   )
-  const [highlightAnnToken, setHighlightAnnToken] = useState<string | null>(null)
+  const [highlightInstanceToken, setHighlightInstanceToken] = useState<string | null>(null)
+
+  const handleBBoxClick = (annToken: string) => {
+    const ann = (annotations ?? []).find((a) => a.token === annToken)
+    setHighlightInstanceToken(ann?.instance_token ?? null)
+  }
 
   // ロケーション内のシーンリスト（フィルタ選択肢）
   const { data: logsData   } = useLogsByLocation(currentMapLocation)
@@ -150,6 +155,8 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
             instances={instances ?? []}
             sceneToken={selectedSceneToken}
             onTabChange={onTabChange}
+            highlightInstanceToken={highlightInstanceToken}
+            onInstanceHighlight={setHighlightInstanceToken}
           />
         </RightPane>
       }
@@ -161,8 +168,8 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
         egoPoses={egoPoses ?? []}
         calibSensorMap={calibSensorMap}
         location={currentMapLocation}
-        onBBoxClick={setHighlightAnnToken}
-        highlightAnnToken={highlightAnnToken ?? undefined}
+        onBBoxClick={handleBBoxClick}
+        highlightInstanceToken={highlightInstanceToken ?? undefined}
       />
     </MainLayout>
   )

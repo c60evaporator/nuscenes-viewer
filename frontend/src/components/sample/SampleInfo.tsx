@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useNavigationStore } from '@/store/navigationStore'
 import { useViewerStore } from '@/store/viewerStore'
 import type { Sample } from '@/types/scene'
@@ -5,10 +6,12 @@ import type { InstanceSummary } from '@/types/sensor'
 import type { TabId } from '@/components/layout/Header'
 
 interface SampleInfoProps {
-  sample:      Sample | null
-  instances:   InstanceSummary[]
-  sceneToken:  string | null
-  onTabChange: (tab: TabId) => void
+  sample:                  Sample | null
+  instances:               InstanceSummary[]
+  sceneToken:              string | null
+  onTabChange:             (tab: TabId) => void
+  highlightInstanceToken?: string | null
+  onInstanceHighlight?:    (instanceToken: string | null) => void
 }
 
 function InfoRow({ label, value }: { label: string; value: string | number | null }) {
@@ -24,9 +27,19 @@ function formatTimestamp(ts: number): string {
   return new Date(ts / 1000).toLocaleString('ja-JP')
 }
 
-export default function SampleInfo({ sample, instances, sceneToken, onTabChange }: SampleInfoProps) {
+export default function SampleInfo({
+  sample, instances, sceneToken, onTabChange,
+  highlightInstanceToken, onInstanceHighlight,
+}: SampleInfoProps) {
   const lock        = useNavigationStore((s) => s.lock)
   const setInstance = useViewerStore((s) => s.setInstance)
+  const highlightRef = useRef<HTMLLIElement | null>(null)
+
+  useEffect(() => {
+    if (highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [highlightInstanceToken])
 
   const handleInstanceDoubleClick = (inst: InstanceSummary) => {
     lock('sample', { sceneToken: sceneToken ?? undefined, categoryName: inst.category_name })
@@ -58,17 +71,26 @@ export default function SampleInfo({ sample, instances, sceneToken, onTabChange 
             Instances ({instances.length})
           </p>
           <ul className="divide-y divide-gray-100">
-            {instances.map((inst) => (
-              <li
-                key={inst.instance_token}
-                className="px-1 py-1.5 cursor-pointer hover:bg-blue-50 rounded text-xs select-none"
-                onDoubleClick={() => handleInstanceDoubleClick(inst)}
-                title="ダブルクリックで Instance 画面へ"
-              >
-                <span className="font-medium text-gray-700">{inst.category_name}</span>
-                <span className="text-gray-400 ml-1">×{inst.nbr_annotations}</span>
-              </li>
-            ))}
+            {instances.map((inst) => {
+              const isHighlighted = inst.instance_token === highlightInstanceToken
+              return (
+                <li
+                  key={inst.instance_token}
+                  ref={isHighlighted ? highlightRef : null}
+                  className={`px-1 py-1.5 cursor-pointer rounded text-xs select-none
+                    ${isHighlighted
+                      ? 'bg-yellow-100 border border-yellow-400'
+                      : 'hover:bg-blue-50'
+                    }`}
+                  onClick={() => onInstanceHighlight?.(isHighlighted ? null : inst.instance_token)}
+                  onDoubleClick={() => handleInstanceDoubleClick(inst)}
+                  title="クリックでハイライト / ダブルクリックで Instance 画面へ"
+                >
+                  <span className="font-medium text-gray-700">{inst.category_name}</span>
+                  <span className="text-gray-400 ml-1">×{inst.nbr_annotations}</span>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

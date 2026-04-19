@@ -11,7 +11,7 @@ interface PointCloudCanvasProps {
   annotations?:       Annotation[]
   egoPose?:           EgoPosePoint
   lidarCalibSensor?:  { translation: number[]; rotation: number[] }
-  highlightAnnToken?: string
+  highlightInstanceToken?: string
   onBBoxClick?:       (token: string) => void
   location?:          string | null
   pointSize?:         number
@@ -33,7 +33,7 @@ export default function PointCloudCanvas({
   annotations,
   egoPose,
   lidarCalibSensor,
-  highlightAnnToken,
+  highlightInstanceToken,
   onBBoxClick,
   location,
   pointSize,
@@ -181,13 +181,13 @@ export default function PointCloudCanvas({
           maxY:  Math.max(...allY),
         })
 
-        const color = ann.token === highlightAnnToken ? '#FFD700' : '#00FF88'
+        const color = ann.instance_token === highlightInstanceToken ? '#FFD700' : '#00FF88'
         drawBBox2D(ctx, corners2D, color)
       }
     }
     ctx.restore()  // 点群、BBox 描画後に restore して点群描画の座標系を元に戻す
     bboxRectsRef.current = newBBoxRects
-  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightAnnToken, location, pointSize])
+  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, location, pointSize])
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onBBoxClick) return

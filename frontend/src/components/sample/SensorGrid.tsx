@@ -18,8 +18,8 @@ interface SensorGridProps {
   egoPoses:          EgoPosePoint[]
   calibSensorMap:    Record<string, CalibratedSensor>
   location:          string | null
-  onBBoxClick:       (annToken: string) => void
-  highlightAnnToken?: string
+  onBBoxClick:              (annToken: string) => void
+  highlightInstanceToken?:  string
 }
 
 export default function SensorGrid({
@@ -31,7 +31,7 @@ export default function SensorGrid({
   calibSensorMap,
   location,
   onBBoxClick,
-  highlightAnnToken,
+  highlightInstanceToken,
 }: SensorGridProps) {
   if (!sampleToken) {
     return (
@@ -60,7 +60,7 @@ export default function SensorGrid({
                 calibSensorMap={calibSensorMap}
                 location={location}
                 onBBoxClick={onBBoxClick}
-                highlightAnnToken={highlightAnnToken}
+                highlightInstanceToken={highlightInstanceToken}
               />
             </div>
           ))}

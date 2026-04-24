@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import logging
 
@@ -9,7 +10,11 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--dataset-version", default="v1.0-trainval")
+args = parser.parse_args()
+
 asyncio.run(import_all(
     data_root="/data/nuscenes",
-    version="v1.0-trainval",
+    version=args.dataset_version,
 ))

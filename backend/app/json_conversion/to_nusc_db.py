@@ -3,7 +3,7 @@ import logging
 import os
 import time
 
-from sqlalchemy import bindparam, update
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,19 +55,16 @@ async def _bulk_update(
     chunk_size: int = 5000,
     label: str = "",
 ) -> int:
-    """bindparam + executemany による bulk UPDATE（token PK で更新）。
+    """ORM Bulk UPDATE by Primary Key（token PK で更新）。
 
     rows は {"token": ..., field1: ..., field2: ...} の辞書リスト。
+    update() に WHERE/VALUES を指定せず rows に PK を含めることで
+    SQLAlchemy が各行を executemany で処理する。
     chunk_size ごとにバッチ実行し、進捗を logger.info で報告する。
     """
     if not rows:
         return 0
-    fields = [k for k in rows[0].keys() if k != "token"]
-    stmt = (
-        update(model)
-        .where(model.token == bindparam("token"))
-        .values(**{f: bindparam(f) for f in fields})
-    )
+    stmt = update(model).execution_options(synchronize_session=None)
     total = len(rows)
     n_chunks = (total + chunk_size - 1) // chunk_size
     for idx, i in enumerate(range(0, total, chunk_size)):

@@ -35,6 +35,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_APP_USER}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB} # Application user for FastAPI
       - ENV=${APP_ENV:-development}
       - AUTO_CREATE_TABLES=${AUTO_CREATE_TABLES:-True}
+      - PYTHONPATH=/app
     depends_on:
       db:
         condition: service_healthy

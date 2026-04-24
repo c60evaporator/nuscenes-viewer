@@ -11,7 +11,6 @@ import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
 import { useSamples, useSampleInstances } from '@/api/samples'
 import { useInstanceAnnotations } from '@/api/instances'
-import { useCategories } from '@/api/categories'
 import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
@@ -34,7 +33,6 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // フィルタ state
   const [selectedSceneToken,    setSelectedSceneToken]    = useState<string | null>(lockedSceneToken ?? null)
   const [selectedSampleToken,   setSelectedSampleToken]   = useState<string | null>(lockedSampleToken ?? null)
-  const [selectedCategoryToken, setSelectedCategoryToken] = useState<string | null>(null)
   const [selectedInstanceToken, setSelectedInstanceToken] = useState<string | null>(lockedInstanceToken ?? null)
 
   // リスト選択 state（左ペインのリストで選択した値）
@@ -111,10 +109,6 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // Instance アノテーション（Instance フィルタが有効な場合に取得）
   const effectiveInstanceToken = lockedInstanceToken ?? selectedInstanceToken
   const { data: instanceAnnotationsRaw } = useInstanceAnnotations(effectiveInstanceToken)
-
-  // カテゴリ
-  const { data: categoriesData } = useCategories()
-  const categories = categoriesData ?? []
 
   // 表示モード
   const hasSampleFilter   = !!effectiveSampleToken
@@ -194,9 +188,6 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
               selectedSampleToken={effectiveSampleToken}
               onSampleChange={setSelectedSampleToken}
               sampleTokenLocked={sampleTokenLocked}
-              categories={categories}
-              selectedCategoryToken={selectedCategoryToken}
-              onCategoryChange={setSelectedCategoryToken}
               instanceSummaries={instanceSummaries ?? []}
               selectedInstanceToken={effectiveInstanceToken}
               onInstanceChange={setSelectedInstanceToken}

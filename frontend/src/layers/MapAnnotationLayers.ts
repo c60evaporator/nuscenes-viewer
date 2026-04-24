@@ -13,9 +13,24 @@ export const LAYER_COLORS: Record<MapLayer, RGBA> = {
   walkway:        [220, 60,  60,  150],
   stop_line:      [255, 160, 40,  200],
   carpark_area:   [255, 220, 40,  120],
-  road_divider:   [255, 255, 255, 200],
+  road_divider:   [255, 140, 0,   220],
   lane_divider:   [180, 130, 255, 200],
   traffic_light:  [255, 200, 0,   255],
+}
+
+export const LAYER_CURSORS: Record<MapLayer, string> = {
+  drivable_area:  'pointer',
+  road_segment:   'pointer',
+  road_block:     'pointer',
+  lane:           'pointer',
+  lane_connector: 'pointer',
+  ped_crossing:   'pointer',
+  walkway:        'pointer',
+  stop_line:      'pointer',
+  carpark_area:   'pointer',
+  road_divider:   'crosshair',
+  lane_divider:   'crosshair',
+  traffic_light:  'pointer',
 }
 
 export const LAYER_LABELS: Record<MapLayer, string> = {
@@ -37,6 +52,7 @@ export function createGeoJsonLayer(
   layer:   MapLayer,
   data:    GeoJSONFeatureCollection,
   onClick: (feature: GeoJSONMapFeature, layerName: MapLayer) => void,
+  onHover: (cursor: string | null) => void,
 ): GeoJsonLayer {
   const color = LAYER_COLORS[layer]
   const lineColor: RGBA = [color[0], color[1], color[2], 255]
@@ -50,7 +66,9 @@ export function createGeoJsonLayer(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: data as unknown as any,
 
-    pickable:    true,
+    pickable:       true,
+    autoHighlight:  true,
+    highlightColor: [255, 255, 255, 60],
     filled:      !isDivider,
     stroked:     true,
 
@@ -64,6 +82,9 @@ export function createGeoJsonLayer(
 
     onClick: (info) => {
       if (info.object) onClick(info.object as GeoJSONMapFeature, layer)
+    },
+    onHover: (info) => {
+      onHover(info.object ? LAYER_CURSORS[layer] : null)
     },
   })
 }

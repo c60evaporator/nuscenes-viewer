@@ -191,14 +191,17 @@ export default function PointCloudCanvas({
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onBBoxClick) return
-    const rect = canvasRef.current!.getBoundingClientRect()
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    const scale = canvasRef.current!.width / rect.width
+    const scaleFactor = canvas.width / rect.width
 
     for (const bbox of bboxRectsRef.current) {
-      if (x * scale >= bbox.minX && x * scale <= bbox.maxX &&
-          y * scale >= bbox.minY && y * scale <= bbox.maxY) {
+      const cx = x * scaleFactor
+      const cy = canvas.height - y * scaleFactor  // Y反転：スクリーン座標 → 数学座標（bbox保存座標系に合わせる）
+      if (cx >= bbox.minX && cx <= bbox.maxX &&
+          cy >= bbox.minY && cy <= bbox.maxY) {
         onBBoxClick(bbox.token)
         break
       }

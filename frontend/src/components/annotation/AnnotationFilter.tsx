@@ -6,7 +6,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Scene, Sample } from '@/types/scene'
-import type { Category } from '@/types/annotation'
 import type { InstanceSummary } from '@/types/sensor'
 
 interface AnnotationFilterProps {
@@ -21,11 +20,6 @@ interface AnnotationFilterProps {
   selectedSampleToken:  string | null
   onSampleChange:       (token: string | null) => void
   sampleTokenLocked:    boolean
-
-  // Category フィルタ
-  categories:           Category[]
-  selectedCategoryToken: string | null
-  onCategoryChange:     (token: string | null) => void
 
   // Instance フィルタ
   instanceSummaries:    InstanceSummary[]
@@ -45,9 +39,6 @@ export default function AnnotationFilter({
   selectedSampleToken,
   onSampleChange,
   sampleTokenLocked,
-  categories,
-  selectedCategoryToken,
-  onCategoryChange,
   instanceSummaries,
   selectedInstanceToken,
   onInstanceChange,
@@ -103,25 +94,6 @@ export default function AnnotationFilter({
               <SelectItem key={s.token} value={s.token} className="text-xs">
                 #{i + 1} — {new Date(s.timestamp / 1000).toLocaleTimeString('ja-JP')}
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Category */}
-      <div>
-        <p className="text-gray-300 text-xs font-medium mb-1">Category</p>
-        <Select
-          value={selectedCategoryToken ?? ALL}
-          onValueChange={(v) => onCategoryChange(v === ALL ? null : v)}
-        >
-          <SelectTrigger className="h-8 text-xs border-gray-500 text-white" style={{ backgroundColor: '#374151' }}>
-            <SelectValue placeholder="すべて" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL} className="text-xs">すべて</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c.token} value={c.token} className="text-xs">{c.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>

@@ -5,13 +5,15 @@ import type { CalibratedSensor, EgoPosePoint, SensorDataMap } from '@/types/sens
 import type { GeoJSONMapFeature, MapLayer } from '@/types/map'
 
 interface SampleMapViewerProps {
-  selectedChannel: string
-  sampleDataMap:   SensorDataMap
-  calibSensorMap:  Record<string, CalibratedSensor>
-  egoPose:         EgoPosePoint | undefined
-  mapToken:        string | null
-  location:        string | null
-  onFeatureClick:  (feature: GeoJSONMapFeature, layer: MapLayer) => void
+  selectedChannel:     string
+  sampleDataMap:       SensorDataMap
+  calibSensorMap:      Record<string, CalibratedSensor>
+  egoPose:             EgoPosePoint | undefined
+  mapToken:            string | null
+  location:            string | null
+  onFeatureClick:      (feature: GeoJSONMapFeature, layer: MapLayer) => void
+  egoPoses?:           EgoPosePoint[]
+  currentSampleToken?: string | null
 }
 
 function Placeholder({ text }: { text: string }) {
@@ -30,6 +32,8 @@ export default function SampleMapViewer({
   mapToken,
   location,
   onFeatureClick,
+  egoPoses,
+  currentSampleToken,
 }: SampleMapViewerProps) {
   const sensorBrief  = sampleDataMap[selectedChannel]
   const cameraCalib  = calibSensorMap[selectedChannel]
@@ -82,6 +86,10 @@ export default function SampleMapViewer({
             mapToken={mapToken}
             location={location}
             onFeatureClick={onFeatureClick}
+            selectedFeature={null}
+            selectedLayer={null}
+            egoPoses={egoPoses}
+            currentSampleToken={currentSampleToken}
           />
         </div>
 

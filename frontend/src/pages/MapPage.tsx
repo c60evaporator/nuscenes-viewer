@@ -71,6 +71,8 @@ export default function MapPage({ activeTab, onTabChange }: MapPageProps) {
         mapToken={mapMeta?.token ?? null}
         location={currentMapLocation}
         onFeatureClick={handleFeatureClick}
+        selectedFeature={selectedFeature}
+        selectedLayer={selectedLayer}
       />
     </MainLayout>
   )

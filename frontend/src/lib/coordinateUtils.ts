@@ -210,6 +210,51 @@ export function bboxCornersToGlobal(
   })
 }
 
+// 各マップのGPS原点（backend/config/settings.yml と同じ値）
+const MAP_ORIGINS: Record<string, [number, number]> = {
+  'boston-seaport':           [42.336849169438615, -71.05785369873047],
+  'singapore-onenorth':       [1.2882100888758645,  103.78475189208984],
+  'singapore-hollandvillage': [1.2993652317780957,  103.78252056121826],
+  'singapore-queenstown':     [1.2782562240223188,  103.76741409301758],
+}
+
+/**
+ * NuScenes メートル座標 → WGS84 経緯度
+ * backend/app/converters/geometry.py の local_to_wgs84 と同じ変換
+ * @returns [longitude, latitude]（GeoJSON 順）
+ */
+export function localToWgs84(
+  x:        number,
+  y:        number,
+  location: string,
+): [number, number] | null {
+  const origin = MAP_ORIGINS[location]
+  if (!origin) return null
+  const [lat0, lon0] = origin
+  const lat = lat0 + y / 111320.0
+  const lon = lon0 + x / (111320.0 * Math.cos((lat0 * Math.PI) / 180))
+  return [lon, lat]
+}
+
+/**
+ * basemap PNG の WGS84 bounds を返す（BitmapLayer の bounds に使用）
+ * basemap PNG はメートル座標系で (0,0)〜(canvasW, canvasH) の範囲をカバーする
+ * @returns [west, south, east, north]
+ */
+export function getBasemapBounds(
+  location: string,
+): [number, number, number, number] | null {
+  const meta = NUSCENES_MAP_META[location]
+  if (!meta) return null
+
+  const [canvasW, canvasH] = meta.canvasEdge
+  const sw = localToWgs84(0,       0,       location)  // 南西（左下）
+  const ne = localToWgs84(canvasW, canvasH, location)  // 北東（右上）
+  if (!sw || !ne) return null
+
+  return [sw[0], sw[1], ne[0], ne[1]]
+}
+
 /**
  * グローバル座標をセンサー座標系に変換する（BEV BBox 描画用）
  *

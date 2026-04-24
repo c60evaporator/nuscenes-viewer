@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react'
 
 interface LeftPaneProps {
-  filter?:  ReactNode   // 上部フィルタ群（bg: #606060）
-  footer?:  ReactNode   // 下部固定フッター（スライダー等）
-  children: ReactNode   // スクロールリスト（白背景）
+  filter?:           ReactNode   // 上部フィルタ群（bg: #606060）
+  footer?:           ReactNode   // 下部固定フッター（スライダー等）
+  children:          ReactNode   // スクロールリスト（白背景）
+  noChildrenScroll?: boolean     // true のとき children ラッパーのスクロールを無効化（内部で制御する場合）
 }
 
-export default function LeftPane({ filter, footer, children }: LeftPaneProps) {
+export default function LeftPane({ filter, footer, children, noChildrenScroll }: LeftPaneProps) {
   return (
     <div className="flex flex-col h-full">
       {filter && (
@@ -17,7 +18,7 @@ export default function LeftPane({ filter, footer, children }: LeftPaneProps) {
           {filter}
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto bg-white">
+      <div className={`flex-1 min-h-0 bg-white ${noChildrenScroll ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         {children}
       </div>
       {footer && (

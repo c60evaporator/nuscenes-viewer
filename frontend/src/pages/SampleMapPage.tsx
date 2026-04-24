@@ -126,14 +126,17 @@ export default function SampleMapPage({ activeTab, onTabChange }: SampleMapPageP
               />
             </div>
           }
+          noChildrenScroll
         >
           <div className="flex flex-col h-full">
-            <SampleList
-              samples={samples}
-              currentSampleToken={currentSampleToken}
-              onSelect={setSample}
-            />
-            <div className="border-t border-gray-200">
+            <div style={{ flex: 2 }} className="min-h-0 overflow-y-auto">
+              <SampleList
+                samples={samples}
+                currentSampleToken={currentSampleToken}
+                onSelect={setSample}
+              />
+            </div>
+            <div style={{ flex: 1 }} className="min-h-0 overflow-y-auto border-t border-gray-700">
               <LayerCheckboxes />
             </div>
           </div>

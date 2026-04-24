@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from app.json_conversion.to_nusc_db import import_all
+from app.json_conversion.to_map_db import import_all_maps
 
 logging.basicConfig(
     level=logging.INFO,
@@ -9,7 +9,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-asyncio.run(import_all(
+asyncio.run(import_all_maps(
     data_root="/data/nuscenes",
-    version="v1.0-trainval",
 ))

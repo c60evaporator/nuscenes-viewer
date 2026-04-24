@@ -12,6 +12,7 @@ fastapi
 uvicorn
 pydantic-settings
 python-dotenv
+PyYAML
 pytest
 pytest-asyncio
 httpx

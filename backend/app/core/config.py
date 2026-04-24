@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     NUSCENES_DATAROOT: str = "/data/nuscenes"
     CORS_ORIGINS: list[str] = ["*"]
     DB_ECHO: bool = False
+    APP_CONFIG_PATH: str = "/app/config/settings.yml"
 
 
 settings = Settings()

@@ -4,25 +4,26 @@ from typing import Any
 from geoalchemy2.shape import to_shape
 from sqlalchemy import inspect as sa_inspect
 
+from app.core.app_config import get_map_origins
 from app.schemas.map import GeoJSONFeature, GeoJSONFeatureCollection, GeoJSONGeometry
 
 # ── Local → WGS84 ────────────────────────────────────────────────────────────
-
-_MAP_ORIGINS: dict[str, tuple[float, float]] = {
-    "boston-seaport":           (42.336849169438615,  -71.05785369873047),
-    "singapore-onenorth":       (1.2882100888758645,  103.78475189208984),
-    "singapore-hollandvillage": (1.2993652317780957,  103.78252056121826),
-    "singapore-queenstown":     (1.2782562240223188,  103.76741409301758),
-}
 
 
 def local_to_wgs84(x: float, y: float, location: str) -> tuple[float, float]:
     """NuScenes マップローカル座標 (x, y) [meters] → WGS84 (lon, lat)。
 
     各ロケーションの GPS 原点を基準に線形近似で変換する。
+    原点は backend/config/settings.yml の map_origins セクションで管理する。
     Returns (longitude, latitude) — GeoJSON の座標順。
     """
-    lat0, lon0 = _MAP_ORIGINS[location]
+    origins = get_map_origins()
+    if location not in origins:
+        raise KeyError(
+            f"Unknown map location: '{location}'. "
+            "backend/config/settings.yml の map_origins セクションに追加してください。"
+        )
+    lat0, lon0 = origins[location]
     lat = lat0 + y / 111320.0
     lon = lon0 + x / (111320.0 * math.cos(math.radians(lat0)))
     return lon, lat
@@ -34,7 +35,13 @@ def wgs84_to_local(lon: float, lat: float, location: str) -> tuple[float, float]
     local_to_wgs84 の逆変換（線形近似）。
     Returns (x, y) — NuScenes ローカル座標順。
     """
-    lat0, lon0 = _MAP_ORIGINS[location]
+    origins = get_map_origins()
+    if location not in origins:
+        raise KeyError(
+            f"Unknown map location: '{location}'. "
+            "backend/config/settings.yml の map_origins セクションに追加してください。"
+        )
+    lat0, lon0 = origins[location]
     y = (lat - lat0) * 111320.0
     x = (lon - lon0) * 111320.0 * math.cos(math.radians(lat0))
     return x, y

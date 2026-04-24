@@ -80,9 +80,30 @@ async def import_scenes(data_root: str, version: str, db: AsyncSession) -> None:
 
 
 async def import_samples(data_root: str, version: str, db: AsyncSession) -> None:
+    """Sample は prev/next が自己参照FK。
+
+    チャンク挿入時の FK 違反を避けるため、まず prev=next=None で全行挿入し、
+    その後 UPDATE で prev/next を補完する。
+    """
     schemas = [SampleS.model_validate(r) for r in _load(data_root, version, "sample.json")]
-    n = await _upsert_ignore(db, Sample, [s.model_dump() for s in schemas])
+    rows_no_refs = [
+        {k: v for k, v in s.model_dump().items() if k not in ("prev", "next")}
+        | {"prev": None, "next": None}
+        for s in schemas
+    ]
+    n = await _upsert_ignore(db, Sample, rows_no_refs)
     logger.info("samples: %d inserted", n)
+
+    update_rows = [(s.token, s.prev, s.next) for s in schemas if s.prev or s.next]
+    chunk_size = 500
+    for i in range(0, len(update_rows), chunk_size):
+        for token, prev, next_ in update_rows[i : i + chunk_size]:
+            await db.execute(
+                update(Sample)
+                .where(Sample.token == token)
+                .values(prev=prev, next=next_)
+            )
+    logger.info("samples: prev/next refs updated (%d records)", len(update_rows))
 
 
 async def import_sensors(data_root: str, version: str, db: AsyncSession) -> None:

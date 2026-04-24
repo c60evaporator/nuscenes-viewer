@@ -1,5 +1,5 @@
 from app.models.scene import Sample
-from sqlalchemy import String, BigInteger, Boolean, ForeignKey, JSON
+from sqlalchemy import String, BigInteger, Boolean, ForeignKey, JSON, Index
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base
  
@@ -61,6 +61,10 @@ class EgoPose(Base):
 class SampleData(Base):
     """センサー1フレーム分のデータ参照（ファイルパス・タイムスタンプ）"""
     __tablename__ = "sample_data"
+    __table_args__ = (
+        # (sample_token, is_key_frame) 複合インデックス：キーフレーム絞り込みクエリを高速化
+        Index("ix_sample_data_sample_key_frame", "sample_token", "is_key_frame"),
+    )
     # Columns
     token:                   Mapped[str] = mapped_column(String, primary_key=True)
     sample_token:            Mapped[str] = mapped_column(

@@ -47,7 +47,7 @@ class Sample(Base):
     # Columns
     token:       Mapped[str] = mapped_column(String, primary_key=True)
     scene_token: Mapped[str] = mapped_column(
-        ForeignKey("scenes.token", ondelete="CASCADE"), nullable=False
+        ForeignKey("scenes.token", ondelete="CASCADE"), nullable=False, index=True
     )
     timestamp:   Mapped[int] = mapped_column(BigInteger, nullable=False)  # UNIX usec
     # 隣接フレーム参照：参照先が消えても行は残す

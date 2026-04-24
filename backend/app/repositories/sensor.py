@@ -82,7 +82,7 @@ class SensorRepository:
     async def get_sample_data_by_sample(
         self, sample_token: str
     ) -> list[SampleData]:
-        """GET /samples/{token}/data で将来使用。"""
+        """指定 Sample のキーフレーム SampleData を返す（is_key_frame=True のみ）。"""
         result = await self.db.execute(
             select(SampleData)
             .options(
@@ -91,7 +91,10 @@ class SensorRepository:
                 ),
                 selectinload(SampleData.ego_pose),
             )
-            .where(SampleData.sample_token == sample_token)
+            .where(
+                SampleData.sample_token == sample_token,
+                SampleData.is_key_frame.is_(True),
+            )
             .order_by(SampleData.timestamp)
         )
         return list(result.scalars().all())

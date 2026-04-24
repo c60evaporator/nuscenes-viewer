@@ -51,7 +51,7 @@ async def get_sensor(token: str, db: AsyncSession = Depends(get_db)):
     response_model=PaginatedResponse[CalibratedSensorResponse],
 )
 async def list_calibrated_sensors(
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=99999),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):

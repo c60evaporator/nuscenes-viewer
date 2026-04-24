@@ -88,10 +88,10 @@ class SampleAnnotation(Base):
     # Columns
     token:          Mapped[str] = mapped_column(String, primary_key=True)
     sample_token:   Mapped[str] = mapped_column(
-        ForeignKey("samples.token", ondelete="CASCADE"), nullable=False
+        ForeignKey("samples.token", ondelete="CASCADE"), nullable=False, index=True
     )
     instance_token: Mapped[str] = mapped_column(
-        ForeignKey("instances.token", ondelete="CASCADE"), nullable=False
+        ForeignKey("instances.token", ondelete="CASCADE"), nullable=False, index=True
     )
     # 3Dバウンディングボックス（グローバル座標）
     translation: Mapped[list] = mapped_column(JSON, nullable=False)  # [x, y, z] 中心座標

@@ -1,8 +1,11 @@
+import { useQueries } from '@tanstack/react-query'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import MapViewer from '@/components/map/MapViewer'
+import { apiFetch } from '@/api/client'
+import { useMapLayerStore, ALL_MAP_LAYERS } from '@/store/mapLayerStore'
 import type { CalibratedSensor, EgoPosePoint, SensorDataMap } from '@/types/sensor'
-import type { GeoJSONMapFeature, MapLayer } from '@/types/map'
+import type { GeoJSONFeatureCollection, GeoJSONMapFeature, MapLayer } from '@/types/map'
 
 interface SampleMapViewerProps {
   selectedChannel:     string
@@ -46,6 +49,20 @@ export default function SampleMapViewer({
     rotation:    lidarCalib.rotation,
   } : undefined
 
+  // 有効レイヤーの GeoJSON を並列フェッチ（MapViewer と同じキーのため TanStack Query がキャッシュ共有）
+  const enabledLayers = useMapLayerStore((s) => s.enabledLayers)
+  const results = useQueries({
+    queries: ALL_MAP_LAYERS.map((layer) => ({
+      queryKey:  ['map-geojson', mapToken, layer] as const,
+      queryFn:   () => apiFetch<GeoJSONFeatureCollection>(`/maps/${mapToken}/geojson?layer=${layer}`),
+      enabled:   !!mapToken && enabledLayers.has(layer),
+      staleTime: 5 * 60 * 1000,
+    })),
+  })
+  const mapLayerData = ALL_MAP_LAYERS
+    .map((layer, i) => (results[i].data && enabledLayers.has(layer)) ? { layer, collection: results[i].data! } : null)
+    .filter((x): x is { layer: MapLayer; collection: GeoJSONFeatureCollection } => x !== null)
+
   return (
     <div className="flex flex-col w-full h-full">
       {/* 上 2/3: センサー画像 */}
@@ -63,6 +80,8 @@ export default function SampleMapViewer({
             calibratedSensor={cameraCalib}
             egoPose={egoPose}
             annotations={[]}
+            mapLayerData={mapLayerData}
+            location={location}
             className="w-full h-full"
           />
         ) : isLidar && sensorBrief ? (

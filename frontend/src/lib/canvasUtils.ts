@@ -123,6 +123,7 @@ export function drawBBox2D(
 
 // ── 点群 BEV 描画 ─────────────────────────────────────────────────────────────
 
+
 export interface BevViewParams {
   width:   number   // Canvas 幅 (px)
   height:  number   // Canvas 高さ (px)
@@ -184,5 +185,72 @@ export function drawPointCloud(
     ctx.fillRect(px - pointSize / 2, py - pointSize / 2, pointSize, pointSize)
   }
 
+  ctx.restore()
+}
+
+// ── Map フィーチャー投影描画 ──────────────────────────────────────────────────
+
+type RGBA = [number, number, number, number]
+
+function rgbaToStyle([r, g, b, a]: RGBA): string {
+  return `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`
+}
+
+/**
+ * 投影済みポリゴン座標をカメラ画像 canvas に描画する（塗りつぶし＋輪郭）
+ */
+export function drawProjectedPolygon(
+  ctx:    CanvasRenderingContext2D,
+  points: [number, number][],
+  color:  RGBA,
+): void {
+  if (points.length < 3) return
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(points[0][0], points[0][1])
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1])
+  ctx.closePath()
+  ctx.fillStyle   = rgbaToStyle(color)
+  ctx.fill()
+  ctx.strokeStyle = rgbaToStyle([color[0], color[1], color[2], 220])
+  ctx.lineWidth   = 1
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
+ * 投影済みライン座標をカメラ画像 canvas に描画する
+ */
+export function drawProjectedLine(
+  ctx:       CanvasRenderingContext2D,
+  points:    [number, number][],
+  color:     RGBA,
+  lineWidth  = 2,
+): void {
+  if (points.length < 2) return
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(points[0][0], points[0][1])
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1])
+  ctx.strokeStyle = rgbaToStyle(color)
+  ctx.lineWidth   = lineWidth
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
+ * 投影済みポイントをカメラ画像 canvas に描画する（塗りつぶし円）
+ */
+export function drawProjectedPoint(
+  ctx:    CanvasRenderingContext2D,
+  point:  [number, number],
+  color:  RGBA,
+  radius  = 5,
+): void {
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(point[0], point[1], radius, 0, Math.PI * 2)
+  ctx.fillStyle = rgbaToStyle(color)
+  ctx.fill()
   ctx.restore()
 }

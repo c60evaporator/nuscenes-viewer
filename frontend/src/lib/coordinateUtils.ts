@@ -256,6 +256,81 @@ export function getBasemapBounds(
 }
 
 /**
+ * WGS84 経緯度 → NuScenes メートル座標
+ * backend/app/converters/geometry.py の wgs84_to_local と同じ変換（localToWgs84 の逆）
+ * @returns [x, y]（ローカルメートル座標）
+ */
+export function wgs84ToLocal(
+  lon:      number,
+  lat:      number,
+  location: string,
+): [number, number] | null {
+  const origin = MAP_ORIGINS[location]
+  if (!origin) return null
+  const [lat0, lon0] = origin
+  const y = (lat - lat0) * 111320.0
+  const x = (lon - lon0) * 111320.0 * Math.cos((lat0 * Math.PI) / 180)
+  return [x, y]
+}
+
+/**
+ * GeoJSON 座標列（WGS84）をカメラ画像上の 2D 座標に変換する。
+ *
+ * nuscenes devkit の NuScenesMapExplorer.render_map_in_image と同じ変換パイプライン:
+ *   WGS84 → ローカルメートル座標 (z=0) → エゴ座標系 → カメラ座標系 → 画像 2D
+ *
+ * 以下の場合は null を返す（ポリゴン・ライン全体をスキップ）:
+ *   - いずれかの点がカメラ後方（z < near_plane）
+ *   - 変換後の全点が画像外
+ *   - 未対応ロケーション
+ *
+ * @param coords      GeoJSON 座標列 [[lon, lat], ...] (WGS84)
+ * @param location    マップロケーション名 ('boston-seaport' 等)
+ * @param egoPose     自車位置・姿勢 { translation: [x,y,z], rotation: [w,x,y,z] }
+ * @param calibSensor カメラのキャリブレーション { translation: [x,y,z], rotation: [w,x,y,z] }
+ * @param intrinsic   カメラ内部パラメータ 3×3 行列
+ * @param imageSize   画像サイズ [width, height]
+ * @returns           カメラ画像上の 2D 座標列 [[u, v], ...] または null
+ */
+export function projectMapCoordsToCamera(
+  coords:      [number, number][],
+  location:    string,
+  egoPose:     { translation: number[]; rotation: number[] },
+  calibSensor: { translation: number[]; rotation: number[] },
+  intrinsic:   number[][],
+  imageSize:   [number, number],
+): [number, number][] | null {
+  const [imgW, imgH] = imageSize
+  const projected: [number, number][] = []
+
+  for (const [lon, lat] of coords) {
+    const local = wgs84ToLocal(lon, lat, location)
+    if (!local) return null  // 未対応ロケーション
+
+    // 地面平面上の 3D 点（z=0）として構築
+    const point3d = [local[0], local[1], 0]
+
+    // ローカル座標系 → エゴ → カメラ → 画像 2D
+    const uv = project3DTo2D(point3d, intrinsic, egoPose, calibSensor)
+
+    // カメラ後方の点があればポリゴン全体をスキップ
+    if (uv === null) return null
+
+    projected.push(uv)
+  }
+
+  if (projected.length === 0) return null
+
+  // 全点が画像外ならスキップ（1 点でも内側にあれば描画）
+  const anyInside = projected.some(
+    ([u, v]) => u >= 0 && u < imgW && v >= 0 && v < imgH,
+  )
+  if (!anyInside) return null
+
+  return projected
+}
+
+/**
  * グローバル座標をセンサー座標系に変換する（BEV BBox 描画用）
  *
  * @param point       グローバル座標 [x, y, z]

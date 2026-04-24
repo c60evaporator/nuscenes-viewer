@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { useSensorImage } from '@/api/sensorData'
-import { project3DTo2D, bboxCornersToGlobal } from '@/lib/coordinateUtils'
-import { drawBBox2D } from '@/lib/canvasUtils'
+import { project3DTo2D, bboxCornersToGlobal, projectMapCoordsToCamera } from '@/lib/coordinateUtils'
+import { drawBBox2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint } from '@/lib/canvasUtils'
+import { LAYER_COLORS } from '@/layers/MapAnnotationLayers'
 import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor } from '@/types/sensor'
+import type { GeoJSONFeatureCollection, MapLayer } from '@/types/map'
 
 interface CameraImageCanvasProps {
   sampleDataToken:  string
@@ -12,10 +14,71 @@ interface CameraImageCanvasProps {
   annotations?:     Annotation[]
   highlightInstanceToken?: string
   onBBoxClick?:     (token: string) => void
+  mapLayerData?:    { layer: MapLayer; collection: GeoJSONFeatureCollection }[]
+  location?:        string | null
   className?:       string
 }
 
-// BBox の画面上 2D 矩形境界（クリック判定用）
+// ── Map フィーチャー投影ヘルパー ──────────────────────────────────────────────
+
+type RGBA = [number, number, number, number]
+
+function drawMapFeatureOnCanvas(
+  ctx:         CanvasRenderingContext2D,
+  geom:        { type: string; coordinates: unknown },
+  color:       RGBA,
+  location:    string,
+  egoPose:     { translation: number[]; rotation: number[] },
+  calibSensor: { translation: number[]; rotation: number[] },
+  intrinsic:   number[][],
+  imageSize:   [number, number],
+  scaleX:      number,
+  scaleY:      number,
+): void {
+  const project = (coords: [number, number][]): [number, number][] | null => {
+    const proj = projectMapCoordsToCamera(coords, location, egoPose, calibSensor, intrinsic, imageSize)
+    if (!proj) return null
+    return proj.map(([u, v]) => [u * scaleX, v * scaleY] as [number, number])
+  }
+
+  switch (geom.type) {
+    case 'Polygon': {
+      const ring = (geom.coordinates as number[][][])[0] as [number, number][]
+      const pts = project(ring)
+      if (pts) drawProjectedPolygon(ctx, pts, color)
+      break
+    }
+    case 'MultiPolygon': {
+      for (const polygon of geom.coordinates as number[][][][]) {
+        const ring = polygon[0] as [number, number][]
+        const pts = project(ring)
+        if (pts) drawProjectedPolygon(ctx, pts, color)
+      }
+      break
+    }
+    case 'LineString': {
+      const pts = project(geom.coordinates as [number, number][])
+      if (pts) drawProjectedLine(ctx, pts, color)
+      break
+    }
+    case 'MultiLineString': {
+      for (const line of geom.coordinates as number[][][]) {
+        const pts = project(line as [number, number][])
+        if (pts) drawProjectedLine(ctx, pts, color)
+      }
+      break
+    }
+    case 'Point': {
+      const [lon, lat] = geom.coordinates as [number, number]
+      const pts = project([[lon, lat]])
+      if (pts && pts.length > 0) drawProjectedPoint(ctx, pts[0], color)
+      break
+    }
+  }
+}
+
+// ── BBox の画面上 2D 矩形境界（クリック判定用）────────────────────────────────
+
 interface BBoxRect {
   token: string
   minX:  number
@@ -31,6 +94,8 @@ export default function CameraImageCanvas({
   annotations,
   highlightInstanceToken,
   onBBoxClick,
+  mapLayerData,
+  location,
   className,
 }: CameraImageCanvasProps) {
   const containerRef  = useRef<HTMLDivElement>(null)
@@ -108,6 +173,19 @@ export default function CameraImageCanvas({
     }
 
     bboxRectsRef.current = newBBoxRects
+
+    // ── Map フィーチャーをカメラ画像上に投影描画 ──────────────────────────────
+    if (mapLayerData && mapLayerData.length > 0 && location && egoPose && calibratedSensor.camera_intrinsic) {
+      const imageSize: [number, number] = [naturalWidth, naturalHeight]
+      for (const { layer, collection } of mapLayerData) {
+        const color = LAYER_COLORS[layer]
+        for (const feature of collection.features) {
+          const geom = feature.geometry
+          if (!geom) continue
+          drawMapFeatureOnCanvas(ctx, geom, color, location, egoPose, calibArray, calibratedSensor.camera_intrinsic, imageSize, scaleX, scaleY)
+        }
+      }
+    }
   }
 
   drawBBoxesRef.current = drawBBoxes
@@ -150,7 +228,7 @@ export default function CameraImageCanvas({
     if (bitmapRef.current) {
       drawBBoxesRef.current?.()
     }
-  }, [annotations, egoPose, highlightInstanceToken, calibratedSensor])
+  }, [annotations, egoPose, highlightInstanceToken, calibratedSensor, mapLayerData, location])
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!onBBoxClick) return

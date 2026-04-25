@@ -6,7 +6,50 @@ import { LAYER_COLORS } from '@/layers/MapAnnotationLayers'
 import { MAP_PROJECTION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor } from '@/types/sensor'
-import type { GeoJSONFeatureCollection, MapLayer } from '@/types/map'
+import type { GeoJSONFeatureCollection, GeoJSONMapFeature, MapLayer } from '@/types/map'
+
+// ── マップフィーチャー ヒットテスト ────────────────────────────────────────────
+
+type ProjectedRegion = { points: [number, number][]; geoType: string }
+
+interface ProjectedFeatureHit {
+  feature: GeoJSONMapFeature
+  layer:   MapLayer
+  regions: ProjectedRegion[]
+}
+
+function pointInPolygon2D(px: number, py: number, poly: [number, number][]): boolean {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]
+    const [xj, yj] = poly[j]
+    if (((yi > py) !== (yj > py)) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi)
+      inside = !inside
+  }
+  return inside
+}
+
+function distPointToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return Math.hypot(px - ax, py - ay)
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy)
+}
+
+function hitTestRegion(x: number, y: number, region: ProjectedRegion, threshold = 6): boolean {
+  const { points: pts, geoType } = region
+  if (geoType === 'polygon') return pointInPolygon2D(x, y, pts)
+  if (geoType === 'line') {
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (distPointToSegment(x, y, pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]) < threshold) return true
+    }
+  }
+  if (geoType === 'point' && pts.length > 0) return Math.hypot(x - pts[0][0], y - pts[0][1]) < threshold + 2
+  return false
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface CameraImageCanvasProps {
   sampleDataToken:  string
@@ -15,6 +58,8 @@ interface CameraImageCanvasProps {
   annotations?:     Annotation[]
   highlightInstanceToken?: string
   onBBoxClick?:     (token: string) => void
+  onFeatureClick?:  (feature: GeoJSONMapFeature, layer: MapLayer) => void
+  selectedFeature?: GeoJSONMapFeature | null
   mapLayerData?:    { layer: MapLayer; collection: GeoJSONFeatureCollection }[]
   location?:        string | null
   className?:       string
@@ -104,6 +149,7 @@ function drawMapFeatureOnCanvas(
   scaleX:      number,
   scaleY:      number,
   properties?: Record<string, unknown>,
+  outRegions?: ProjectedRegion[],
 ): void {
   const project = (coords: [number, number][], isPolygonRing = false): [number, number][] | null => {
     const proj = projectMapCoordsToCamera(coords, location, egoPose, calibSensor, intrinsic, imageSize, MAP_PROJECTION.MAX_DISTANCE_M, isPolygonRing)
@@ -115,26 +161,38 @@ function drawMapFeatureOnCanvas(
     case 'Polygon': {
       const ring = (geom.coordinates as number[][][])[0] as [number, number][]
       const pts = project(ring, true)
-      if (pts) drawProjectedPolygon(ctx, pts, color)
+      if (pts) {
+        drawProjectedPolygon(ctx, pts, color)
+        outRegions?.push({ points: pts, geoType: 'polygon' })
+      }
       break
     }
     case 'MultiPolygon': {
       for (const polygon of geom.coordinates as number[][][][]) {
         const ring = polygon[0] as [number, number][]
         const pts = project(ring, true)
-        if (pts) drawProjectedPolygon(ctx, pts, color)
+        if (pts) {
+          drawProjectedPolygon(ctx, pts, color)
+          outRegions?.push({ points: pts, geoType: 'polygon' })
+        }
       }
       break
     }
     case 'LineString': {
       const pts = project(geom.coordinates as [number, number][])
-      if (pts) drawProjectedLine(ctx, pts, color)
+      if (pts) {
+        drawProjectedLine(ctx, pts, color)
+        outRegions?.push({ points: pts, geoType: 'line' })
+      }
       break
     }
     case 'MultiLineString': {
       for (const line of geom.coordinates as number[][][]) {
         const pts = project(line as [number, number][])
-        if (pts) drawProjectedLine(ctx, pts, color)
+        if (pts) {
+          drawProjectedLine(ctx, pts, color)
+          outRegions?.push({ points: pts, geoType: 'line' })
+        }
       }
       break
     }
@@ -143,6 +201,7 @@ function drawMapFeatureOnCanvas(
       const pts = project([[lon, lat]])
       if (pts && pts.length > 0) {
         drawProjectedPoint(ctx, pts[0], color)
+        outRegions?.push({ points: [pts[0]], geoType: 'point' })
         if (properties?.layer === 'traffic_light') {
           drawTrafficLightExtras(ctx, properties, color, project, egoPose, calibSensor, intrinsic, imageSize, scaleX, scaleY)
         }
@@ -169,16 +228,19 @@ export default function CameraImageCanvas({
   annotations,
   highlightInstanceToken,
   onBBoxClick,
+  onFeatureClick,
+  selectedFeature,
   mapLayerData,
   location,
   className,
 }: CameraImageCanvasProps) {
-  const containerRef  = useRef<HTMLDivElement>(null)
-  const imgCanvasRef  = useRef<HTMLCanvasElement>(null)
-  const bboxCanvasRef = useRef<HTMLCanvasElement>(null)
-  const bboxRectsRef  = useRef<BBoxRect[]>([])
-  const drawBBoxesRef = useRef<(() => void) | null>(null)
-  const bitmapRef     = useRef<ImageBitmap | null>(null)
+  const containerRef          = useRef<HTMLDivElement>(null)
+  const imgCanvasRef          = useRef<HTMLCanvasElement>(null)
+  const bboxCanvasRef         = useRef<HTMLCanvasElement>(null)
+  const bboxRectsRef          = useRef<BBoxRect[]>([])
+  const projectedFeaturesRef  = useRef<ProjectedFeatureHit[]>([])
+  const drawBBoxesRef         = useRef<(() => void) | null>(null)
+  const bitmapRef             = useRef<ImageBitmap | null>(null)
 
   const { data: bitmap, isError } = useSensorImage(sampleDataToken)
 
@@ -250,17 +312,31 @@ export default function CameraImageCanvas({
     bboxRectsRef.current = newBBoxRects
 
     // ── Map フィーチャーをカメラ画像上に投影描画 ──────────────────────────────
+    const newProjectedFeatures: ProjectedFeatureHit[] = []
     if (mapLayerData && mapLayerData.length > 0 && location && egoPose && calibratedSensor.camera_intrinsic) {
       const imageSize: [number, number] = [naturalWidth, naturalHeight]
+      const selectedToken = selectedFeature?.properties?.token
+
       for (const { layer, collection } of mapLayerData) {
         const color = LAYER_COLORS[layer]
         for (const feature of collection.features) {
           const geom = feature.geometry
           if (!geom) continue
-          drawMapFeatureOnCanvas(ctx, geom, color, location, egoPose, calibArray, calibratedSensor.camera_intrinsic, imageSize, scaleX, scaleY, feature.properties)
+          const regions: ProjectedRegion[] = []
+          drawMapFeatureOnCanvas(ctx, geom, color, location, egoPose, calibArray, calibratedSensor.camera_intrinsic, imageSize, scaleX, scaleY, feature.properties, regions)
+
+          // 選択中フィーチャーを白でハイライト
+          if (selectedToken && feature.properties?.token === selectedToken) {
+            drawMapFeatureOnCanvas(ctx, geom, [255, 238, 128, 170] as RGBA, location, egoPose, calibArray, calibratedSensor.camera_intrinsic, imageSize, scaleX, scaleY, feature.properties)
+          }
+
+          if (regions.length > 0) {
+            newProjectedFeatures.push({ feature: feature as GeoJSONMapFeature, layer, regions })
+          }
         }
       }
     }
+    projectedFeaturesRef.current = newProjectedFeatures
   }
 
   drawBBoxesRef.current = drawBBoxes
@@ -298,23 +374,37 @@ export default function CameraImageCanvas({
     drawBBoxesRef.current?.()
   }, [bitmap])
 
-  // annotations / egoPose / highlight 変化時に BBox を再描画
+  // annotations / egoPose / highlight / 選択フィーチャー 変化時に再描画
   useEffect(() => {
     if (bitmapRef.current) {
       drawBBoxesRef.current?.()
     }
-  }, [annotations, egoPose, highlightInstanceToken, calibratedSensor, mapLayerData, location])
+  }, [annotations, egoPose, highlightInstanceToken, calibratedSensor, mapLayerData, location, selectedFeature])
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!onBBoxClick) return
     const rect = containerRef.current!.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
 
-    for (const bbox of bboxRectsRef.current) {
-      if (x >= bbox.minX && x <= bbox.maxX && y >= bbox.minY && y <= bbox.maxY) {
-        onBBoxClick(bbox.token)
-        break
+    // BBox クリック判定（優先）
+    if (onBBoxClick) {
+      for (const bbox of bboxRectsRef.current) {
+        if (x >= bbox.minX && x <= bbox.maxX && y >= bbox.minY && y <= bbox.maxY) {
+          onBBoxClick(bbox.token)
+          return
+        }
+      }
+    }
+
+    // Map フィーチャークリック判定
+    if (onFeatureClick) {
+      for (const { feature, layer, regions } of projectedFeaturesRef.current) {
+        for (const region of regions) {
+          if (hitTestRegion(x, y, region)) {
+            onFeatureClick(feature, layer)
+            return
+          }
+        }
       }
     }
   }

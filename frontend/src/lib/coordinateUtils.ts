@@ -79,6 +79,36 @@ function clipPolygonNear(camPts: number[][], near: number): number[][] {
   return out
 }
 
+/**
+ * ポリライン（開いた線）をニアプレーン（z >= near）でクリッピングする（開いた列なので最初と最後を結ばない）
+ * ポリゴン用の clipPolygonNear と異なり、後方→前方の再進入も正しく扱う。
+ */
+function clipPolylineNear(camPts: number[][], near: number): number[][] {
+  if (camPts.length === 0) return []
+  const out: number[][] = []
+  const intersect = (a: number[], b: number[]) => {
+    const t = (near - a[2]) / (b[2] - a[2])
+    return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), near]
+  }
+  let prev = camPts[0]
+  if (prev[2] >= near) out.push(prev)
+  for (let i = 1; i < camPts.length; i++) {
+    const curr = camPts[i]
+    const prevIn = prev[2] >= near
+    const currIn = curr[2] >= near
+    if (prevIn && currIn) {
+      out.push(curr)
+    } else if (prevIn && !currIn) {
+      out.push(intersect(prev, curr))
+    } else if (!prevIn && currIn) {
+      out.push(intersect(prev, curr))
+      out.push(curr)
+    }
+    prev = curr
+  }
+  return out
+}
+
 const NEAR_PLANE = 0.1  // カメラニアプレーン（メートル）
 
 // ── 公開 API ─────────────────────────────────────────────────────────────────
@@ -356,18 +386,34 @@ export function projectMapCoordsToCamera(
   // 未対応ロケーションは早期リターン
   if (coords.length > 0 && !wgs84ToLocal(coords[0][0], coords[0][1], location)) return null
 
-  // 距離フィルタ: 最も近い頂点が閾値を超えていればスキップ
+  // 距離フィルタ: 頂点距離チェック + セグメント最短距離チェック
+  // （長いラインが ego 直下を通る場合、頂点が遠くてもセグメントが近ければ表示する）
   if (maxDistanceM !== undefined) {
     const egoX = egoPose.translation[0]
     const egoY = egoPose.translation[1]
+    const localCoords: [number, number][] = []
     let minDist = Infinity
     for (const [lon, lat] of coords) {
       const local = wgs84ToLocal(lon, lat, location)
       if (!local) continue
+      localCoords.push(local)
       const d = Math.sqrt((local[0] - egoX) ** 2 + (local[1] - egoY) ** 2)
       if (d < minDist) minDist = d
     }
-    if (minDist > maxDistanceM) return null
+    // 頂点が全て閾値外の場合、各セグメントの最短距離も確認
+    if (minDist > maxDistanceM) {
+      for (let i = 0; i < localCoords.length - 1; i++) {
+        const [ax, ay] = localCoords[i]
+        const [bx, by] = localCoords[i + 1]
+        const dx = bx - ax, dy = by - ay
+        const lenSq = dx * dx + dy * dy
+        if (lenSq === 0) continue
+        const t = Math.max(0, Math.min(1, ((egoX - ax) * dx + (egoY - ay) * dy) / lenSq))
+        const sd = Math.sqrt((egoX - ax - t * dx) ** 2 + (egoY - ay - t * dy) ** 2)
+        if (sd < minDist) minDist = sd
+      }
+      if (minDist > maxDistanceM) return null
+    }
   }
 
   const [imgW, imgH] = imageSize
@@ -399,17 +445,22 @@ export function projectMapCoordsToCamera(
     return projected
   }
 
-  // ── ライン / ポイント: 頂点ごとにカメラ後方をスキップ ─────────────────────
-  const projected: [number, number][] = []
+  // ── ライン / ポイント: カメラ空間でニアプレーンクリッピング ──────────────
+  // 頂点スキップでなく交点計算を行うことで、後方をまたぐラインも正しく描画する
+  const camPts: number[][] = []
   for (const [lon, lat] of coords) {
     const local = wgs84ToLocal(lon, lat, location)
     if (!local) continue
-    const uv = project3DTo2D([local[0], local[1], 0], intrinsic, egoPose, calibSensor)
-    if (uv === null) continue
-    projected.push(uv)
+    camPts.push(localToCamera([local[0], local[1], 0], egoPose, calibSensor))
   }
 
-  if (projected.length === 0) return null
+  const clipped = clipPolylineNear(camPts, NEAR_PLANE)
+  if (clipped.length === 0) return null
+
+  const projected = clipped.map((p): [number, number] => [
+    intrinsic[0][0] * (p[0] / p[2]) + intrinsic[0][2],
+    intrinsic[1][1] * (p[1] / p[2]) + intrinsic[1][2],
+  ])
 
   const anyInside = projected.some(([u, v]) => u >= 0 && u < imgW && v >= 0 && v < imgH)
   if (!anyInside) return null

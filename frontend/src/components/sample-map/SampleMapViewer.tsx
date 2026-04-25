@@ -84,6 +84,8 @@ export default function SampleMapViewer({
             calibratedSensor={cameraCalib}
             egoPose={sensorBrief.ego_pose ?? egoPose}
             annotations={[]}
+            onFeatureClick={onFeatureClick}
+            selectedFeature={selectedFeature ?? null}
             mapLayerData={mapLayerData}
             location={location}
             className="w-full h-full"

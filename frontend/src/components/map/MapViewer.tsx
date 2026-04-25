@@ -206,7 +206,7 @@ export default function MapViewer({ mapToken, location, onFeatureClick, selected
         pickable:         false,
         filled:           false,
         stroked:          true,
-        getLineColor:     [255, 255, 255, 255],
+        getLineColor:     [255, 238, 128, 255],
         getLineWidth:     3,
         lineWidthUnits:   'pixels',
         getPointRadius:   10,

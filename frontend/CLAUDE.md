@@ -37,6 +37,8 @@ nuscenes-viewerのフロントエンド
 - パターンB（上2/3 + 下1/3）: Instance, Annotation, Sample&Map
 
 ## 各画面の仕様
+画面デザイン案は`design_document/frontend/design_mockups`も参照
+
 ### 1. Scene
 - `Map Selection`プルダウンメニューで選択したMapに紐づくScene情報を表示する
 - 左側のペインにSceneの一覧をリスト表示（ソートは名前順）。クリックで特定のSceneを選択できるようにする

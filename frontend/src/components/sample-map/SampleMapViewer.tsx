@@ -15,6 +15,8 @@ interface SampleMapViewerProps {
   mapToken:            string | null
   location:            string | null
   onFeatureClick:      (feature: GeoJSONMapFeature, layer: MapLayer) => void
+  selectedFeature?:    GeoJSONMapFeature | null
+  selectedLayer?:      MapLayer | null
   egoPoses?:           EgoPosePoint[]
   currentSampleToken?: string | null
 }
@@ -35,6 +37,8 @@ export default function SampleMapViewer({
   mapToken,
   location,
   onFeatureClick,
+  selectedFeature,
+  selectedLayer,
   egoPoses,
   currentSampleToken,
 }: SampleMapViewerProps) {
@@ -105,8 +109,8 @@ export default function SampleMapViewer({
             mapToken={mapToken}
             location={location}
             onFeatureClick={onFeatureClick}
-            selectedFeature={null}
-            selectedLayer={null}
+            selectedFeature={selectedFeature ?? null}
+            selectedLayer={selectedLayer ?? null}
             egoPoses={egoPoses}
             currentSampleToken={currentSampleToken}
           />

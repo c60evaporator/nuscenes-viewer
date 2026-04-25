@@ -160,6 +160,8 @@ export default function SampleMapPage({ activeTab, onTabChange }: SampleMapPageP
         mapToken={mapMeta?.token ?? null}
         location={currentMapLocation}
         onFeatureClick={handleFeatureClick}
+        selectedFeature={selectedFeature}
+        selectedLayer={selectedLayer}
         egoPoses={egoPoses ?? []}
         currentSampleToken={currentSampleToken}
       />

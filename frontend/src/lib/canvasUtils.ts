@@ -254,3 +254,48 @@ export function drawProjectedPoint(
   ctx.fill()
   ctx.restore()
 }
+
+/**
+ * 投影済みライン座標をカメラ画像 canvas に矢印付きで描画する（末端に矢じり）
+ */
+export function drawProjectedArrow(
+  ctx:      CanvasRenderingContext2D,
+  points:   [number, number][],
+  color:    RGBA,
+  lineWidth = 2,
+): void {
+  if (points.length < 2) return
+  drawProjectedLine(ctx, points, color, lineWidth)
+  const [x1, y1] = points[points.length - 2]
+  const [x2, y2] = points[points.length - 1]
+  const angle   = Math.atan2(y2 - y1, x2 - x1)
+  const headLen = 12
+  ctx.save()
+  ctx.fillStyle = rgbaToStyle(color)
+  ctx.beginPath()
+  ctx.moveTo(x2, y2)
+  ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6))
+  ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6))
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
+/**
+ * カメラ画像 canvas に投影済み座標上にテキストラベルを描画する
+ */
+export function drawProjectedLabel(
+  ctx:      CanvasRenderingContext2D,
+  point:    [number, number],
+  text:     string,
+  color:    RGBA,
+  fontSize  = 14,
+): void {
+  ctx.save()
+  ctx.font         = `bold ${fontSize}px sans-serif`
+  ctx.fillStyle    = rgbaToStyle(color)
+  ctx.textAlign    = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, point[0], point[1])
+  ctx.restore()
+}

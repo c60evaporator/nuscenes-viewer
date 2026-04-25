@@ -5,6 +5,7 @@ from geoalchemy2.shape import to_shape
 from sqlalchemy import inspect as sa_inspect
 
 from app.core.app_config import get_map_origins
+from app.models.map import TrafficLight
 from app.schemas.map import GeoJSONFeature, GeoJSONFeatureCollection, GeoJSONGeometry
 
 # ── Local → WGS84 ────────────────────────────────────────────────────────────
@@ -75,6 +76,12 @@ def to_geojson_feature(obj: Any, layer_name: str | None = None) -> GeoJSONFeatur
 
     if layer_name is not None:
         properties["layer"] = layer_name
+
+    # TrafficLight のみ: eager load 済みの line geometry を properties に追加
+    if isinstance(obj, TrafficLight) and obj.line is not None:
+        line_geom = wkb_to_geojson(obj.line.geom)
+        if line_geom:
+            properties["line_geometry"] = line_geom
 
     return GeoJSONFeature(geometry=geometry, properties=properties)
 

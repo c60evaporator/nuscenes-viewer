@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSensorImage } from '@/api/sensorData'
 import { project3DTo2D, bboxCornersToGlobal, projectMapCoordsToCamera } from '@/lib/coordinateUtils'
-import { drawBBox2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint } from '@/lib/canvasUtils'
+import { drawBBox2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint, drawProjectedArrow, drawProjectedLabel } from '@/lib/canvasUtils'
 import { LAYER_COLORS } from '@/layers/MapAnnotationLayers'
 import { MAP_PROJECTION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
@@ -24,6 +24,74 @@ interface CameraImageCanvasProps {
 
 type RGBA = [number, number, number, number]
 
+const TL_ITEM_COLORS: Record<string, RGBA> = {
+  RED:    [255, 60,  60,  255],
+  GREEN:  [50,  220, 50,  255],
+  YELLOW: [255, 220, 0,   255],
+}
+
+// TrafficLight の line（矢印）と items（個別ライト）をカメラ画像上に描画する
+function drawTrafficLightExtras(
+  ctx:         CanvasRenderingContext2D,
+  props:       Record<string, unknown>,
+  baseColor:   RGBA,
+  project:     (coords: [number, number][]) => [number, number][] | null,
+  egoPose:     { translation: number[]; rotation: number[] },
+  calibSensor: { translation: number[]; rotation: number[] },
+  intrinsic:   number[][],
+  imageSize:   [number, number],
+  scaleX:      number,
+  scaleY:      number,
+): void {
+  const [imgW, imgH] = imageSize
+
+  // 1. line を矢印で描画
+  const lineGeom = props.line_geometry as { type: string; coordinates: unknown } | undefined
+  if (lineGeom?.type === 'LineString') {
+    const pts = project(lineGeom.coordinates as [number, number][])
+    if (pts && pts.length >= 2) drawProjectedArrow(ctx, pts, baseColor)
+  }
+
+  // 2. items を個別描画（pose + rel_pos で絶対ローカル座標を計算して投影）
+  const pose  = props.pose  as { tx: number; ty: number; tz: number; rz?: number | null } | undefined
+  const items = props.items as Array<{
+    color:   string
+    shape:   string
+    rel_pos: { tx: number; ty: number; tz: number }
+  }> | undefined
+
+  if (!pose || !items?.length) return
+
+  // rel_pos は traffic light のローカルフレームでの相対座標。
+  // nuScenes の pose.rz はパッシブ回転（座標フレームの回転角）なので、
+  // body→world 変換には R_z(rz)^T（転置 = R_z(-rz)）を使う。
+  const rz    = pose.rz ?? 0
+  const cosRz = Math.cos(rz)
+  const sinRz = Math.sin(rz)
+
+  for (const item of items) {
+    const worldPos = [
+      pose.tx + item.rel_pos.tx * cosRz + item.rel_pos.ty * sinRz,
+      pose.ty + item.rel_pos.tx * sinRz - item.rel_pos.ty * cosRz,
+      pose.tz + item.rel_pos.tz,
+    ]
+    const uv = project3DTo2D(worldPos, intrinsic, egoPose, calibSensor)
+    if (!uv) continue
+    if (uv[0] < 0 || uv[0] > imgW || uv[1] < 0 || uv[1] > imgH) continue
+
+    const px: [number, number]  = [uv[0] * scaleX, uv[1] * scaleY]
+    const itemColor: RGBA = TL_ITEM_COLORS[item.color] ?? baseColor
+
+    switch (item.shape) {
+      case 'CIRCLE': drawProjectedPoint(ctx, px, itemColor, 6);         break
+      case 'RIGHT':  drawProjectedLabel(ctx, px, 'R', itemColor);       break
+      case 'LEFT':   drawProjectedLabel(ctx, px, 'L', itemColor);       break
+      case 'UP':     drawProjectedLabel(ctx, px, 'U', itemColor);       break
+      default:       drawProjectedPoint(ctx, px, itemColor, 4);         break
+    }
+  }
+}
+
 function drawMapFeatureOnCanvas(
   ctx:         CanvasRenderingContext2D,
   geom:        { type: string; coordinates: unknown },
@@ -35,6 +103,7 @@ function drawMapFeatureOnCanvas(
   imageSize:   [number, number],
   scaleX:      number,
   scaleY:      number,
+  properties?: Record<string, unknown>,
 ): void {
   const project = (coords: [number, number][], isPolygonRing = false): [number, number][] | null => {
     const proj = projectMapCoordsToCamera(coords, location, egoPose, calibSensor, intrinsic, imageSize, MAP_PROJECTION.MAX_DISTANCE_M, isPolygonRing)
@@ -72,7 +141,12 @@ function drawMapFeatureOnCanvas(
     case 'Point': {
       const [lon, lat] = geom.coordinates as [number, number]
       const pts = project([[lon, lat]])
-      if (pts && pts.length > 0) drawProjectedPoint(ctx, pts[0], color)
+      if (pts && pts.length > 0) {
+        drawProjectedPoint(ctx, pts[0], color)
+        if (properties?.layer === 'traffic_light') {
+          drawTrafficLightExtras(ctx, properties, color, project, egoPose, calibSensor, intrinsic, imageSize, scaleX, scaleY)
+        }
+      }
       break
     }
   }
@@ -183,7 +257,7 @@ export default function CameraImageCanvas({
         for (const feature of collection.features) {
           const geom = feature.geometry
           if (!geom) continue
-          drawMapFeatureOnCanvas(ctx, geom, color, location, egoPose, calibArray, calibratedSensor.camera_intrinsic, imageSize, scaleX, scaleY)
+          drawMapFeatureOnCanvas(ctx, geom, color, location, egoPose, calibArray, calibratedSensor.camera_intrinsic, imageSize, scaleX, scaleY, feature.properties)
         }
       }
     }

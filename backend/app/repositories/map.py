@@ -2,6 +2,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.map import (
     CarparkArea,
@@ -66,7 +67,8 @@ class MapRepository:
     ) -> list[Any]:
         """指定ロケーションの特定レイヤーの全フィーチャーを返す。"""
         model = _LAYER_MODEL[layer]
-        result = await self.db.execute(
-            select(model).where(model.location == location)
-        )
+        query = select(model).where(model.location == location)
+        if layer == MapLayer.traffic_light:
+            query = query.options(selectinload(TrafficLight.line))
+        result = await self.db.execute(query)
         return list(result.scalars().all())

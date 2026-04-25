@@ -3,6 +3,7 @@ import { useSensorImage } from '@/api/sensorData'
 import { project3DTo2D, bboxCornersToGlobal, projectMapCoordsToCamera } from '@/lib/coordinateUtils'
 import { drawBBox2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint } from '@/lib/canvasUtils'
 import { LAYER_COLORS } from '@/layers/MapAnnotationLayers'
+import { MAP_PROJECTION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor } from '@/types/sensor'
 import type { GeoJSONFeatureCollection, MapLayer } from '@/types/map'
@@ -35,8 +36,8 @@ function drawMapFeatureOnCanvas(
   scaleX:      number,
   scaleY:      number,
 ): void {
-  const project = (coords: [number, number][]): [number, number][] | null => {
-    const proj = projectMapCoordsToCamera(coords, location, egoPose, calibSensor, intrinsic, imageSize)
+  const project = (coords: [number, number][], isPolygonRing = false): [number, number][] | null => {
+    const proj = projectMapCoordsToCamera(coords, location, egoPose, calibSensor, intrinsic, imageSize, MAP_PROJECTION.MAX_DISTANCE_M, isPolygonRing)
     if (!proj) return null
     return proj.map(([u, v]) => [u * scaleX, v * scaleY] as [number, number])
   }
@@ -44,14 +45,14 @@ function drawMapFeatureOnCanvas(
   switch (geom.type) {
     case 'Polygon': {
       const ring = (geom.coordinates as number[][][])[0] as [number, number][]
-      const pts = project(ring)
+      const pts = project(ring, true)
       if (pts) drawProjectedPolygon(ctx, pts, color)
       break
     }
     case 'MultiPolygon': {
       for (const polygon of geom.coordinates as number[][][][]) {
         const ring = polygon[0] as [number, number][]
-        const pts = project(ring)
+        const pts = project(ring, true)
         if (pts) drawProjectedPolygon(ctx, pts, color)
       }
       break

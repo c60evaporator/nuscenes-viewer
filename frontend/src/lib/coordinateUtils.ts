@@ -30,6 +30,57 @@ function vecSub(a: number[], b: number[]): number[] {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
+/** ローカル3D座標 → カメラ座標系（透視投影前） */
+function localToCamera(
+  localPoint:  number[],
+  egoPose:     { translation: number[]; rotation: number[] },
+  calibSensor: { translation: number[]; rotation: number[] },
+): number[] {
+  const R_ego = quatToRotMat(egoPose.rotation)
+  const R_egoT: number[][] = [
+    [R_ego[0][0], R_ego[1][0], R_ego[2][0]],
+    [R_ego[0][1], R_ego[1][1], R_ego[2][1]],
+    [R_ego[0][2], R_ego[1][2], R_ego[2][2]],
+  ]
+  const p_ego = matVecMul(R_egoT, vecSub(localPoint, egoPose.translation))
+  const R_cs = quatToRotMat(calibSensor.rotation)
+  const R_csT: number[][] = [
+    [R_cs[0][0], R_cs[1][0], R_cs[2][0]],
+    [R_cs[0][1], R_cs[1][1], R_cs[2][1]],
+    [R_cs[0][2], R_cs[1][2], R_cs[2][2]],
+  ]
+  return matVecMul(R_csT, vecSub(p_ego, calibSensor.translation))
+}
+
+/**
+ * Sutherland-Hodgman アルゴリズムによるポリゴンのニアプレーンクリッピング（z >= near）
+ *
+ * 辺がニアプレーンを横切る交点を正確に計算するため、頂点スキップよりも正確な形状を保持する。
+ */
+function clipPolygonNear(camPts: number[][], near: number): number[][] {
+  if (camPts.length === 0) return []
+  const out: number[][] = []
+  let prev = camPts[camPts.length - 1]
+  for (const curr of camPts) {
+    const prevIn = prev[2] >= near
+    const currIn = curr[2] >= near
+    if (currIn) {
+      if (!prevIn) {
+        const t = (near - prev[2]) / (curr[2] - prev[2])
+        out.push([prev[0] + t * (curr[0] - prev[0]), prev[1] + t * (curr[1] - prev[1]), near])
+      }
+      out.push(curr)
+    } else if (prevIn) {
+      const t = (near - prev[2]) / (curr[2] - prev[2])
+      out.push([prev[0] + t * (curr[0] - prev[0]), prev[1] + t * (curr[1] - prev[1]), near])
+    }
+    prev = curr
+  }
+  return out
+}
+
+const NEAR_PLANE = 0.1  // カメラニアプレーン（メートル）
+
 // ── 公開 API ─────────────────────────────────────────────────────────────────
 
 export const NUSCENES_MAP_META: Record<string, {
@@ -293,38 +344,74 @@ export function wgs84ToLocal(
  * @returns           カメラ画像上の 2D 座標列 [[u, v], ...] または null
  */
 export function projectMapCoordsToCamera(
-  coords:      [number, number][],
-  location:    string,
-  egoPose:     { translation: number[]; rotation: number[] },
-  calibSensor: { translation: number[]; rotation: number[] },
-  intrinsic:   number[][],
-  imageSize:   [number, number],
+  coords:          [number, number][],
+  location:        string,
+  egoPose:         { translation: number[]; rotation: number[] },
+  calibSensor:     { translation: number[]; rotation: number[] },
+  intrinsic:       number[][],
+  imageSize:       [number, number],
+  maxDistanceM?:   number,
+  isPolygonRing?:  boolean,
 ): [number, number][] | null {
-  const [imgW, imgH] = imageSize
-  const projected: [number, number][] = []
+  // 未対応ロケーションは早期リターン
+  if (coords.length > 0 && !wgs84ToLocal(coords[0][0], coords[0][1], location)) return null
 
+  // 距離フィルタ: 最も近い頂点が閾値を超えていればスキップ
+  if (maxDistanceM !== undefined) {
+    const egoX = egoPose.translation[0]
+    const egoY = egoPose.translation[1]
+    let minDist = Infinity
+    for (const [lon, lat] of coords) {
+      const local = wgs84ToLocal(lon, lat, location)
+      if (!local) continue
+      const d = Math.sqrt((local[0] - egoX) ** 2 + (local[1] - egoY) ** 2)
+      if (d < minDist) minDist = d
+    }
+    if (minDist > maxDistanceM) return null
+  }
+
+  const [imgW, imgH] = imageSize
+
+  if (isPolygonRing) {
+    // ── ポリゴンリング: Sutherland-Hodgman ニアプレーンクリッピング ──────────
+    // WGS84 → ローカル → カメラ座標系
+    const camPts: number[][] = []
+    for (const [lon, lat] of coords) {
+      const local = wgs84ToLocal(lon, lat, location)
+      if (!local) return null  // ロケーション不明は全体スキップ
+      camPts.push(localToCamera([local[0], local[1], 0], egoPose, calibSensor))
+    }
+
+    // ニアプレーンでクリップ
+    const clipped = clipPolygonNear(camPts, NEAR_PLANE)
+    if (clipped.length < 3) return null
+
+    // 透視投影
+    const projected = clipped.map((p): [number, number] => [
+      intrinsic[0][0] * (p[0] / p[2]) + intrinsic[0][2],
+      intrinsic[1][1] * (p[1] / p[2]) + intrinsic[1][2],
+    ])
+
+    // 全点が画像外ならスキップ
+    const anyInside = projected.some(([u, v]) => u >= 0 && u < imgW && v >= 0 && v < imgH)
+    if (!anyInside) return null
+
+    return projected
+  }
+
+  // ── ライン / ポイント: 頂点ごとにカメラ後方をスキップ ─────────────────────
+  const projected: [number, number][] = []
   for (const [lon, lat] of coords) {
     const local = wgs84ToLocal(lon, lat, location)
-    if (!local) return null  // 未対応ロケーション
-
-    // 地面平面上の 3D 点（z=0）として構築
-    const point3d = [local[0], local[1], 0]
-
-    // ローカル座標系 → エゴ → カメラ → 画像 2D
-    const uv = project3DTo2D(point3d, intrinsic, egoPose, calibSensor)
-
-    // カメラ後方の点があればポリゴン全体をスキップ
-    if (uv === null) return null
-
+    if (!local) continue
+    const uv = project3DTo2D([local[0], local[1], 0], intrinsic, egoPose, calibSensor)
+    if (uv === null) continue
     projected.push(uv)
   }
 
   if (projected.length === 0) return null
 
-  // 全点が画像外ならスキップ（1 点でも内側にあれば描画）
-  const anyInside = projected.some(
-    ([u, v]) => u >= 0 && u < imgW && v >= 0 && v < imgH,
-  )
+  const anyInside = projected.some(([u, v]) => u >= 0 && u < imgW && v >= 0 && v < imgH)
   if (!anyInside) return null
 
   return projected

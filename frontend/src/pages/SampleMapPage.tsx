@@ -52,14 +52,18 @@ export default function SampleMapPage({ activeTab, onTabChange }: SampleMapPageP
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scenesData, locationLogTokens])
 
-  // 初期 Scene の設定
+  // 初期 Scene の設定（lockedSceneToken → 最初の Scene）
   useEffect(() => {
     if (lockedSceneToken) {
       setSelectedSceneToken(lockedSceneToken)
-    } else if (!selectedSceneToken && locationScenes.length > 0) {
+      return
+    }
+    const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
+    if (!isValidScene && locationScenes.length > 0) {
       setSelectedSceneToken(locationScenes[0].token)
     }
-  }, [lockedSceneToken, locationScenes, selectedSceneToken])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedSceneToken, locationScenes])
 
   // サンプルリスト
   const { data: samplesRaw } = useSamples(selectedSceneToken)

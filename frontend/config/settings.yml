@@ -1,0 +1,4 @@
+# frontend/src/config/settings.ts に同じ値を反映すること
+
+map_projection:
+  max_distance_m: 75  # カメラ画像上に表示するフィーチャーの最大距離（自車からの地面2D距離、メートル）

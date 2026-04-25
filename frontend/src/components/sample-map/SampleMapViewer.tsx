@@ -78,7 +78,7 @@ export default function SampleMapViewer({
           <CameraImageCanvas
             sampleDataToken={sensorBrief.token}
             calibratedSensor={cameraCalib}
-            egoPose={egoPose}
+            egoPose={sensorBrief.ego_pose ?? egoPose}
             annotations={[]}
             mapLayerData={mapLayerData}
             location={location}

@@ -142,7 +142,7 @@ project-root/
   - 変換ロジックは `app/converters/geometry.py` に集約する
   - RouterやCRUDに変換コードを直接書かない
 
-### geo_service.pyの変換パターン（参考実装）
+### geometry.pyの変換パターン（参考実装）
 ```python
 # GeoJSON dict → WKBElement（DB保存時）
 from geoalchemy2.shape import from_shape

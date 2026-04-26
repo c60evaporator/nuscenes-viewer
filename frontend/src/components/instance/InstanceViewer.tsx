@@ -123,6 +123,7 @@ export default function InstanceViewer({
               lidarCalibSensor={lidarCalibArray}
               highlightInstanceToken={highlightInstanceToken}
               onBBoxClick={onBBoxClick}
+              location={location}
               className="w-full h-full"
             />
           ) : (

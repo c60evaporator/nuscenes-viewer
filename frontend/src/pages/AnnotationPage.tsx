@@ -194,6 +194,24 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
               instanceTokenLocked={instanceTokenLocked}
             />
           }
+          footer={
+            <div className="flex gap-2 px-3 py-2">
+              <button
+                className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                style={{ background: '#4A90D9' }}
+                onClick={() => {/* TODO: Edit BBox */}}
+              >
+                Edit BBox
+              </button>
+              <button
+                className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                style={{ background: '#4A90D9' }}
+                onClick={() => {/* TODO: Add BBox */}}
+              >
+                Add BBox
+              </button>
+            </div>
+          }
         >
           {displayMode === 'empty' && (
             <div className="p-4 text-center text-gray-400 text-xs">

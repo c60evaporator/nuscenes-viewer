@@ -241,28 +241,55 @@ export default function CameraImageCanvas({
   const projectedFeaturesRef  = useRef<ProjectedFeatureHit[]>([])
   const drawBBoxesRef         = useRef<(() => void) | null>(null)
   const bitmapRef             = useRef<ImageBitmap | null>(null)
+  const offsetRef             = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   const { data: bitmap, isError } = useSensorImage(sampleDataToken)
 
   const drawBBoxes = () => {
     const imgCanvas  = imgCanvasRef.current
     const bboxCanvas = bboxCanvasRef.current
-    if (!imgCanvas || !bboxCanvas) return
+    const container  = containerRef.current
+    if (!imgCanvas || !bboxCanvas || !container) return
 
-    // imgCanvas の実際の CSS 表示サイズを取得
-    const imgRect = imgCanvas.getBoundingClientRect()
+    // contain モード: コンテナに収まる最大サイズを計算
+    const containerW = container.clientWidth
+    const containerH = container.clientHeight
+    if (containerW === 0 || containerH === 0) return
+
+    const naturalWidth  = bitmapRef.current?.width  ?? 1
+    const naturalHeight = bitmapRef.current?.height ?? 1
+
+    const scale    = Math.min(containerW / naturalWidth, containerH / naturalHeight)
+    const displayW = naturalWidth  * scale
+    const displayH = naturalHeight * scale
+    const offsetX  = (containerW - displayW) / 2
+    const offsetY  = (containerH - displayH) / 2
+
+    // imgCanvas を中央に絶対配置
+    imgCanvas.style.position = 'absolute'
+    imgCanvas.style.left     = offsetX + 'px'
+    imgCanvas.style.top      = offsetY + 'px'
+    imgCanvas.style.width    = displayW + 'px'
+    imgCanvas.style.height   = displayH + 'px'
+
+    // bboxCanvas を imgCanvas と同じ位置・サイズに配置
     const dpr = window.devicePixelRatio || 1
+    bboxCanvas.width          = displayW * dpr
+    bboxCanvas.height         = displayH * dpr
+    bboxCanvas.style.position = 'absolute'
+    bboxCanvas.style.left     = offsetX + 'px'
+    bboxCanvas.style.top      = offsetY + 'px'
+    bboxCanvas.style.width    = displayW + 'px'
+    bboxCanvas.style.height   = displayH + 'px'
 
-    bboxCanvas.width        = imgRect.width  * dpr
-    bboxCanvas.height       = imgRect.height * dpr
-    bboxCanvas.style.width  = imgRect.width  + 'px'
-    bboxCanvas.style.height = imgRect.height + 'px'
+    // クリック座標補正用にオフセットを保存
+    offsetRef.current = { x: offsetX, y: offsetY }
 
     const ctx = bboxCanvas.getContext('2d')
     if (!ctx) return
 
     ctx.scale(dpr, dpr)
-    ctx.clearRect(0, 0, imgRect.width, imgRect.height)
+    ctx.clearRect(0, 0, displayW, displayH)
 
     if (!annotations || !egoPose || !calibratedSensor.camera_intrinsic) return
 
@@ -270,12 +297,10 @@ export default function CameraImageCanvas({
       translation: calibratedSensor.translation,
       rotation:    calibratedSensor.rotation,
     }
-    const naturalWidth  = bitmapRef.current?.width  ?? 1
-    const naturalHeight = bitmapRef.current?.height ?? 1
 
-    // 元画像 → bboxCanvas（imgCanvas の CSS 表示サイズ）へのスケール
-    const scaleX = imgRect.width  / naturalWidth
-    const scaleY = imgRect.height / naturalHeight
+    // 元画像座標 → bboxCanvas 座標へのスケール
+    const scaleX = displayW / naturalWidth
+    const scaleY = displayH / naturalHeight
 
     const intrinsic = calibratedSensor.camera_intrinsic
     const newBBoxRects: BBoxRect[] = []
@@ -383,8 +408,8 @@ export default function CameraImageCanvas({
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = containerRef.current!.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const x = e.clientX - rect.left - offsetRef.current.x
+    const y = e.clientY - rect.top  - offsetRef.current.y
 
     // BBox クリック判定（優先）
     if (onBBoxClick) {
@@ -421,16 +446,16 @@ export default function CameraImageCanvas({
     <div
       ref={containerRef}
       className={className}
-      style={{ position: 'relative', display: 'inline-block', width: '100%' }}
+      style={{ position: 'relative', overflow: 'hidden' }}
       onClick={handleClick}
     >
       <canvas
         ref={imgCanvasRef}
-        style={{ width: '100%', display: 'block' }}
+        style={{ display: 'block' }}
       />
       <canvas
         ref={bboxCanvasRef}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+        style={{ pointerEvents: 'none' }}
       />
     </div>
   )

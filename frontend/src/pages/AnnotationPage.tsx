@@ -41,8 +41,8 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
 
   // ロック判定
   const sceneTokenLocked    = !!lockedSceneToken
-  const sampleTokenLocked   = lockSource === 'sample'   && !!lockedSampleToken
-  const instanceTokenLocked = lockSource === 'instance' && !!lockedInstanceToken
+  const sampleTokenLocked   = (lockSource === 'sample' && !!lockedSampleToken) || lockSource === 'instance'
+  const instanceTokenLocked = lockSource !== 'instance' || !!lockedInstanceToken
 
   // ロケーション内のシーンリスト
   const { data: logsData   } = useLogsByLocation(currentMapLocation)
@@ -101,13 +101,13 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   }, [selectedSceneToken, sampleTokenLocked])
 
   // 有効なサンプルトークン（フィルタ）
-  const effectiveSampleToken = lockedSampleToken ?? selectedSampleToken
+  const effectiveSampleToken = lockSource === 'instance' ? null : (lockedSampleToken ?? selectedSampleToken)
 
   // Instance サマリ（Sample に紐づく）
   const { data: instanceSummaries } = useSampleInstances(effectiveSampleToken)
 
   // Instance アノテーション（Instance フィルタが有効な場合に取得）
-  const effectiveInstanceToken = lockedInstanceToken ?? selectedInstanceToken
+  const effectiveInstanceToken = lockSource === 'instance' ? (lockedInstanceToken ?? selectedInstanceToken) : null
   const { data: instanceAnnotationsRaw } = useInstanceAnnotations(effectiveInstanceToken)
 
   // 表示モード

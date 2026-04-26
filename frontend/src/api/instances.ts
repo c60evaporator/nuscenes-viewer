@@ -37,11 +37,11 @@ export function useInstanceAnnotations(token: string | null) {
   })
 }
 
-export function useInstanceBestCamera(token: string | null, sampleToken: string | null) {
+export function useInstanceBestCamera(token: string | null, sampleToken: string | null, rank = 1) {
   return useQuery({
-    queryKey: ['instance-best-camera', token, sampleToken],
+    queryKey: ['instance-best-camera', token, sampleToken, rank],
     queryFn:  () =>
-      apiFetch<BestCamera>(`/instances/${token}/best-camera?sample_token=${sampleToken}`),
+      apiFetch<BestCamera>(`/instances/${token}/best-camera?sample_token=${sampleToken}&rank=${rank}`),
     enabled: !!token && !!sampleToken,
   })
 }

@@ -38,13 +38,13 @@ export default function InstanceViewer({
 }: InstanceViewerProps) {
   const sampleToken = currentAnnotation?.sample_token ?? null
 
-  const { data: sampleDataMap }   = useSampleSensorData(sampleToken)
+  const { data: sampleDataMap }     = useSampleSensorData(sampleToken)
   const { data: sampleAnnotations } = useSampleAnnotations(sampleToken)
-  const { data: bestCamera }      = useInstanceBestCamera(instanceToken, sampleToken)
+  const { data: bestCamera }        = useInstanceBestCamera(instanceToken, sampleToken, 1)
 
   // 現在サンプルの ego pose（devkit 準拠: LIDAR_TOP の ego_pose を優先）
-  const currentEgoPose = sampleDataMap?.['LIDAR_TOP']?.ego_pose
-    ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)
+  const currentEgoPose = (sampleDataMap?.['LIDAR_TOP']?.ego_pose
+    ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)) as EgoPosePoint | undefined
 
   // インスタンス全サンプルの ego pose（底部右地図用）
   const instanceEgoPoses: EgoPosePoint[] = allAnnotations
@@ -65,9 +65,9 @@ export default function InstanceViewer({
     rotation:    lidarCalib.rotation,
   } : undefined
 
-  // Camera
-  const cameraBrief = bestCamera ? sampleDataMap?.[bestCamera.channel] : undefined
-  const cameraCalib = cameraBrief?.calibrated_sensor_token
+  // Camera (1st best)
+  const cameraBrief   = bestCamera ? sampleDataMap?.[bestCamera.channel] : undefined
+  const cameraCalib   = cameraBrief?.calibrated_sensor_token
     ? calibSensorMap[cameraBrief.calibrated_sensor_token]
     : undefined
   const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
@@ -90,28 +90,10 @@ export default function InstanceViewer({
 
   return (
     <div className="flex flex-col w-full h-full">
-      {/* 上 2/3: LiDAR + Camera */}
+      {/* 上 2/3: Camera + LiDAR */}
       <div className="flex min-h-0" style={{ flex: '2 0 0' }}>
-        {/* LiDAR BEV */}
-        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900" style={{ borderRight: '1px solid #374151' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>LIDAR_TOP</div>
-          {lidarBrief ? (
-            <PointCloudCanvas
-              sampleDataToken={lidarBrief.token}
-              annotations={sampleAnnotations ?? []}
-              egoPose={currentEgoPose}
-              lidarCalibSensor={lidarCalibArray}
-              highlightInstanceToken={highlightInstanceToken}
-              onBBoxClick={onBBoxClick}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No LIDAR_TOP" />
-          )}
-        </div>
-
         {/* Camera (best) */}
-        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900">
+        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900" style={{ borderRight: '1px solid #374151' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
             {bestCamera?.channel ?? 'CAMERA'}
           </div>
@@ -127,6 +109,24 @@ export default function InstanceViewer({
             />
           ) : (
             <Placeholder text="No Camera" />
+          )}
+        </div>
+
+        {/* LiDAR BEV */}
+        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900">
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>LIDAR_TOP</div>
+          {lidarBrief ? (
+            <PointCloudCanvas
+              sampleDataToken={lidarBrief.token}
+              annotations={sampleAnnotations ?? []}
+              egoPose={currentEgoPose}
+              lidarCalibSensor={lidarCalibArray}
+              highlightInstanceToken={highlightInstanceToken}
+              onBBoxClick={onBBoxClick}
+              className="w-full h-full"
+            />
+          ) : (
+            <Placeholder text="No LIDAR_TOP" />
           )}
         </div>
       </div>

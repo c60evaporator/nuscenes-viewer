@@ -99,6 +99,7 @@ async def get_instance_annotations(token: str, db: AsyncSession = Depends(get_db
 async def get_instance_best_camera(
     token: str,
     sample_token: str = Query(..., description="対象サンプルのトークン"),
+    rank: int = Query(1, ge=1, description="取得するカメラの順位（1=最良、2=2番目など）"),
     db: AsyncSession = Depends(get_db),
 ):
     ann = await AnnotationRepository(db).get_by_instance_and_sample(token, sample_token)
@@ -112,8 +113,12 @@ async def get_instance_best_camera(
     if not cameras:
         raise HTTPException(status_code=404, detail="No camera data found for this sample")
 
-    best = max(cameras, key=lambda sd: _camera_score(ann.translation, sd))
+    sorted_cameras = sorted(cameras, key=lambda sd: _camera_score(ann.translation, sd), reverse=True)
+    if rank > len(sorted_cameras):
+        raise HTTPException(status_code=404, detail=f"Camera rank {rank} not available (only {len(sorted_cameras)} cameras)")
+
+    selected = sorted_cameras[rank - 1]
     return BestCameraResponse(
-        channel=best.calibrated_sensor.sensor.channel,
-        sample_data_token=best.token,
+        channel=selected.calibrated_sensor.sensor.channel,
+        sample_data_token=selected.token,
     )

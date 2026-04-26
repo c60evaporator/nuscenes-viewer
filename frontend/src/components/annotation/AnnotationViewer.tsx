@@ -30,12 +30,13 @@ export default function AnnotationViewer({
   sceneEgoPoses,
   onBBoxClick,
 }: AnnotationViewerProps) {
-  const { data: sampleDataMap }     = useSampleSensorData(sampleToken)
-  const { data: sampleAnnotations } = useSampleAnnotations(sampleToken)
-  const { data: bestCamera }        = useInstanceBestCamera(instanceToken, sampleToken)
+  const { data: sampleDataMap }      = useSampleSensorData(sampleToken)
+  const { data: sampleAnnotations }  = useSampleAnnotations(sampleToken)
+  const { data: bestCamera }         = useInstanceBestCamera(instanceToken, sampleToken, 1)
+  const { data: secondBestCamera }   = useInstanceBestCamera(instanceToken, sampleToken, 2)
 
-  const currentEgoPose = sampleDataMap?.['LIDAR_TOP']?.ego_pose
-    ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)
+  const currentEgoPose = (sampleDataMap?.['LIDAR_TOP']?.ego_pose
+    ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)) as EgoPosePoint | undefined
 
   // LiDAR
   const lidarBrief = sampleDataMap?.['LIDAR_TOP']
@@ -45,10 +46,15 @@ export default function AnnotationViewer({
     rotation:    lidarCalib.rotation,
   } : undefined
 
-  // Camera
-  const cameraBrief  = bestCamera ? sampleDataMap?.[bestCamera.channel] : undefined
-  const cameraCalib  = bestCamera ? calibSensorMap[bestCamera.channel] : undefined
+  // Camera (1st best)
+  const cameraBrief   = bestCamera ? sampleDataMap?.[bestCamera.channel] : undefined
+  const cameraCalib   = bestCamera ? calibSensorMap[bestCamera.channel] : undefined
   const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
+
+  // Camera (2nd best)
+  const camera2Brief   = secondBestCamera ? sampleDataMap?.[secondBestCamera.channel] : undefined
+  const camera2Calib   = secondBestCamera ? calibSensorMap[secondBestCamera.channel] : undefined
+  const camera2EgoPose = camera2Brief?.ego_pose ?? currentEgoPose
 
   const handleBBoxClick = (annToken: string) => {
     const ann = (sampleAnnotations ?? []).find((a) => a.token === annToken)
@@ -65,10 +71,53 @@ export default function AnnotationViewer({
 
   return (
     <div className="flex flex-col w-full h-full">
-      {/* 上 2/3: LiDAR + Camera */}
+      {/* 上 2/3: Camera + LiDAR */}
       <div className="flex min-h-0" style={{ flex: '2 0 0' }}>
+        {/* Camera (1st best + 2nd best, stacked vertically) */}
+        <div className="flex-1 min-w-0 flex flex-col" style={{ borderRight: '1px solid #374151' }}>
+          {/* 上: 1番目に映りの良いカメラ */}
+          <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900" style={{ borderBottom: '1px solid #374151' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
+              {bestCamera?.channel ?? 'CAMERA'}
+            </div>
+            {bestCamera && cameraCalib ? (
+              <CameraImageCanvas
+                sampleDataToken={bestCamera.sample_data_token}
+                calibratedSensor={cameraCalib}
+                egoPose={cameraEgoPose}
+                annotations={sampleAnnotations ?? []}
+                highlightInstanceToken={instanceToken ?? undefined}
+                onBBoxClick={handleBBoxClick}
+                className="w-full h-full"
+              />
+            ) : (
+              <Placeholder text="No Camera" />
+            )}
+          </div>
+
+          {/* 下: 2番目に映りの良いカメラ */}
+          <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900">
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
+              {secondBestCamera?.channel ?? 'CAMERA 2'}
+            </div>
+            {secondBestCamera && camera2Calib ? (
+              <CameraImageCanvas
+                sampleDataToken={secondBestCamera.sample_data_token}
+                calibratedSensor={camera2Calib}
+                egoPose={camera2EgoPose}
+                annotations={sampleAnnotations ?? []}
+                highlightInstanceToken={instanceToken ?? undefined}
+                onBBoxClick={handleBBoxClick}
+                className="w-full h-full"
+              />
+            ) : (
+              <Placeholder text="No Camera 2" />
+            )}
+          </div>
+        </div>
+
         {/* LiDAR BEV */}
-        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900" style={{ borderRight: '1px solid #374151' }}>
+        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900">
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>LIDAR_TOP</div>
           {lidarBrief ? (
             <PointCloudCanvas
@@ -82,26 +131,6 @@ export default function AnnotationViewer({
             />
           ) : (
             <Placeholder text="No LIDAR_TOP" />
-          )}
-        </div>
-
-        {/* Camera (best) */}
-        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900">
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-            {bestCamera?.channel ?? 'CAMERA'}
-          </div>
-          {bestCamera && cameraCalib ? (
-            <CameraImageCanvas
-              sampleDataToken={bestCamera.sample_data_token}
-              calibratedSensor={cameraCalib}
-              egoPose={cameraEgoPose}
-              annotations={sampleAnnotations ?? []}
-              highlightInstanceToken={instanceToken ?? undefined}
-              onBBoxClick={handleBBoxClick}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No Camera" />
           )}
         </div>
       </div>

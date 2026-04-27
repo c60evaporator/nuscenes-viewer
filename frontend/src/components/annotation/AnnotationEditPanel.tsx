@@ -77,16 +77,18 @@ function TripleInputRow({ label, vals, placeholders }: {
   placeholders: string[]
 }) {
   return (
-    <div style={ROW}>
-      <span style={LABEL}>{label}</span>
-      <div style={{ display: 'flex', gap: '3px', flex: 1 }}>
+    <div style={{ marginBottom: '5px' }}>
+      <span style={{ fontSize: '11px', color: '#9CA3AF', display: 'block', marginBottom: '2px' }}>
+        {label}
+      </span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px' }}>
         {vals.map((v, i) => (
           <input
             key={i}
             disabled
             value={v}
             placeholder={placeholders[i]}
-            style={INPUT}
+            style={{ ...INPUT, textAlign: 'center' }}
             onChange={() => {}}
           />
         ))}

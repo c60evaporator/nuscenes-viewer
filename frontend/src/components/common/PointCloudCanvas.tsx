@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { usePointCloud } from '@/api/sensorData'
 import { useBasemap } from '@/api/maps'
 import { drawPointCloud, drawBBox2D, type BevViewParams } from '@/lib/canvasUtils'
@@ -44,6 +44,10 @@ export default function PointCloudCanvas({
   const containerRef = useRef<HTMLDivElement>(null)
   const bboxRectsRef = useRef<BBoxRect[]>([])
   const [canvasSize, setCanvasSize] = useState(400)
+  const [zoom, setZoom]             = useState(1.0)
+  const [panOffset, setPanOffset]   = useState({ x: 0, y: 0 })
+  const [cursor, setCursor]         = useState<string>('grab')
+  const dragRef = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -56,8 +60,46 @@ export default function PointCloudCanvas({
     return () => observer.disconnect()
   }, [])
 
+  // サンプル切り替え時にズーム・パンをリセット
+  useEffect(() => {
+    setZoom(1)
+    setPanOffset({ x: 0, y: 0 })
+  }, [sampleDataToken])
+
+  const axesLimitMeters = 40
+
   const { data, isLoading, isError } = usePointCloud(sampleDataToken, refSensorToken)
   const { data: bitmap } = useBasemap(location ?? null)
+
+  // ホイールズーム（passive: false でスクロール防止）
+  // data を依存配列に含めることで、データ取得後に canvas がマウントされた際にリスナーを再登録する
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const ZOOM_FACTOR = e.deltaY < 0 ? 1.15 : 1 / 1.15
+      const MIN_ZOOM = 0.2, MAX_ZOOM = 20
+      setZoom((prev) => {
+        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev * ZOOM_FACTOR))
+        const rect = canvas.getBoundingClientRect()
+        const sz   = canvas.width
+        const half = sz / 2
+        const mx   = e.clientX - rect.left
+        const my   = e.clientY - rect.top
+        const oldScale = (sz / (axesLimitMeters * 2)) * prev
+        const newScale = (sz / (axesLimitMeters * 2)) * next
+        const inv = 1 / oldScale - 1 / newScale
+        setPanOffset((p) => ({
+          x: p.x + (my - half) * inv,
+          y: p.y + (mx - half) * inv,
+        }))
+        return next
+      })
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [data, axesLimitMeters])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -76,14 +118,12 @@ export default function PointCloudCanvas({
 
     const points = data.points
 
-    // devkit の axes_limit=40 相当の固定表示範囲
-    const axesLimitMeters = 40
     const viewParams: BevViewParams = {
       width:   size,
       height:  size,
-      scale:   size / (axesLimitMeters * 2),
-      offsetX: 0,
-      offsetY: 0,
+      scale:   (size / (axesLimitMeters * 2)) * zoom,
+      offsetX: panOffset.x,
+      offsetY: panOffset.y,
     }
 
     // basemap 切り出し・回転描画（devkit の render_ego_centric_map() 相当）
@@ -91,7 +131,18 @@ export default function PointCloudCanvas({
       const meta = NUSCENES_MAP_META[location]
       if (meta) {
         const { resolution } = meta
-        const axesLimitPx = axesLimitMeters / resolution   // 400px
+        const axesLimitPx = axesLimitMeters / resolution
+
+        // yaw を先に計算（パン補正とクロップ中心調整に使用）
+        const [w, qx, qy, qz] = egoPose.rotation
+        const yaw = Math.atan2(2 * (w * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
+
+        // sensor frame → world frame → map pixel 座標への変換
+        // globalToMapPixel: px = x/res, py = -y/res + canvasH_px
+        // → Δpx = Δx/res,  Δpy = -Δy/res
+        const cosYaw = Math.cos(yaw), sinYaw = Math.sin(yaw)
+        const world_dx = panOffset.x * cosYaw - panOffset.y * sinYaw  // east 方向
+        const world_dy = panOffset.x * sinYaw + panOffset.y * cosYaw  // north 方向
 
         const centerPixel = globalToMapPixel(
           egoPose.translation[0], egoPose.translation[1], location,
@@ -99,44 +150,46 @@ export default function PointCloudCanvas({
         if (centerPixel) {
           const [cx_map, cy_map] = centerPixel
 
+          // パンオフセットを map pixel 座標に反映（canvas translate は使わない）
+          // BEV 表示系（sensor_x=下, sensor_y=右）と地図座標系（east=右, north=上）の
+          // 90° ずれを吸収するため world_dx と world_dy を入れ替えて使用する
+          const adj_cx = cx_map + world_dy / resolution   // ← world_dy で東西を制御
+          const adj_cy = cy_map + world_dx / resolution   // ← world_dx で南北を制御（符号+）
+
           // bitmap はリサイズ済みの可能性があるためスケール係数を計算
           const origW  = meta.canvasEdge[0] / resolution
           const origH  = meta.canvasEdge[1] / resolution
           const scaleX = bitmap.width  / origW
           const scaleY = bitmap.height / origH
 
+          // ズームに応じた表示半径（クランプなし → ズームアウトも basemap に反映）
+          const effectivePx = axesLimitPx / zoom
+
           // √2 倍の範囲を切り出す（回転後のクリッピング防止）
-          const cropSize = Math.ceil(axesLimitPx * Math.sqrt(2))
+          const cropSize = Math.ceil(effectivePx * Math.sqrt(2))
 
           const offscreen = new OffscreenCanvas(cropSize * 2, cropSize * 2)
           const offCtx    = offscreen.getContext('2d')!
           offCtx.drawImage(
             bitmap,
-            (cx_map - cropSize) * scaleX, (cy_map - cropSize) * scaleY,
+            (adj_cx - cropSize) * scaleX, (adj_cy - cropSize) * scaleY,
             cropSize * 2 * scaleX,        cropSize * 2 * scaleY,
             0, 0,
             cropSize * 2, cropSize * 2,
           )
 
-          // yaw 角で回転（車両前方が上になるように）
-          const [w, qx, qy, qz] = egoPose.rotation
-          const yaw = Math.atan2(2 * (w * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
-
           const rotCanvas = new OffscreenCanvas(cropSize * 2, cropSize * 2)
           const rotCtx    = rotCanvas.getContext('2d')!
           rotCtx.translate(cropSize, cropSize)
-          // 画像中心を回転中心にして ego yaw を適用
           rotCtx.rotate(yaw)
-          // 原点を左上に戻して回転後の画像を描画
           rotCtx.translate(-cropSize, -cropSize)
           rotCtx.drawImage(offscreen, 0, 0)
 
-          // 中央から axesLimitPx 範囲を再切り出してメイン canvas に半透明で描画
           ctx.globalAlpha = 0.5
           ctx.drawImage(
             rotCanvas,
-            cropSize - axesLimitPx, cropSize - axesLimitPx,
-            axesLimitPx * 2,        axesLimitPx * 2,
+            cropSize - effectivePx, cropSize - effectivePx,
+            effectivePx * 2,        effectivePx * 2,
             0, 0, size, size,
           )
           ctx.globalAlpha = 1.0
@@ -187,25 +240,52 @@ export default function PointCloudCanvas({
     }
     ctx.restore()  // 点群、BBox 描画後に restore して点群描画の座標系を元に戻す
     bboxRectsRef.current = newBBoxRects
-  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, location, pointSize])
+  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, location, pointSize, zoom, panOffset, axesLimitMeters])
+
+  const hitTestBBox = useCallback((screenX: number, screenY: number): string | null => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const rect = canvas.getBoundingClientRect()
+    const x      = (screenX - rect.left) * (canvas.width  / rect.width)
+    const cy_inv = canvas.height - (screenY - rect.top) * (canvas.height / rect.height)
+    for (const bbox of bboxRectsRef.current) {
+      if (x >= bbox.minX && x <= bbox.maxX && cy_inv >= bbox.minY && cy_inv <= bbox.maxY)
+        return bbox.token
+    }
+    return null
+  }, [])
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    dragRef.current = { startX: e.clientX, startY: e.clientY,
+                        startPanX: panOffset.x, startPanY: panOffset.y }
+    setCursor('grabbing')
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (dragRef.current) {
+      const dx = e.clientX - dragRef.current.startX
+      const dy = e.clientY - dragRef.current.startY
+      const currentScale = (canvasSize / (axesLimitMeters * 2)) * zoom
+      setPanOffset({
+        x: dragRef.current.startPanX - dy / currentScale,   // drag up (dy<0) → panOffset.x 増加 → ego 上移動
+        y: dragRef.current.startPanY - dx / currentScale,   // drag right (dx>0) → panOffset.y 減少 → ego 右移動
+      })
+    } else {
+      const hit = hitTestBBox(e.clientX, e.clientY)
+      setCursor(hit ? 'pointer' : 'grab')
+    }
+  }
+
+  const handleMouseUp = () => {
+    dragRef.current = null
+    setCursor('grab')
+  }
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onBBoxClick) return
-    const canvas = canvasRef.current!
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const scaleFactor = canvas.width / rect.width
-
-    for (const bbox of bboxRectsRef.current) {
-      const cx = x * scaleFactor
-      const cy = canvas.height - y * scaleFactor  // Y反転：スクリーン座標 → 数学座標（bbox保存座標系に合わせる）
-      if (cx >= bbox.minX && cx <= bbox.maxX &&
-          cy >= bbox.minY && cy <= bbox.maxY) {
-        onBBoxClick(bbox.token)
-        break
-      }
-    }
+    if (dragRef.current) return
+    const token = hitTestBBox(e.clientX, e.clientY)
+    if (token) onBBoxClick(token)
   }
 
   const containerStyle: React.CSSProperties = {
@@ -244,7 +324,12 @@ export default function PointCloudCanvas({
           display:    'block',
           background: '#111',
           flexShrink: 0,
+          cursor,
         }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
         onClick={handleClick}
       />
     </div>

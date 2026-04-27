@@ -144,7 +144,6 @@ export default function AnnotationViewer({
               lidarCalibSensor={lidarCalibArray}
               highlightInstanceToken={instanceToken ?? undefined}
               onBBoxClick={handleBBoxClick}
-              location={location}
               className="w-full h-full"
             />
           ) : (

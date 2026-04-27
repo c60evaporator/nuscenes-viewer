@@ -148,6 +148,16 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     setListSelectedInstanceToken(instToken)
   }
 
+  // ボタン有効/無効ルール
+  // bboxSelected: サンプルモード = BBox クリック済み、インスタンスモード = サンプル選択済み
+  const bboxSelected = hasSampleFilter
+    ? listSelectedInstanceToken !== null
+    : hasInstanceFilter
+      ? listSelectedSampleToken !== null
+      : false
+  const canAddBBox  = hasSampleFilter && !hasInstanceFilter
+  const canEditBBox = bboxSelected
+
   // Calibrated Sensors
   const { data: calibSensorsData } = useCalibratedSensors()
   const calibSensorMap = useMemo<Record<string, CalibratedSensor>>(() => {
@@ -197,15 +207,25 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
           footer={
             <div className="flex gap-2 px-3 py-2">
               <button
+                disabled={!canEditBBox}
                 className="flex-1 py-1.5 text-xs font-medium rounded text-white"
-                style={{ background: '#4A90D9' }}
+                style={{
+                  background: canEditBBox ? '#4A90D9' : '#374151',
+                  cursor:     canEditBBox ? 'pointer' : 'not-allowed',
+                  opacity:    canEditBBox ? 1 : 0.5,
+                }}
                 onClick={() => {/* TODO: Edit BBox */}}
               >
                 Edit BBox
               </button>
               <button
+                disabled={!canAddBBox}
                 className="flex-1 py-1.5 text-xs font-medium rounded text-white"
-                style={{ background: '#4A90D9' }}
+                style={{
+                  background: canAddBBox ? '#4A90D9' : '#374151',
+                  cursor:     canAddBBox ? 'pointer' : 'not-allowed',
+                  opacity:    canAddBBox ? 1 : 0.5,
+                }}
                 onClick={() => {/* TODO: Add BBox */}}
               >
                 Add BBox

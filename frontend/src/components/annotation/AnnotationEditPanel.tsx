@@ -300,8 +300,8 @@ export default function AnnotationEditPanel({ annotation, sceneToken }: Props) {
         <ReadOnlyRow label="token"          value={annotation?.token} />
         <ReadOnlyRow label="prev"           value={annotation?.prev} />
         <ReadOnlyRow label="next"           value={annotation?.next} />
-        <ReadOnlyRow label="num_lidar_pts"  value={annotation?.num_lidar_pts?.toString()} />
-        <ReadOnlyRow label="num_radar_pts"  value={annotation?.num_radar_pts?.toString()} />
+        <ReadOnlyRow label="lidar_pts"  value={annotation?.num_lidar_pts?.toString()} />
+        <ReadOnlyRow label="radar_pts"  value={annotation?.num_radar_pts?.toString()} />
       </div>
 
       {/* ── Register ボタン ───────────────────────────────────────────── */}

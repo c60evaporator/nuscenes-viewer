@@ -42,8 +42,9 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const [listSelectedInstanceToken, setListSelectedInstanceToken] = useState<string | null>(null)
 
   // 編集モード state
-  const [editMode,         setEditMode]         = useState<EditMode>('view')
-  const [workingAnnotation, setWorkingAnnotation] = useState<Annotation | null>(null)
+  const [editMode,            setEditMode]            = useState<EditMode>('view')
+  const [workingAnnotation,   setWorkingAnnotation]   = useState<Annotation | null>(null)
+  const [addTargetSampleToken, setAddTargetSampleToken] = useState<string | null>(null)
 
   // ロック判定
   const sceneTokenLocked    = !!lockedSceneToken
@@ -166,16 +167,21 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     setListSelectedInstanceToken(null)
     setEditMode('view')
     setWorkingAnnotation(null)
+    setAddTargetSampleToken(null)
   }, [effectiveSampleToken])
 
   // Instance フィルタ変更時にも編集モードをリセット
   useEffect(() => {
     setEditMode('view')
     setWorkingAnnotation(null)
+    setAddTargetSampleToken(null)
   }, [effectiveInstanceToken])
 
   // Viewer に渡す sampleToken / instanceToken
-  const viewSampleToken   = hasSampleFilter ? effectiveSampleToken   : listSelectedSampleToken
+  // add モード + instance フィルタ時は addTargetSampleToken（prev/next）を優先
+  const viewSampleToken = (editMode === 'add' && addTargetSampleToken)
+    ? addTargetSampleToken
+    : hasSampleFilter ? effectiveSampleToken : listSelectedSampleToken
   const viewInstanceToken = hasInstanceFilter ? effectiveInstanceToken : listSelectedInstanceToken
 
   // BBox クリックハンドラ（Instance フィルタ有効時は無視）
@@ -198,6 +204,27 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const isEditing   = editMode !== 'view'
   const canAddBBox  = hasSampleFilter && !hasInstanceFilter && !isEditing
   const canEditBBox = bboxSelected && !isEditing
+
+  // Instance フィルタ時の「Add BBox to prev/next」判定
+  const instanceFirstSampleToken = samplesForInstance[0]?.token ?? null
+  const instanceLastSampleToken  = samplesForInstance[samplesForInstance.length - 1]?.token ?? null
+  const sceneIdxOfFirst = instanceFirstSampleToken !== null
+    ? samples.findIndex((s) => s.token === instanceFirstSampleToken)
+    : -1
+  const sceneIdxOfLast = instanceLastSampleToken !== null
+    ? samples.findIndex((s) => s.token === instanceLastSampleToken)
+    : -1
+  const prevSampleToken = sceneIdxOfFirst > 0 ? (samples[sceneIdxOfFirst - 1]?.token ?? null) : null
+  const nextSampleToken = sceneIdxOfLast >= 0 && sceneIdxOfLast < samples.length - 1
+    ? (samples[sceneIdxOfLast + 1]?.token ?? null) : null
+  const canAddToPrev = hasInstanceFilter && !isEditing
+    && listSelectedSampleToken !== null
+    && listSelectedSampleToken === instanceFirstSampleToken
+    && prevSampleToken !== null
+  const canAddToNext = hasInstanceFilter && !isEditing
+    && listSelectedSampleToken !== null
+    && listSelectedSampleToken === instanceLastSampleToken
+    && nextSampleToken !== null
 
   // Calibrated Sensors
   const { data: calibSensorsData } = useCalibratedSensors()
@@ -248,7 +275,8 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
             </div>
           }
           footer={
-            <div className="flex gap-2 px-3 py-2">
+            <div className="flex flex-wrap gap-2 px-3 py-2">
+              {/* Edit BBox */}
               <button
                 disabled={!canEditBBox}
                 className="flex-1 py-1.5 text-xs font-medium rounded text-white"
@@ -256,48 +284,101 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   background: canEditBBox ? '#4A90D9' : '#374151',
                   cursor:     canEditBBox ? 'pointer' : 'not-allowed',
                   opacity:    canEditBBox ? 1 : 0.5,
+                  minWidth:   '80px',
                 }}
                 onClick={() => { setEditMode('edit') }}
               >
                 Edit BBox
               </button>
-              <button
-                disabled={!canAddBBox}
-                className="flex-1 py-1.5 text-xs font-medium rounded text-white"
-                style={{
-                  background: canAddBBox ? '#4A90D9' : '#374151',
-                  cursor:     canAddBBox ? 'pointer' : 'not-allowed',
-                  opacity:    canAddBBox ? 1 : 0.5,
-                }}
-                onClick={() => {
-                  const egoPose = egoPoses?.find((p) => p.sample_token === effectiveSampleToken)
-                  const translation = egoPose
-                    ? [...egoPose.translation]
-                    : [0, 0, 0]
-                  const newAnn: Annotation = {
-                    token:            '__working__',
-                    instance_token:   '__working__',
-                    sample_token:     effectiveSampleToken ?? '',
-                    translation,
-                    rotation:         [1, 0, 0, 0],
-                    size:             [1.8, 4.6, 1.5],
-                    prev:             null,
-                    next:             null,
-                    num_lidar_pts:    0,
-                    num_radar_pts:    0,
-                    visibility_token: null,
-                    category_token:   '',
-                    attributes:       [],
-                    visibility:       null,
-                  }
-                  setWorkingAnnotation(newAnn)
-                  setEditMode('add')
-                  setListSelectedInstanceToken(null)
-                  setListSelectedSampleToken(null)
-                }}
-              >
-                Add BBox
-              </button>
+
+              {/* Add BBox（サンプルフィルタ時 or インスタンスフィルタ時で出し分け） */}
+              {!hasInstanceFilter && (
+                <button
+                  disabled={!canAddBBox}
+                  className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                  style={{
+                    background: canAddBBox ? '#4A90D9' : '#374151',
+                    cursor:     canAddBBox ? 'pointer' : 'not-allowed',
+                    opacity:    canAddBBox ? 1 : 0.5,
+                    minWidth:   '80px',
+                  }}
+                  onClick={() => {
+                    const egoPose = egoPoses?.find((p) => p.sample_token === effectiveSampleToken)
+                    const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
+                    setWorkingAnnotation({
+                      token: '__working__', instance_token: '__working__',
+                      sample_token: effectiveSampleToken ?? '',
+                      translation, rotation: [1, 0, 0, 0], size: [1.8, 4.6, 1.5],
+                      prev: null, next: null, num_lidar_pts: 0, num_radar_pts: 0,
+                      visibility_token: null, category_token: '', attributes: [], visibility: null,
+                    })
+                    setEditMode('add')
+                    setListSelectedInstanceToken(null)
+                    setListSelectedSampleToken(null)
+                  }}
+                >
+                  Add BBox
+                </button>
+              )}
+
+              {/* Add BBox to prev（インスタンスフィルタ + 最初のサンプルが選択 + scene内に前のサンプルあり） */}
+              {hasInstanceFilter && canAddToPrev && (
+                <button
+                  className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                  style={{ background: '#4A90D9', cursor: 'pointer', minWidth: '80px' }}
+                  onClick={() => {
+                    const targetToken = prevSampleToken!
+                    const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
+                    const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
+                    setWorkingAnnotation({
+                      token: '__working__', instance_token: '__working__',
+                      sample_token: targetToken,
+                      translation, rotation: [1, 0, 0, 0], size: [1.8, 4.6, 1.5],
+                      prev: null, next: null, num_lidar_pts: 0, num_radar_pts: 0,
+                      visibility_token: null, category_token: '', attributes: [], visibility: null,
+                    })
+                    setAddTargetSampleToken(targetToken)
+                    setEditMode('add')
+                  }}
+                >
+                  Add BBox to prev
+                </button>
+              )}
+
+              {/* Add BBox to next（インスタンスフィルタ + 最後のサンプルが選択 + scene内に後のサンプルあり） */}
+              {hasInstanceFilter && canAddToNext && (
+                <button
+                  className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                  style={{ background: '#4A90D9', cursor: 'pointer', minWidth: '80px' }}
+                  onClick={() => {
+                    const targetToken = nextSampleToken!
+                    const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
+                    const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
+                    setWorkingAnnotation({
+                      token: '__working__', instance_token: '__working__',
+                      sample_token: targetToken,
+                      translation, rotation: [1, 0, 0, 0], size: [1.8, 4.6, 1.5],
+                      prev: null, next: null, num_lidar_pts: 0, num_radar_pts: 0,
+                      visibility_token: null, category_token: '', attributes: [], visibility: null,
+                    })
+                    setAddTargetSampleToken(targetToken)
+                    setEditMode('add')
+                  }}
+                >
+                  Add BBox to next
+                </button>
+              )}
+
+              {/* インスタンスフィルタ時、どちらの条件も非該当の場合は disabled Add BBox を表示 */}
+              {hasInstanceFilter && !canAddToPrev && !canAddToNext && (
+                <button
+                  disabled
+                  className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                  style={{ background: '#374151', cursor: 'not-allowed', opacity: 0.5, minWidth: '80px' }}
+                >
+                  Add BBox
+                </button>
+              )}
             </div>
           }
         >
@@ -334,6 +415,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
             onCancel={() => {
               setEditMode('view')
               setWorkingAnnotation(null)
+              setAddTargetSampleToken(null)
             }}
           />
         </RightPane>

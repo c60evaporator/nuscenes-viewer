@@ -117,12 +117,43 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const effectiveInstanceToken = lockSource === 'instance' ? (lockedInstanceToken ?? selectedInstanceToken) : null
   const { data: instanceAnnotationsRaw } = useInstanceAnnotations(effectiveInstanceToken)
 
+  // add モード + Sample フィルタ時の隣接サンプルインスタンス取得（インスタンス選択肢フィルタリング用）
+  const sceneIdxOfCurrentSample = (!!effectiveSampleToken && !effectiveInstanceToken)
+    ? samples.findIndex((s) => s.token === effectiveSampleToken)
+    : -1
+  const prevSampleTokenForSampleAdd = sceneIdxOfCurrentSample > 0
+    ? (samples[sceneIdxOfCurrentSample - 1]?.token ?? null) : null
+  const nextSampleTokenForSampleAdd = sceneIdxOfCurrentSample >= 0 && sceneIdxOfCurrentSample < samples.length - 1
+    ? (samples[sceneIdxOfCurrentSample + 1]?.token ?? null) : null
+  const { data: prevSampleInstSummaries } = useSampleInstances(
+    editMode === 'add' && !effectiveInstanceToken ? prevSampleTokenForSampleAdd : null
+  )
+  const { data: nextSampleInstSummaries } = useSampleInstances(
+    editMode === 'add' && !effectiveInstanceToken ? nextSampleTokenForSampleAdd : null
+  )
+
   // Sample アノテーション（Sample フィルタが有効な場合に取得、右ペイン表示用）
   const { data: sampleAnnotations } = useSampleAnnotations(effectiveSampleToken)
 
   // 表示モード
   const hasSampleFilter   = !!effectiveSampleToken
   const hasInstanceFilter = !!effectiveInstanceToken
+
+  // add モード + Sample フィルタ時: 隣接サンプルに含まれ現サンプルに含まれないインスタンスのみ許可
+  const allowedInstanceTokens = useMemo<Set<string> | null>(() => {
+    if (editMode !== 'add' || hasInstanceFilter) return null
+    const currentSet = new Set((instanceSummaries ?? []).map((is) => is.instance_token))
+    const adjTokens = new Set([
+      ...((prevSampleInstSummaries ?? []).map((is) => is.instance_token)),
+      ...((nextSampleInstSummaries ?? []).map((is) => is.instance_token)),
+    ])
+    const allowed = new Set<string>()
+    for (const t of adjTokens) {
+      if (!currentSet.has(t)) allowed.add(t)
+    }
+    return allowed
+  }, [editMode, hasInstanceFilter, instanceSummaries, prevSampleInstSummaries, nextSampleInstSummaries])
+
   const displayMode = hasSampleFilter ? 'instanceList'
     : hasInstanceFilter ? 'sampleList'
     : 'empty'
@@ -225,6 +256,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     && listSelectedSampleToken !== null
     && listSelectedSampleToken === instanceLastSampleToken
     && nextSampleToken !== null
+  const canDeleteBBox = hasInstanceFilter && !isEditing
+    && listSelectedSampleToken !== null
+    && (listSelectedSampleToken === instanceFirstSampleToken
+        || listSelectedSampleToken === instanceLastSampleToken)
 
   // Calibrated Sensors
   const { data: calibSensorsData } = useCalibratedSensors()
@@ -249,6 +284,14 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     })),
     [instanceSummaries],
   )
+
+  // 右ペイン固定トークン（編集・追加モード時）
+  const fixedSampleToken = isEditing ? viewSampleToken : null
+  const fixedInstanceTokenForPanel: string | null = editMode === 'edit'
+    ? (viewInstanceToken ?? null)
+    : (editMode === 'add' && hasInstanceFilter)
+      ? (effectiveInstanceToken ?? null)
+      : null
 
   return (
     <MainLayout
@@ -289,6 +332,21 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                 onClick={() => { setEditMode('edit') }}
               >
                 Edit BBox
+              </button>
+
+              {/* Delete BBox */}
+              <button
+                disabled={!canDeleteBBox}
+                className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                style={{
+                  background: canDeleteBBox ? '#DC2626' : '#374151',
+                  cursor:     canDeleteBBox ? 'pointer' : 'not-allowed',
+                  opacity:    canDeleteBBox ? 1 : 0.5,
+                  minWidth:   '80px',
+                }}
+                onClick={() => { /* TODO: 削除ロジック */ }}
+              >
+                Delete BBox
               </button>
 
               {/* Add BBox（サンプルフィルタ時 or インスタンスフィルタ時で出し分け） */}
@@ -417,6 +475,9 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
               setWorkingAnnotation(null)
               setAddTargetSampleToken(null)
             }}
+            fixedSampleToken={fixedSampleToken}
+            fixedInstanceToken={fixedInstanceTokenForPanel}
+            allowedInstanceTokens={allowedInstanceTokens}
           />
         </RightPane>
       }

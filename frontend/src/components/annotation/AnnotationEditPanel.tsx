@@ -8,10 +8,13 @@ import type { Annotation } from '@/types/annotation'
 type EditMode = 'view' | 'edit' | 'add'
 
 interface Props {
-  annotation: Annotation | null
-  sceneToken: string | null
-  editMode?:  EditMode
-  onCancel?:  () => void
+  annotation:             Annotation | null
+  sceneToken:             string | null
+  editMode?:              EditMode
+  onCancel?:              () => void
+  fixedSampleToken?:      string | null
+  fixedInstanceToken?:    string | null
+  allowedInstanceTokens?: Set<string> | null
 }
 
 // ── スタイル定数 ────────────────────────────────────────────────────────────
@@ -73,12 +76,35 @@ const READONLY_VAL: React.CSSProperties = {
   paddingTop:      '2px',
 }
 
+// ── 有効/無効に応じたスタイルヘルパー ──────────────────────────────────────
+
+const inputFor = (enabled: boolean): React.CSSProperties => ({
+  ...INPUT,
+  color:  enabled ? '#D1D5DB' : INPUT.color,
+  border: enabled ? '1px solid #4B5563' : INPUT.border,
+  cursor: enabled ? 'text' : 'not-allowed',
+})
+
+const selectFor = (enabled: boolean): React.CSSProperties => ({
+  ...SELECT,
+  color:  enabled ? '#D1D5DB' : SELECT.color,
+  border: enabled ? '1px solid #4B5563' : SELECT.border,
+  cursor: enabled ? 'pointer' : 'not-allowed',
+})
+
+const ctrlBtnFor = (enabled: boolean): React.CSSProperties => ({
+  ...BTN,
+  color:  enabled ? '#D1D5DB' : BTN.color,
+  cursor: enabled ? 'pointer' : 'not-allowed',
+})
+
 // ── サブコンポーネント ───────────────────────────────────────────────────────
 
-function TripleInputRow({ label, vals, placeholders }: {
+function TripleInputRow({ label, vals, placeholders, enabled = false }: {
   label:        string
   vals:         (string | number)[]
   placeholders: string[]
+  enabled?:     boolean
 }) {
   return (
     <div style={{ marginBottom: '5px' }}>
@@ -89,10 +115,10 @@ function TripleInputRow({ label, vals, placeholders }: {
         {vals.map((v, i) => (
           <input
             key={i}
-            disabled
+            disabled={!enabled}
             value={v}
             placeholder={placeholders[i]}
-            style={{ ...INPUT, textAlign: 'center' }}
+            style={{ ...inputFor(enabled), textAlign: 'center' }}
             onChange={() => {}}
           />
         ))}
@@ -112,7 +138,10 @@ function ReadOnlyRow({ label, value }: { label: string; value?: string | null })
 
 // ── メインコンポーネント ────────────────────────────────────────────────────
 
-export default function AnnotationEditPanel({ annotation, sceneToken, editMode = 'view', onCancel }: Props) {
+export default function AnnotationEditPanel({
+  annotation, sceneToken, editMode = 'view', onCancel,
+  fixedSampleToken, fixedInstanceToken, allowedInstanceTokens,
+}: Props) {
   const { data: visibilities = [] } = useVisibilities()
   const { data: attributes   = [] } = useAttributes()
   const { data: categories   = [] } = useCategories()
@@ -126,6 +155,33 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
 
   const fmt3 = (v: number | undefined) => (v !== undefined ? v.toFixed(3) : '')
   const checkedAttrTokens = new Set((annotation?.attributes ?? []).map((a) => a.token))
+
+  // ── 有効/無効の判定値 ─────────────────────────────────────────────────────
+  const isEditing = editMode !== 'view'
+  const isAdd     = editMode === 'add'
+
+  // instance ドロップダウンの表示値・有効状態・選択肢
+  const instanceSelectValue = isEditing
+    ? (fixedInstanceToken ?? '__new__')
+    : (annotation?.instance_token ?? '')
+  const instanceEnabled = isAdd && fixedInstanceToken === null
+  const instanceOptions = (instanceEnabled && allowedInstanceTokens != null)
+    ? instances.filter((i) => allowedInstanceTokens.has(i.token))
+    : instances
+
+  // category: instance が '__new__' のときのみ有効
+  const categoryEnabled = isEditing && instanceSelectValue === '__new__'
+  const fixedInstance   = fixedInstanceToken
+    ? (instances.find((i) => i.token === fixedInstanceToken) ?? null)
+    : null
+  const categorySelectValue = (!categoryEnabled && isEditing)
+    ? (fixedInstance?.category_token ?? annotation?.category_token ?? '')
+    : (annotation?.category_token ?? '')
+
+  // sample: 常に無効だが編集・追加モード時は固定値を表示
+  const sampleSelectValue = isEditing
+    ? (fixedSampleToken ?? annotation?.sample_token ?? '')
+    : (annotation?.sample_token ?? '')
 
   const sampleLabel = (token: string) => {
     const s = samples.find((s) => s.token === token)
@@ -162,7 +218,7 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
         ].map((row, ri) => (
           <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: '4px' }}>
             {row.map((label) => (
-              <button key={label} disabled style={BTN}>{label}</button>
+              <button key={label} disabled={!isEditing} style={ctrlBtnFor(isEditing)}>{label}</button>
             ))}
           </div>
         ))}
@@ -173,7 +229,7 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
         ].map((row, ri) => (
           <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: ri === 0 ? '4px' : 0 }}>
             {row.map((label) => (
-              <button key={label} disabled style={BTN}>{label}</button>
+              <button key={label} disabled={!isEditing} style={ctrlBtnFor(isEditing)}>{label}</button>
             ))}
           </div>
         ))}
@@ -184,25 +240,28 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
         label="translation"
         vals={[fmt3(annotation?.translation[0]), fmt3(annotation?.translation[1]), fmt3(annotation?.translation[2])]}
         placeholders={['x', 'y', 'z']}
+        enabled={isEditing}
       />
       <TripleInputRow
         label="size"
         vals={[fmt3(annotation?.size[0]), fmt3(annotation?.size[1]), fmt3(annotation?.size[2])]}
         placeholders={['W', 'L', 'H']}
+        enabled={isEditing}
       />
       <TripleInputRow
         label="rotation"
         vals={[euler?.yaw ?? '', euler?.pitch ?? '', euler?.roll ?? '']}
         placeholders={['yaw', 'pitch', 'roll']}
+        enabled={isEditing}
       />
 
       {/* ── visibility ────────────────────────────────────────────────── */}
       <div style={ROW}>
         <span style={LABEL}>visibility</span>
         <select
-          disabled
+          disabled={!isEditing}
           value={annotation?.visibility_token ?? ''}
-          style={SELECT}
+          style={selectFor(isEditing)}
           onChange={() => {}}
         >
           <option value="">—</option>
@@ -232,15 +291,15 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
               display:    'flex',
               alignItems: 'center',
               gap:        '4px',
-              cursor:     'not-allowed',
+              cursor:     isEditing ? 'pointer' : 'not-allowed',
               padding:    '1px 0',
             }}>
               <input
                 type="checkbox"
-                disabled
+                disabled={!isEditing}
                 checked={checkedAttrTokens.has(a.token)}
                 readOnly
-                style={{ accentColor: '#4A90D9', cursor: 'not-allowed' }}
+                style={{ accentColor: '#4A90D9', cursor: isEditing ? 'pointer' : 'not-allowed' }}
               />
               <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{a.name}</span>
             </label>
@@ -253,7 +312,7 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
         <span style={LABEL}>sample</span>
         <select
           disabled
-          value={annotation?.sample_token ?? ''}
+          value={sampleSelectValue}
           style={SELECT}
           onChange={() => {}}
         >
@@ -268,14 +327,14 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
       <div style={ROW}>
         <span style={LABEL}>instance</span>
         <select
-          disabled
-          value={annotation?.instance_token ?? ''}
-          style={SELECT}
+          disabled={!instanceEnabled}
+          value={instanceSelectValue}
+          style={selectFor(instanceEnabled)}
           onChange={() => {}}
         >
           <option value="">—</option>
           <option value="__new__">new instance</option>
-          {instances.map((inst) => (
+          {instanceOptions.map((inst) => (
             <option key={inst.token} value={inst.token}>
               {inst.category_name} ({inst.token.substring(0, 8)})
             </option>
@@ -287,9 +346,9 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
       <div style={ROW}>
         <span style={LABEL}>category</span>
         <select
-          disabled
-          value={annotation?.category_token ?? ''}
-          style={SELECT}
+          disabled={!categoryEnabled}
+          value={categorySelectValue}
+          style={selectFor(categoryEnabled)}
           onChange={() => {}}
         >
           <option value="">—</option>
@@ -324,7 +383,7 @@ export default function AnnotationEditPanel({ annotation, sceneToken, editMode =
           fontWeight:    'bold',
         }}
       >
-        Register the BBox
+        Save BBox
       </button>
 
       {/* ── Cancel Edit ボタン ─────────────────────────────────────────── */}

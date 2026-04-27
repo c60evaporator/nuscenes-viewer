@@ -15,8 +15,10 @@ import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import type { CalibratedSensor } from '@/types/sensor'
-import type { Instance } from '@/types/annotation'
+import type { Annotation, Instance } from '@/types/annotation'
 import type { TabId } from '@/components/layout/Header'
+
+type EditMode = 'view' | 'edit' | 'add'
 
 interface AnnotationPageProps {
   activeTab:   TabId
@@ -38,6 +40,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // リスト選択 state（左ペインのリストで選択した値）
   const [listSelectedSampleToken,   setListSelectedSampleToken]   = useState<string | null>(null)
   const [listSelectedInstanceToken, setListSelectedInstanceToken] = useState<string | null>(null)
+
+  // 編集モード state
+  const [editMode,         setEditMode]         = useState<EditMode>('view')
+  const [workingAnnotation, setWorkingAnnotation] = useState<Annotation | null>(null)
 
   // ロック判定
   const sceneTokenLocked    = !!lockedSceneToken
@@ -158,7 +164,15 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // Sample フィルタ変更時にリスト選択をリセット
   useEffect(() => {
     setListSelectedInstanceToken(null)
+    setEditMode('view')
+    setWorkingAnnotation(null)
   }, [effectiveSampleToken])
+
+  // Instance フィルタ変更時にも編集モードをリセット
+  useEffect(() => {
+    setEditMode('view')
+    setWorkingAnnotation(null)
+  }, [effectiveInstanceToken])
 
   // Viewer に渡す sampleToken / instanceToken
   const viewSampleToken   = hasSampleFilter ? effectiveSampleToken   : listSelectedSampleToken
@@ -167,6 +181,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // BBox クリックハンドラ（Instance フィルタ有効時は無視）
   const handleBBoxClick = (instToken: string) => {
     if (hasInstanceFilter) return
+    if (instToken !== listSelectedInstanceToken) {
+      setEditMode('view')
+      setWorkingAnnotation(null)
+    }
     setListSelectedInstanceToken(instToken)
   }
 
@@ -177,8 +195,9 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     : hasInstanceFilter
       ? listSelectedSampleToken !== null
       : false
-  const canAddBBox  = hasSampleFilter && !hasInstanceFilter
-  const canEditBBox = bboxSelected
+  const isEditing   = editMode !== 'view'
+  const canAddBBox  = hasSampleFilter && !hasInstanceFilter && !isEditing
+  const canEditBBox = bboxSelected && !isEditing
 
   // Calibrated Sensors
   const { data: calibSensorsData } = useCalibratedSensors()
@@ -211,20 +230,22 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       left={
         <LeftPane
           filter={
-            <AnnotationFilter
-              scenes={locationScenes}
-              selectedSceneToken={selectedSceneToken}
-              onSceneChange={setSelectedSceneToken}
-              sceneTokenLocked={sceneTokenLocked}
-              samples={samples}
-              selectedSampleToken={effectiveSampleToken}
-              onSampleChange={setSelectedSampleToken}
-              sampleTokenLocked={sampleTokenLocked}
-              instanceSummaries={instanceSummaries ?? []}
-              selectedInstanceToken={effectiveInstanceToken}
-              onInstanceChange={setSelectedInstanceToken}
-              instanceTokenLocked={instanceTokenLocked}
-            />
+            <div style={{ pointerEvents: isEditing ? 'none' : undefined, opacity: isEditing ? 0.45 : undefined }}>
+              <AnnotationFilter
+                scenes={locationScenes}
+                selectedSceneToken={selectedSceneToken}
+                onSceneChange={setSelectedSceneToken}
+                sceneTokenLocked={sceneTokenLocked}
+                samples={samples}
+                selectedSampleToken={effectiveSampleToken}
+                onSampleChange={setSelectedSampleToken}
+                sampleTokenLocked={sampleTokenLocked}
+                instanceSummaries={instanceSummaries ?? []}
+                selectedInstanceToken={effectiveInstanceToken}
+                onInstanceChange={setSelectedInstanceToken}
+                instanceTokenLocked={instanceTokenLocked}
+              />
+            </div>
           }
           footer={
             <div className="flex gap-2 px-3 py-2">
@@ -236,7 +257,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   cursor:     canEditBBox ? 'pointer' : 'not-allowed',
                   opacity:    canEditBBox ? 1 : 0.5,
                 }}
-                onClick={() => {/* TODO: Edit BBox */}}
+                onClick={() => { setEditMode('edit') }}
               >
                 Edit BBox
               </button>
@@ -248,33 +269,60 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   cursor:     canAddBBox ? 'pointer' : 'not-allowed',
                   opacity:    canAddBBox ? 1 : 0.5,
                 }}
-                onClick={() => {/* TODO: Add BBox */}}
+                onClick={() => {
+                  const egoPose = egoPoses?.find((p) => p.sample_token === effectiveSampleToken)
+                  const translation = egoPose
+                    ? [...egoPose.translation]
+                    : [0, 0, 0]
+                  const newAnn: Annotation = {
+                    token:            '__working__',
+                    instance_token:   '__working__',
+                    sample_token:     effectiveSampleToken ?? '',
+                    translation,
+                    rotation:         [1, 0, 0, 0],
+                    size:             [1.8, 4.6, 1.5],
+                    prev:             null,
+                    next:             null,
+                    num_lidar_pts:    0,
+                    num_radar_pts:    0,
+                    visibility_token: null,
+                    category_token:   '',
+                    attributes:       [],
+                    visibility:       null,
+                  }
+                  setWorkingAnnotation(newAnn)
+                  setEditMode('add')
+                  setListSelectedInstanceToken(null)
+                  setListSelectedSampleToken(null)
+                }}
               >
                 Add BBox
               </button>
             </div>
           }
         >
-          {displayMode === 'empty' && (
-            <div className="p-4 text-center text-gray-400 text-xs">
-              Please select Sample or Instance
-            </div>
-          )}
-          {displayMode === 'sampleList' && (
-            <SampleList
-              samples={samplesForInstance}
-              currentSampleToken={listSelectedSampleToken}
-              onSelect={setListSelectedSampleToken}
-            />
-          )}
-          {displayMode === 'instanceList' && (
-            <InstanceList
-              instances={instanceListItems}
-              currentInstanceToken={listSelectedInstanceToken}
-              onSelect={setListSelectedInstanceToken}
-              highlightInstanceToken={listSelectedInstanceToken}
-            />
-          )}
+          <div style={{ pointerEvents: isEditing ? 'none' : undefined, opacity: isEditing ? 0.45 : undefined, height: '100%' }}>
+            {displayMode === 'empty' && (
+              <div className="p-4 text-center text-gray-400 text-xs">
+                Please select Sample or Instance
+              </div>
+            )}
+            {displayMode === 'sampleList' && (
+              <SampleList
+                samples={samplesForInstance}
+                currentSampleToken={listSelectedSampleToken}
+                onSelect={setListSelectedSampleToken}
+              />
+            )}
+            {displayMode === 'instanceList' && (
+              <InstanceList
+                instances={instanceListItems}
+                currentInstanceToken={listSelectedInstanceToken}
+                onSelect={setListSelectedInstanceToken}
+                highlightInstanceToken={listSelectedInstanceToken}
+              />
+            )}
+          </div>
         </LeftPane>
       }
       right={
@@ -282,6 +330,11 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
           <AnnotationEditPanel
             annotation={selectedAnnotation}
             sceneToken={selectedSceneToken}
+            editMode={editMode}
+            onCancel={() => {
+              setEditMode('view')
+              setWorkingAnnotation(null)
+            }}
           />
         </RightPane>
       }
@@ -292,7 +345,13 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
         location={currentMapLocation}
         calibSensorMap={calibSensorMap}
         sceneEgoPoses={egoPoses ?? []}
-        onBBoxClick={handleBBoxClick}
+        onBBoxClick={isEditing ? undefined : handleBBoxClick}
+        editingInstanceToken={
+          editMode === 'edit' ? (viewInstanceToken ?? undefined)
+          : editMode === 'add' ? '__working__'
+          : undefined
+        }
+        workingAnnotation={editMode === 'add' ? workingAnnotation : null}
       />
     </MainLayout>
   )

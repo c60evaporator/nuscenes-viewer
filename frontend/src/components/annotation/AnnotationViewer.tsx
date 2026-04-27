@@ -4,6 +4,7 @@ import CameraImageCanvas from '@/components/common/CameraImageCanvas'
 import { useSampleSensorData, useSampleAnnotations } from '@/api/samples'
 import { useInstanceBestCamera } from '@/api/instances'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
+import type { Annotation } from '@/types/annotation'
 
 interface AnnotationViewerProps {
   sampleToken:   string | null
@@ -12,6 +13,8 @@ interface AnnotationViewerProps {
   calibSensorMap: Record<string, CalibratedSensor>
   sceneEgoPoses: EgoPosePoint[]
   onBBoxClick?:  (instanceToken: string) => void
+  editingInstanceToken?: string
+  workingAnnotation?:    Annotation | null
 }
 
 function Placeholder({ text }: { text: string }) {
@@ -29,9 +32,16 @@ export default function AnnotationViewer({
   calibSensorMap,
   sceneEgoPoses,
   onBBoxClick,
+  editingInstanceToken,
+  workingAnnotation,
 }: AnnotationViewerProps) {
   const { data: sampleDataMap }      = useSampleSensorData(sampleToken)
-  const { data: sampleAnnotations }  = useSampleAnnotations(sampleToken)
+  const { data: sampleAnnotationsRaw } = useSampleAnnotations(sampleToken)
+
+  // 追加モード時: workingAnnotation を末尾に追加して描画
+  const sampleAnnotations = workingAnnotation
+    ? [...(sampleAnnotationsRaw ?? []), workingAnnotation]
+    : (sampleAnnotationsRaw ?? [])
   const { data: bestCamera }         = useInstanceBestCamera(instanceToken, sampleToken, 1)
   const { data: secondBestCamera }   = useInstanceBestCamera(instanceToken, sampleToken, 2)
 
@@ -83,8 +93,9 @@ export default function AnnotationViewer({
               sampleDataToken={bestCamera.sample_data_token}
               calibratedSensor={cameraCalib}
               egoPose={cameraEgoPose}
-              annotations={sampleAnnotations ?? []}
+              annotations={sampleAnnotations}
               highlightInstanceToken={instanceToken ?? undefined}
+              editingInstanceToken={editingInstanceToken}
               onBBoxClick={handleBBoxClick}
               className="w-full h-full"
             />
@@ -103,8 +114,9 @@ export default function AnnotationViewer({
               sampleDataToken={secondBestCamera.sample_data_token}
               calibratedSensor={camera2Calib}
               egoPose={camera2EgoPose}
-              annotations={sampleAnnotations ?? []}
+              annotations={sampleAnnotations}
               highlightInstanceToken={instanceToken ?? undefined}
+              editingInstanceToken={editingInstanceToken}
               onBBoxClick={handleBBoxClick}
               className="w-full h-full"
             />
@@ -139,10 +151,11 @@ export default function AnnotationViewer({
           {lidarBrief ? (
             <PointCloudCanvas
               sampleDataToken={lidarBrief.token}
-              annotations={sampleAnnotations ?? []}
+              annotations={sampleAnnotations}
               egoPose={currentEgoPose}
               lidarCalibSensor={lidarCalibArray}
               highlightInstanceToken={instanceToken ?? undefined}
+              editingInstanceToken={editingInstanceToken}
               onBBoxClick={handleBBoxClick}
               className="w-full h-full"
             />

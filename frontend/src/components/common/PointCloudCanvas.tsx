@@ -11,7 +11,8 @@ interface PointCloudCanvasProps {
   annotations?:       Annotation[]
   egoPose?:           EgoPosePoint
   lidarCalibSensor?:  { translation: number[]; rotation: number[] }
-  highlightInstanceToken?: string
+  highlightInstanceToken?:  string
+  editingInstanceToken?:    string
   onBBoxClick?:       (token: string) => void
   location?:          string | null
   pointSize?:         number
@@ -34,6 +35,7 @@ export default function PointCloudCanvas({
   egoPose,
   lidarCalibSensor,
   highlightInstanceToken,
+  editingInstanceToken,
   onBBoxClick,
   location,
   pointSize,
@@ -234,13 +236,17 @@ export default function PointCloudCanvas({
           maxY:  Math.max(...allY),
         })
 
-        const color = ann.instance_token === highlightInstanceToken ? '#FFD700' : '#00FF88'
+        const color = ann.instance_token === editingInstanceToken
+          ? '#FF8C00'
+          : ann.instance_token === highlightInstanceToken
+            ? '#FFD700'
+            : '#00FF88'
         drawBBox2D(ctx, corners2D, color)
       }
     }
     ctx.restore()  // 点群、BBox 描画後に restore して点群描画の座標系を元に戻す
     bboxRectsRef.current = newBBoxRects
-  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, location, pointSize, zoom, panOffset, axesLimitMeters])
+  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, editingInstanceToken, location, pointSize, zoom, panOffset, axesLimitMeters])
 
   const hitTestBBox = useCallback((screenX: number, screenY: number): string | null => {
     const canvas = canvasRef.current
@@ -272,7 +278,7 @@ export default function PointCloudCanvas({
       })
     } else {
       const hit = hitTestBBox(e.clientX, e.clientY)
-      setCursor(hit ? 'pointer' : 'grab')
+      setCursor(hit && onBBoxClick ? 'pointer' : 'grab')
     }
   }
 

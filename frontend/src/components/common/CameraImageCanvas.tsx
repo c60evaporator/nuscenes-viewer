@@ -57,6 +57,7 @@ interface CameraImageCanvasProps {
   egoPose?:         { translation: number[]; rotation: number[] }
   annotations?:     Annotation[]
   highlightInstanceToken?: string
+  editingInstanceToken?:   string
   onBBoxClick?:     (token: string) => void
   onFeatureClick?:  (feature: GeoJSONMapFeature, layer: MapLayer) => void
   selectedFeature?: GeoJSONMapFeature | null
@@ -227,6 +228,7 @@ export default function CameraImageCanvas({
   egoPose,
   annotations,
   highlightInstanceToken,
+  editingInstanceToken,
   onBBoxClick,
   onFeatureClick,
   selectedFeature,
@@ -330,7 +332,11 @@ export default function CameraImageCanvas({
         maxY:  Math.max(...allY),
       })
 
-      const color = ann.instance_token === highlightInstanceToken ? '#FFFF00' : '#00AAFF'
+      const color = ann.instance_token === editingInstanceToken
+        ? '#FF8C00'
+        : ann.instance_token === highlightInstanceToken
+          ? '#FFFF00'
+          : '#00AAFF'
       drawBBox2D(ctx, corners2D, color)
     }
 
@@ -404,7 +410,7 @@ export default function CameraImageCanvas({
     if (bitmapRef.current) {
       drawBBoxesRef.current?.()
     }
-  }, [annotations, egoPose, highlightInstanceToken, calibratedSensor, mapLayerData, location, selectedFeature])
+  }, [annotations, egoPose, highlightInstanceToken, editingInstanceToken, calibratedSensor, mapLayerData, location, selectedFeature])
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = containerRef.current!.getBoundingClientRect()

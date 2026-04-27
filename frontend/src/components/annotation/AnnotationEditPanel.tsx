@@ -5,9 +5,13 @@ import { useSceneSamples } from '@/api/scenes'
 import { quaternionToEulerDeg } from '@/lib/coordinateUtils'
 import type { Annotation } from '@/types/annotation'
 
+type EditMode = 'view' | 'edit' | 'add'
+
 interface Props {
   annotation: Annotation | null
   sceneToken: string | null
+  editMode?:  EditMode
+  onCancel?:  () => void
 }
 
 // ── スタイル定数 ────────────────────────────────────────────────────────────
@@ -108,7 +112,7 @@ function ReadOnlyRow({ label, value }: { label: string; value?: string | null })
 
 // ── メインコンポーネント ────────────────────────────────────────────────────
 
-export default function AnnotationEditPanel({ annotation, sceneToken }: Props) {
+export default function AnnotationEditPanel({ annotation, sceneToken, editMode = 'view', onCancel }: Props) {
   const { data: visibilities = [] } = useVisibilities()
   const { data: attributes   = [] } = useAttributes()
   const { data: categories   = [] } = useCategories()
@@ -322,6 +326,31 @@ export default function AnnotationEditPanel({ annotation, sceneToken }: Props) {
       >
         Register the BBox
       </button>
+
+      {/* ── Cancel Edit ボタン ─────────────────────────────────────────── */}
+      {(() => {
+        const active = editMode !== 'view'
+        return (
+          <button
+            disabled={!active}
+            onClick={active ? onCancel : undefined}
+            style={{
+              width:         '100%',
+              padding:       '8px',
+              marginTop:     '6px',
+              background:    active ? '#DC2626' : '#374151',
+              color:         active ? '#FFFFFF'  : '#6B7280',
+              border:        'none',
+              borderRadius:  '4px',
+              cursor:        active ? 'pointer' : 'not-allowed',
+              fontSize:      '13px',
+              fontWeight:    'bold',
+            }}
+          >
+            Cancel Edit
+          </button>
+        )
+      })()}
     </div>
   )
 }

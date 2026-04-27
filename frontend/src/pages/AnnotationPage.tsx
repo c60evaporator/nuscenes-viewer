@@ -6,10 +6,10 @@ import AnnotationFilter from '@/components/annotation/AnnotationFilter'
 import SampleList from '@/components/sample/SampleList'
 import InstanceList from '@/components/instance/InstanceList'
 import AnnotationViewer from '@/components/annotation/AnnotationViewer'
-import AnnotationInfo from '@/components/annotation/AnnotationInfo'
+import AnnotationEditPanel from '@/components/annotation/AnnotationEditPanel'
 import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
-import { useSamples, useSampleInstances } from '@/api/samples'
+import { useSamples, useSampleInstances, useSampleAnnotations } from '@/api/samples'
 import { useInstanceAnnotations } from '@/api/instances'
 import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
@@ -110,12 +110,34 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const effectiveInstanceToken = lockSource === 'instance' ? (lockedInstanceToken ?? selectedInstanceToken) : null
   const { data: instanceAnnotationsRaw } = useInstanceAnnotations(effectiveInstanceToken)
 
+  // Sample アノテーション（Sample フィルタが有効な場合に取得、右ペイン表示用）
+  const { data: sampleAnnotations } = useSampleAnnotations(effectiveSampleToken)
+
   // 表示モード
   const hasSampleFilter   = !!effectiveSampleToken
   const hasInstanceFilter = !!effectiveInstanceToken
   const displayMode = hasSampleFilter ? 'instanceList'
     : hasInstanceFilter ? 'sampleList'
     : 'empty'
+
+  // 選択中アノテーション（右ペイン表示用）
+  const selectedAnnotation = useMemo(() => {
+    if (hasSampleFilter && listSelectedInstanceToken) {
+      return (sampleAnnotations ?? []).find(
+        (a) => a.instance_token === listSelectedInstanceToken
+      ) ?? null
+    }
+    if (hasInstanceFilter && listSelectedSampleToken) {
+      return (instanceAnnotationsRaw ?? []).find(
+        (a) => a.sample_token === listSelectedSampleToken
+      ) ?? null
+    }
+    return null
+  }, [
+    hasSampleFilter, hasInstanceFilter,
+    listSelectedInstanceToken, listSelectedSampleToken,
+    sampleAnnotations, instanceAnnotationsRaw,
+  ])
 
   // Case 2: Instance フィルタ → Instance を含む Sample リスト
   const instanceSampleTokenSet = useMemo(
@@ -257,9 +279,9 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       }
       right={
         <RightPane>
-          <AnnotationInfo
-            annotation={null}
-            categoryMap={{}}
+          <AnnotationEditPanel
+            annotation={selectedAnnotation}
+            sceneToken={selectedSceneToken}
           />
         </RightPane>
       }

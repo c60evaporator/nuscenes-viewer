@@ -1,8 +1,6 @@
 # アノテーション機能
 
-アノテーション機能の使用をこちらに記載
-
-可視化機能の実装が完了したので、アノテーション機能を追加したいです。具体的には
+アノテーション機能の仕様をこちらに記載。nuScenes本体（バウンディングボックス）とMap Expansion（）2種類のアノテーションが
 
 1. Annotation画面：nuScenes本体のバウンディングボックスアノテーションの編集・追加
 2. Sample&Map画面：Map Expansionアノテーションの編集・追加（ポリゴン、ライン、信号機）
@@ -11,15 +9,129 @@
 
 ## 1. Annotation画面（nuScenes本体のアノテーション）
 
-### 画面仕様
-Annotation画面の左ペイン下側の現在Instanceリストor
+### アノテーション編集モード、追加モードへの遷移ボタン
+Annotation画面の左ペインの最下部に、編集モード、追加モードに遷移するための以下の2つのボタンを設置
 
-#### Sampleフィルタ適用時
-左ペインのSampleフィルタを適用している場合（Sample画面の「Annotations」ボタンから遷移した時が典型的）
-- インスタンス（バウンディングボックス）を選択していない場合：「Add」ボタンのみ
+- 「Edit BBox」：現在選択されているバウンディングボックスアノテーションの**編集モード**に入る
+- 「Add BBox」：新規バウンディングボックスアノテーションの**追加モード**に入る
 
-#### Instanceフィルタ適用時
-左ペインのSampleフィルタを適用している場合（Instance画面から遷移した場合）
+以下のルールで有効・無効を切り替え
+
+- Instanceフィルタ、Sampleフィルタどちらも「すべて」の場合
+  - 「Add BBox」「Edit BBox」どちらも無効
+- Sampleフィルタ適用時（Instanceフィルタは「すべて」）
+  - バウンディングボックスを選択していない場合：「Add BBox」ボタンのみ有効
+  - バウンディングボックスを選択している場合：「Add BBox」「Edit BBox」両方有効
+- Instanceフィルタ適用時（Sampleフィルタは「すべて」）
+  - バウンディングボックスを選択していない場合：「Add BBox」「Edit BBox」どちらも無効
+  - バウンディングボックスを選択している場合：「Edit BBox」ボタンのみ有効（「Add BBox」は同じInstanceの重複を防ぐため無効化）
+
+### 編集モード、追加モード中の操作
+
+以下4通りの方法で、バウンディングボックスの位置や大きさ等を調整
+
+- 右ペイン：translation, size, rotationや各種属性を直接編集する
+- LIDAR_TOP画像：CVAT形式ベースのUI（後述）
+- Three.js：UnityベースのUI（後述）
+
+カメラ画像は表示専用とする（カメラ画像上でマウスクリックを用いたバウンディングボックス編集は行わない）
+
+#### 右ペインによる操作
+
+右ペインに、以下のようなアノテーション情報表示・編集用のコンポーネントを表示
+
+- Bonding box ctrl（div）
+  - 回転ボタン（ボタン）
+    - 右回転（Ego-pose座標ではなくグローバル座標のz軸で上から見た時計回り回転）
+    - 左回転（Ego-pose座標ではなくグローバル座標のz軸で上から見た反時計回り回転）
+  - 並進ボタン（ボタン）
+    - 上移動（LIDAR_TOP画像での上方向=Ego-pose座標系y正方向）
+    - 下移動（LIDAR_TOP画像での下方向=Ego-pose座標系y負方向）
+    - 左移動（LIDAR_TOP画像での左方向=Ego-pose座標系x負方向）
+    - 右移動（LIDAR_TOP画像での右方向=Ego-pose座標系x正方向）
+  - 拡大・縮小ボタン（ボタン）
+    - W方向拡大（Ego-pose座標系y方向サイズ）
+    - W方向拡縮小（Ego-pose座標系y方向サイズ）
+    - L方向拡大（Ego-pose座標系x方向サイズ）
+    - L方向拡縮小（Ego-pose座標系x方向サイズ）
+    - H方向拡大（Ego-pose座標系z方向サイズ）
+    - H方向拡縮小（Ego-pose座標系z方向サイズ）
+- translation（テキストボックス）：選択したバウンディングボックス（SampleAnnotationテーブル）のtranslation
+  - x
+  - y
+  - z
+- size（テキストボックス）：選択したバウンディングボックスのsize
+  - W
+  - L
+  - H
+- rotation（テキストボックス）：選択したバウンディングボックスのrotation。元データはクオータニオンだが、オイラー角に変換して表示
+  - yaw
+  - pitch
+  - roll
+- visibility（プルダウンメニュー）：Visibilityテーブルのlevelのリストをプルダウン表示。デフォルト値は選択したバウンディングボックスのvisibility_tokenに基づく
+- attributes（multiselect）：Attributeテーブルのnameのリストをmultiselect形式で表示。デフォルト値は選択したバウンディングボックスのattribute_tokensに基づく
+- sample（プルダウンメニュー）：Sceneに含まれるSampleのリストをプルダウン表示。デフォルト値は選択したバウンディングボックスのsample_tokenに基づく
+- instance（プルダウンメニュー）：Sceneに含まれるInstanceのリストに「new instance」を追加したものをプルダウン表示。デフォルト値は選択したバウンディングボックスのinstance_tokenに基づく。
+- category（プルダウンメニュー）：Categoryテーブルのnameのリストをプルダウン表示。デフォルト値は選択したバウンディングボックスのinstance_tokenと、紐づいたInstandeのcategory_tokenに基づく
+- token（テキスト表示のみ）：選択したバウンディングボックスのtokenを表示
+- prev（テキスト表示のみ）：選択したバウンディングボックスのprevを表示
+- next（テキスト表示のみ）：選択したバウンディングボックスのnextを表示
+- num_lidar_pts（テキスト表示のみ）：選択したバウンディングボックスのnum_lidar_ptsを表示
+- num_radar_pts（テキスト表示のみ）：選択したバウンディングボックスのnum_radar_ptsを表示
+- Register the BBox（ボタン）：上記で指定した条件でバウンディングボックスを登録
+
+各コンポーネントは、以下の条件で有効、無効を制御
+
+- 編集・追加モードでないとき：全コンポーネントの入力を無効化。バウンディングボックス選択時に表示のみ実施
+- 編集モードのとき：
+  - 各ボタンの操作を有効化
+  - translation、size、rotationのテキストボックス入力を有効化
+  - visibility、sample、instanceのプルダウン選択を有効化
+  - categoryのプルダウン選択は、instanceプルダウンで「new instance」を選択している場合のみ有効化。それ以外の場合は無効化
+  - attributesのmultiselectを有効化
+- 追加モードのとき：
+  - 各ボタンの操作を有効化
+  - translation、size、rotationのテキストボックス入力を有効化
+  - visibility、sample、instanceのプルダウン選択を有効化
+  - categoryのプルダウン選択は、instanceプルダウンで「new instance」を選択している場合のみ有効化。それ以外の場合は無効化
+  - attributesのmultiselectを有効化
+
+追加モードでは、
+
+### LIDAR_TOP画面上でのBBOXの編集（編集モード・追加モード共通）
+
+- マウスホイール動作：LIDAR画像全体のズーム
+- マウスのパン：LIDAR画像全体のパン
+- バウンディングボックス左クリック時：以下の操作を有効にする
+  - キーボードの「G」キー：マウスを動かすとバウンディングボックスをXY平面上で動かすモードに
+    - キーボードの「X」キー：バウンディングボックスが動く方向をX軸に制限
+    - キーボードの「Y」キー：バウンディングボックスが動く方向をY軸に制限
+  - キーボードの「R」キー：マウスを動かすとバウンディングボックスが回転するモードに（Z軸周りのみ回転）
+  - キーボードの「S」キー：マウスを動かすとバウンディングボックスの大きさを変えるモードに
+    - キーボードの「X」キー：バウンディングボックスの大きさ変更をX軸方向に制限
+    - キーボードの「Y」キー：バウンディングボックスの大きさ変更をY軸方向に制限
+  - 左クリック：バウンディングボックスの位置、大きさ、回転を確定（カメラ画像、のバウンディングボックス位置を更新）
+  - 右クリック or 「Esc」キー：キャンセル
+  - キーボードの「R」キーを押しながらマウスホイール動作：バウンディングボックスの回転
+  - キーボードの「S」キーを押しながらマウスホイール動作：バウンディングボックスのスケール微調整
+  - キーボードの「A」キーを押しながらマウスホイール動作：バウンディングボックスのアスペクト比変更
+
+左クリックでバウンディングボックスの位置を確定するまで、他のビュー（カメラ画像）
+
+### 登録時のバリデーション
+
+- 登録を受け付けないケース
+  - sample_tokenと一致するsampleが存在しない
+  - instance_tokenと一致するinstanceが存在しない
+  - prevと一致するsample_annotationが存在しない（空欄の場合を除く）
+  - prevが空欄だが、自身よりも前のsampleに同じinstanceのsample_annotationが存在する
+  - nextと一致するsample_annotationが存在しない（空欄の場合を除く）
+  - nextが空欄だが、自身よりも後のsampleに同じinstanceのsample_annotationが存在する
+  - 
+
+- 警告を出すケース
+  - 同じinstanceでsampleが不連続な（間のサンプルが抜けている）場合
+
 
 ### 設定ファイル
 `frontend/config/settings.yml`に`annotation`項目を作りアノテーションに関係した設定を記述
@@ -55,8 +167,6 @@ annotation:
 | PATCH | `/api/v1/annotations/{token}` | 部分更新 (translation/size/rotationのみ等) |
 | POST | `/api/v1/annotations` | 新規BBox作成 (sample_token必須) |
 | GET | `/api/v1/annotations/{token}/history` | 編集履歴取得 |
-
-
 
 ### DB
 
@@ -117,7 +227,7 @@ frontend/
 ## 3. Undo/Redo (クライアント側のみ)
 
 ### Zustandストア構造
-
+う
 ```typescript
 interface EditStore {
   // 現在の編集中BBox状態

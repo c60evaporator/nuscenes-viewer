@@ -337,6 +337,24 @@ export function getBasemapBounds(
 }
 
 /**
+ * クォータニオン [w, x, y, z] → オイラー角 {yaw, pitch, roll}（度）
+ * ZYX 慣例（yaw=Z, pitch=Y, roll=X）
+ */
+export function quaternionToEulerDeg(q: number[]): { yaw: number; pitch: number; roll: number } {
+  const [w, x, y, z] = q
+  const sinr_cosp = 2 * (w * x + y * z)
+  const cosr_cosp = 1 - 2 * (x * x + y * y)
+  const roll = Math.atan2(sinr_cosp, cosr_cosp)
+  const sinp = Math.max(-1, Math.min(1, 2 * (w * y - z * x)))
+  const pitch = Math.asin(sinp)
+  const siny_cosp = 2 * (w * z + x * y)
+  const cosy_cosp = 1 - 2 * (y * y + z * z)
+  const yaw = Math.atan2(siny_cosp, cosy_cosp)
+  const toDeg = (r: number) => Math.round(r * (180 / Math.PI) * 100) / 100
+  return { yaw: toDeg(yaw), pitch: toDeg(pitch), roll: toDeg(roll) }
+}
+
+/**
  * WGS84 経緯度 → NuScenes メートル座標
  * backend/app/converters/geometry.py の wgs84_to_local と同じ変換（localToWgs84 の逆）
  * @returns [x, y]（ローカルメートル座標）

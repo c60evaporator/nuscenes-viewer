@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from './client'
-import type { Annotation } from '../types/annotation'
+import type { Annotation, Attribute, Visibility } from '../types/annotation'
 import type { PaginatedResponse } from '../types/common'
 
 export function useAnnotations(params?: { limit?: number; offset?: number }) {
@@ -18,6 +18,22 @@ export function useAnnotation(token: string | null) {
     queryKey: ['annotation', token],
     queryFn:  () => apiFetch<Annotation>(`/annotations/${token}`),
     enabled:  !!token,
+  })
+}
+
+export function useVisibilities() {
+  return useQuery({
+    queryKey: ['visibilities'],
+    queryFn:  () => apiFetch<Visibility[]>('/visibilities'),
+    staleTime: Infinity,
+  })
+}
+
+export function useAttributes() {
+  return useQuery({
+    queryKey: ['attributes'],
+    queryFn:  () => apiFetch<Attribute[]>('/attributes'),
+    staleTime: Infinity,
   })
 }
 

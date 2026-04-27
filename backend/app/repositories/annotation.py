@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.annotation import Attribute, Category, Instance, SampleAnnotation
+from app.models.annotation import Attribute, Category, Instance, SampleAnnotation, Visibility
 from app.models.scene import Sample
 from app.schemas.annotation import AnnotationUpdate
 
@@ -130,6 +130,14 @@ class AnnotationRepository:
 
     async def get_all_categories(self) -> list[Category]:
         result = await self.db.execute(select(Category).order_by(Category.name))
+        return list(result.scalars().all())
+
+    async def get_all_visibilities(self) -> list[Visibility]:
+        result = await self.db.execute(select(Visibility).order_by(Visibility.token))
+        return list(result.scalars().all())
+
+    async def get_all_attributes(self) -> list[Attribute]:
+        result = await self.db.execute(select(Attribute).order_by(Attribute.name))
         return list(result.scalars().all())
 
     async def update(

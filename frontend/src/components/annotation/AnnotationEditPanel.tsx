@@ -3,17 +3,12 @@ import { useCategories } from '@/api/categories'
 import { useInstances } from '@/api/instances'
 import { useSceneSamples } from '@/api/scenes'
 import { quaternionToEulerDeg } from '@/lib/coordinateUtils'
+import { useEditStore } from '@/store/editStore'
 import type { Annotation } from '@/types/annotation'
-
-type EditMode = 'view' | 'edit' | 'add'
 
 interface Props {
   annotation:             Annotation | null
   sceneToken:             string | null
-  editMode?:              EditMode
-  onCancel?:              () => void
-  fixedSampleToken?:      string | null
-  fixedInstanceToken?:    string | null
   allowedInstanceTokens?: Set<string> | null
 }
 
@@ -139,8 +134,7 @@ function ReadOnlyRow({ label, value }: { label: string; value?: string | null })
 // ── メインコンポーネント ────────────────────────────────────────────────────
 
 export default function AnnotationEditPanel({
-  annotation, sceneToken, editMode = 'view', onCancel,
-  fixedSampleToken, fixedInstanceToken, allowedInstanceTokens,
+  annotation, sceneToken, allowedInstanceTokens,
 }: Props) {
   const { data: visibilities = [] } = useVisibilities()
   const { data: attributes   = [] } = useAttributes()
@@ -149,22 +143,39 @@ export default function AnnotationEditPanel({
   const { data: instancesRes }      = useInstances({ sceneToken: sceneToken ?? undefined, limit: 500 })
   const instances = instancesRes?.items ?? []
 
-  const euler = annotation?.rotation && annotation.rotation.length === 4
-    ? quaternionToEulerDeg(annotation.rotation)
+  // editStore
+  const editMode          = useEditStore((s) => s.mode)
+  const editSession       = useEditStore((s) => s.session)
+  const currentAnnotation = useEditStore((s) => s.getCurrentAnnotation())
+  const isDirty           = useEditStore((s) => s.isDirty())
+  const endSession        = useEditStore((s) => s.endSession)
+
+  // session中はストア優先、それ以外はprops.annotation
+  const displayAnnotation = currentAnnotation ?? annotation
+
+  // sessionからの派生値
+  const fixedSampleToken     = editSession?.fixedSampleToken     ?? null
+  const fixedInstanceToken   = editSession?.fixedInstanceToken   ?? null
+  const isInstanceSelectable = editSession?.isInstanceSelectable ?? false
+
+  const euler = displayAnnotation?.rotation && displayAnnotation.rotation.length === 4
+    ? quaternionToEulerDeg(displayAnnotation.rotation)
     : null
 
   const fmt3 = (v: number | undefined) => (v !== undefined ? v.toFixed(3) : '')
-  const checkedAttrTokens = new Set((annotation?.attributes ?? []).map((a) => a.token))
+  const checkedAttrTokens = new Set((displayAnnotation?.attributes ?? []).map((a) => a.token))
 
   // ── 有効/無効の判定値 ─────────────────────────────────────────────────────
   const isEditing = editMode !== 'view'
   const isAdd     = editMode === 'add'
 
   // instance ドロップダウンの表示値・有効状態・選択肢
+  const instanceEnabled = isAdd && isInstanceSelectable
   const instanceSelectValue = isEditing
-    ? (fixedInstanceToken ?? '__new__')
-    : (annotation?.instance_token ?? '')
-  const instanceEnabled = isAdd && fixedInstanceToken === null
+    ? (instanceEnabled
+        ? (displayAnnotation?.instance_token === '' ? '__new__' : (displayAnnotation?.instance_token ?? '__new__'))
+        : (fixedInstanceToken ?? '__new__'))
+    : (displayAnnotation?.instance_token ?? '')
   const instanceOptions = (instanceEnabled && allowedInstanceTokens != null)
     ? instances.filter((i) => allowedInstanceTokens.has(i.token))
     : instances
@@ -175,13 +186,13 @@ export default function AnnotationEditPanel({
     ? (instances.find((i) => i.token === fixedInstanceToken) ?? null)
     : null
   const categorySelectValue = (!categoryEnabled && isEditing)
-    ? (fixedInstance?.category_token ?? annotation?.category_token ?? '')
-    : (annotation?.category_token ?? '')
+    ? (fixedInstance?.category_token ?? displayAnnotation?.category_token ?? '')
+    : (displayAnnotation?.category_token ?? '')
 
   // sample: 常に無効だが編集・追加モード時は固定値を表示
   const sampleSelectValue = isEditing
-    ? (fixedSampleToken ?? annotation?.sample_token ?? '')
-    : (annotation?.sample_token ?? '')
+    ? (fixedSampleToken ?? displayAnnotation?.sample_token ?? '')
+    : (displayAnnotation?.sample_token ?? '')
 
   const sampleLabel = (token: string) => {
     const s = samples.find((s) => s.token === token)
@@ -238,13 +249,13 @@ export default function AnnotationEditPanel({
       {/* ── translation / size / rotation ─────────────────────────────── */}
       <TripleInputRow
         label="translation"
-        vals={[fmt3(annotation?.translation[0]), fmt3(annotation?.translation[1]), fmt3(annotation?.translation[2])]}
+        vals={[fmt3(displayAnnotation?.translation[0]), fmt3(displayAnnotation?.translation[1]), fmt3(displayAnnotation?.translation[2])]}
         placeholders={['x', 'y', 'z']}
         enabled={isEditing}
       />
       <TripleInputRow
         label="size"
-        vals={[fmt3(annotation?.size[0]), fmt3(annotation?.size[1]), fmt3(annotation?.size[2])]}
+        vals={[fmt3(displayAnnotation?.size[0]), fmt3(displayAnnotation?.size[1]), fmt3(displayAnnotation?.size[2])]}
         placeholders={['W', 'L', 'H']}
         enabled={isEditing}
       />
@@ -260,7 +271,7 @@ export default function AnnotationEditPanel({
         <span style={LABEL}>visibility</span>
         <select
           disabled={!isEditing}
-          value={annotation?.visibility_token ?? ''}
+          value={displayAnnotation?.visibility_token ?? ''}
           style={selectFor(isEditing)}
           onChange={() => {}}
         >
@@ -360,27 +371,31 @@ export default function AnnotationEditPanel({
 
       {/* ── 読み取り専用フィールド ─────────────────────────────────────── */}
       <div style={{ borderTop: '1px solid #374151', marginTop: '6px', paddingTop: '6px' }}>
-        <ReadOnlyRow label="token"          value={annotation?.token} />
-        <ReadOnlyRow label="prev"           value={annotation?.prev} />
-        <ReadOnlyRow label="next"           value={annotation?.next} />
-        <ReadOnlyRow label="lidar_pts"  value={annotation?.num_lidar_pts?.toString()} />
-        <ReadOnlyRow label="radar_pts"  value={annotation?.num_radar_pts?.toString()} />
+        <ReadOnlyRow label="token"      value={displayAnnotation?.token} />
+        <ReadOnlyRow label="prev"       value={displayAnnotation?.prev} />
+        <ReadOnlyRow label="next"       value={displayAnnotation?.next} />
+        <ReadOnlyRow label="lidar_pts"  value={displayAnnotation?.num_lidar_pts?.toString()} />
+        <ReadOnlyRow label="radar_pts"  value={displayAnnotation?.num_radar_pts?.toString()} />
       </div>
 
-      {/* ── Register ボタン ───────────────────────────────────────────── */}
+      {/* ── Save BBox ボタン ──────────────────────────────────────────── */}
       <button
-        disabled
+        disabled={!isDirty}
         style={{
           width:         '100%',
           padding:       '8px',
           marginTop:     '10px',
-          background:    '#374151',
-          color:         '#6B7280',
+          background:    isDirty ? '#4A90D9' : '#374151',
+          color:         isDirty ? '#FFFFFF' : '#6B7280',
           border:        'none',
           borderRadius:  '4px',
-          cursor:        'not-allowed',
+          cursor:        isDirty ? 'pointer' : 'not-allowed',
           fontSize:      '13px',
           fontWeight:    'bold',
+        }}
+        onClick={() => {
+          // Step 5以降で実装
+          console.log('[Save BBox] not implemented yet', currentAnnotation)
         }}
       >
         Save BBox
@@ -388,11 +403,11 @@ export default function AnnotationEditPanel({
 
       {/* ── Cancel Edit ボタン ─────────────────────────────────────────── */}
       {(() => {
-        const active = editMode !== 'view'
+        const active = isEditing
         return (
           <button
             disabled={!active}
-            onClick={active ? onCancel : undefined}
+            onClick={active ? endSession : undefined}
             style={{
               width:         '100%',
               padding:       '8px',

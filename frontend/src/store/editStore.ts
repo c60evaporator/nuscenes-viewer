@@ -60,7 +60,7 @@ export const useEditStore = create<EditStoreState>((set, get) => ({
   },
 
   startAddSession: ({ template, fixedSampleToken, fixedInstanceToken, isInstanceSelectable }) => {
-    const tempToken = `temp-${crypto.randomUUID()}`
+    const tempToken = `temp-${randomHex(16)}`
     const initial: Annotation = {
       ...template,
       token:          tempToken,
@@ -170,6 +170,12 @@ export const useEditStore = create<EditStoreState>((set, get) => ({
   setActiveEditor: (editor) => set({ activeEditor: editor }),
 }))
 
+function randomHex(len: number): string {
+  const bytes = new Uint8Array(len)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 function deepEqualAnnotation(a: Annotation, b: Annotation): boolean {
   return (
     arrEq(a.translation, b.translation) &&
@@ -193,4 +199,9 @@ function attrTokensEq(a: { token: string }[], b: { token: string }[]): boolean {
   const sa = new Set(a.map(x => x.token))
   for (const x of b) if (!sa.has(x.token)) return false
   return true
+}
+
+// 開発環境のみ window に公開 (DevTools/手動テスト用)
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+    (window as unknown as { useEditStore: typeof useEditStore }).useEditStore = useEditStore
 }

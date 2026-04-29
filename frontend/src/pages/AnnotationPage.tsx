@@ -14,11 +14,10 @@ import { useInstanceAnnotations } from '@/api/instances'
 import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
+import { useEditStore } from '@/store/editStore'
 import type { CalibratedSensor } from '@/types/sensor'
 import type { Annotation, Instance } from '@/types/annotation'
 import type { TabId } from '@/components/layout/Header'
-
-type EditMode = 'view' | 'edit' | 'add'
 
 interface AnnotationPageProps {
   activeTab:   TabId
@@ -32,6 +31,14 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const lockedInstanceToken     = useNavigationStore((s) => s.lockedInstanceToken)
   const lockSource              = useNavigationStore((s) => s.lockSource)
 
+  // editStore
+  const editMode          = useEditStore((s) => s.mode)
+  const editSession       = useEditStore((s) => s.session)
+  const currentAnnotation = useEditStore((s) => s.getCurrentAnnotation())
+  const startEditSession  = useEditStore((s) => s.startEditSession)
+  const startAddSession   = useEditStore((s) => s.startAddSession)
+  const endSession        = useEditStore((s) => s.endSession)
+
   // フィルタ state
   const [selectedSceneToken,    setSelectedSceneToken]    = useState<string | null>(lockedSceneToken ?? null)
   const [selectedSampleToken,   setSelectedSampleToken]   = useState<string | null>(lockedSampleToken ?? null)
@@ -40,11 +47,6 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // リスト選択 state（左ペインのリストで選択した値）
   const [listSelectedSampleToken,   setListSelectedSampleToken]   = useState<string | null>(null)
   const [listSelectedInstanceToken, setListSelectedInstanceToken] = useState<string | null>(null)
-
-  // 編集モード state
-  const [editMode,            setEditMode]            = useState<EditMode>('view')
-  const [workingAnnotation,   setWorkingAnnotation]   = useState<Annotation | null>(null)
-  const [addTargetSampleToken, setAddTargetSampleToken] = useState<string | null>(null)
 
   // ロック判定
   const sceneTokenLocked    = !!lockedSceneToken
@@ -158,7 +160,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     : hasInstanceFilter ? 'sampleList'
     : 'empty'
 
-  // 選択中アノテーション（右ペイン表示用）
+  // 選択中アノテーション（右ペイン表示用、react-queryキャッシュから）
   const selectedAnnotation = useMemo(() => {
     if (hasSampleFilter && listSelectedInstanceToken) {
       return (sampleAnnotations ?? []).find(
@@ -187,31 +189,23 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     [samples, instanceSampleTokenSet],
   )
 
-  // Instance フィルタ変更時にリスト選択をリセット
+  // Sample フィルタ変更時にリスト選択と編集セッションをリセット
+  useEffect(() => {
+    setListSelectedInstanceToken(null)
+    endSession()
+  }, [effectiveSampleToken])
+
+  // Instance フィルタ変更時にリスト選択と編集セッションをリセット
   useEffect(() => {
     setListSelectedSampleToken(null)
     setListSelectedInstanceToken(null)
-  }, [effectiveInstanceToken])
-
-  // Sample フィルタ変更時にリスト選択をリセット
-  useEffect(() => {
-    setListSelectedInstanceToken(null)
-    setEditMode('view')
-    setWorkingAnnotation(null)
-    setAddTargetSampleToken(null)
-  }, [effectiveSampleToken])
-
-  // Instance フィルタ変更時にも編集モードをリセット
-  useEffect(() => {
-    setEditMode('view')
-    setWorkingAnnotation(null)
-    setAddTargetSampleToken(null)
+    endSession()
   }, [effectiveInstanceToken])
 
   // Viewer に渡す sampleToken / instanceToken
-  // add モード + instance フィルタ時は addTargetSampleToken（prev/next）を優先
-  const viewSampleToken = (editMode === 'add' && addTargetSampleToken)
-    ? addTargetSampleToken
+  // add モード + instance フィルタ時は editSession.fixedSampleToken（prev/next）を優先
+  const viewSampleToken = (editMode === 'add' && editSession?.fixedSampleToken)
+    ? editSession.fixedSampleToken
     : hasSampleFilter ? effectiveSampleToken : listSelectedSampleToken
   const viewInstanceToken = hasInstanceFilter ? effectiveInstanceToken : listSelectedInstanceToken
 
@@ -219,14 +213,12 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const handleBBoxClick = (instToken: string) => {
     if (hasInstanceFilter) return
     if (instToken !== listSelectedInstanceToken) {
-      setEditMode('view')
-      setWorkingAnnotation(null)
+      endSession()  // 別BBoxへ切り替え時はセッション終了
     }
     setListSelectedInstanceToken(instToken)
   }
 
   // ボタン有効/無効ルール
-  // bboxSelected: サンプルモード = BBox クリック済み、インスタンスモード = サンプル選択済み
   const bboxSelected = hasSampleFilter
     ? listSelectedInstanceToken !== null
     : hasInstanceFilter
@@ -285,14 +277,6 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     [instanceSummaries],
   )
 
-  // 右ペイン固定トークン（編集・追加モード時）
-  const fixedSampleToken = isEditing ? viewSampleToken : null
-  const fixedInstanceTokenForPanel: string | null = editMode === 'edit'
-    ? (viewInstanceToken ?? null)
-    : (editMode === 'add' && hasInstanceFilter)
-      ? (effectiveInstanceToken ?? null)
-      : null
-
   return (
     <MainLayout
       activeTab={activeTab}
@@ -329,7 +313,11 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   opacity:    canEditBBox ? 1 : 0.5,
                   minWidth:   '80px',
                 }}
-                onClick={() => { setEditMode('edit') }}
+                onClick={() => {
+                  if (selectedAnnotation) {
+                    startEditSession(selectedAnnotation)
+                  }
+                }}
               >
                 Edit BBox
               </button>
@@ -363,14 +351,28 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   onClick={() => {
                     const egoPose = egoPoses?.find((p) => p.sample_token === effectiveSampleToken)
                     const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
-                    setWorkingAnnotation({
-                      token: '__working__', instance_token: '__working__',
-                      sample_token: effectiveSampleToken ?? '',
-                      translation, rotation: [1, 0, 0, 0], size: [1.8, 4.6, 1.5],
-                      prev: null, next: null, num_lidar_pts: 0, num_radar_pts: 0,
-                      visibility_token: null, category_token: '', attributes: [], visibility: null,
+                    const template: Annotation = {
+                      token:            '',
+                      instance_token:   '',
+                      sample_token:     effectiveSampleToken ?? '',
+                      translation,
+                      rotation:         [1, 0, 0, 0],
+                      size:             [1.8, 4.6, 1.5],
+                      prev:             null,
+                      next:             null,
+                      num_lidar_pts:    0,
+                      num_radar_pts:    0,
+                      visibility_token: null,
+                      category_token:   '',
+                      attributes:       [],
+                      visibility:       null,
+                    }
+                    startAddSession({
+                      template,
+                      fixedSampleToken:     effectiveSampleToken ?? '',
+                      fixedInstanceToken:   null,
+                      isInstanceSelectable: true,
                     })
-                    setEditMode('add')
                     setListSelectedInstanceToken(null)
                     setListSelectedSampleToken(null)
                   }}
@@ -388,15 +390,28 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                     const targetToken = prevSampleToken!
                     const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
                     const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
-                    setWorkingAnnotation({
-                      token: '__working__', instance_token: '__working__',
-                      sample_token: targetToken,
-                      translation, rotation: [1, 0, 0, 0], size: [1.8, 4.6, 1.5],
-                      prev: null, next: null, num_lidar_pts: 0, num_radar_pts: 0,
-                      visibility_token: null, category_token: '', attributes: [], visibility: null,
+                    const template: Annotation = {
+                      token:            '',
+                      instance_token:   effectiveInstanceToken ?? '',
+                      sample_token:     targetToken,
+                      translation,
+                      rotation:         [1, 0, 0, 0],
+                      size:             [1.8, 4.6, 1.5],
+                      prev:             null,
+                      next:             null,
+                      num_lidar_pts:    0,
+                      num_radar_pts:    0,
+                      visibility_token: null,
+                      category_token:   '',
+                      attributes:       [],
+                      visibility:       null,
+                    }
+                    startAddSession({
+                      template,
+                      fixedSampleToken:     targetToken,
+                      fixedInstanceToken:   effectiveInstanceToken ?? null,
+                      isInstanceSelectable: false,
                     })
-                    setAddTargetSampleToken(targetToken)
-                    setEditMode('add')
                   }}
                 >
                   Add BBox to prev
@@ -412,15 +427,28 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                     const targetToken = nextSampleToken!
                     const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
                     const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
-                    setWorkingAnnotation({
-                      token: '__working__', instance_token: '__working__',
-                      sample_token: targetToken,
-                      translation, rotation: [1, 0, 0, 0], size: [1.8, 4.6, 1.5],
-                      prev: null, next: null, num_lidar_pts: 0, num_radar_pts: 0,
-                      visibility_token: null, category_token: '', attributes: [], visibility: null,
+                    const template: Annotation = {
+                      token:            '',
+                      instance_token:   effectiveInstanceToken ?? '',
+                      sample_token:     targetToken,
+                      translation,
+                      rotation:         [1, 0, 0, 0],
+                      size:             [1.8, 4.6, 1.5],
+                      prev:             null,
+                      next:             null,
+                      num_lidar_pts:    0,
+                      num_radar_pts:    0,
+                      visibility_token: null,
+                      category_token:   '',
+                      attributes:       [],
+                      visibility:       null,
+                    }
+                    startAddSession({
+                      template,
+                      fixedSampleToken:     targetToken,
+                      fixedInstanceToken:   effectiveInstanceToken ?? null,
+                      isInstanceSelectable: false,
                     })
-                    setAddTargetSampleToken(targetToken)
-                    setEditMode('add')
                   }}
                 >
                   Add BBox to next
@@ -469,19 +497,13 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
           <AnnotationEditPanel
             annotation={selectedAnnotation}
             sceneToken={selectedSceneToken}
-            editMode={editMode}
-            onCancel={() => {
-              setEditMode('view')
-              setWorkingAnnotation(null)
-              setAddTargetSampleToken(null)
-            }}
-            fixedSampleToken={fixedSampleToken}
-            fixedInstanceToken={fixedInstanceTokenForPanel}
             allowedInstanceTokens={allowedInstanceTokens}
           />
         </RightPane>
       }
     >
+      {/* NOTE: workingAnnotation の '__working__' 置換は過渡期のハック。
+          Step 3/4 で AnnotationViewer をストア駆動に書き換える際に解消する。 */}
       <AnnotationViewer
         sampleToken={viewSampleToken}
         instanceToken={viewInstanceToken}
@@ -494,7 +516,11 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
           : editMode === 'add' ? '__working__'
           : undefined
         }
-        workingAnnotation={editMode === 'add' ? workingAnnotation : null}
+        workingAnnotation={
+          editMode === 'add' && currentAnnotation
+            ? { ...currentAnnotation, token: '__working__', instance_token: '__working__' }
+            : null
+        }
       />
     </MainLayout>
   )

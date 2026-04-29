@@ -95,7 +95,7 @@ nuscenes-viewerのフロントエンド
 - 右側のペインに、左側のペインで選択したAnnotationの情報を表示（translation, rotation等のAPIのフィールド情報、およびカテゴリ名）
 
 ### 5. Map
-- `Map Selection`プルダウンメニューで選択したMapのアノテーション（Map Expansion）を表示する
+- `Map Selection`プルダウンメニューで選択したMapのアノテーション（Map expansion）を表示する
 - ポリゴンで表示するアノテーションは、drivable_area,road_segment,road_block,lane,lane_connector,carpark_area,stop_line,ped_crossing,walkway
 - ラインで表示するアノテーションは、road_divider,lane_divider
 - ポイントで表示するアノテーションはtraffic_light
@@ -107,7 +107,7 @@ nuscenes-viewerのフロントエンド
 - 右側のペインに、中央のメイン画面でクリックしたアノテーションの情報を表示（DBにおける各カラム情報＋ポリゴンなら面積。ラインなら長さ）
 
 ### 6. Sample&Map
-- `Map Selection`プルダウンメニューで選択したMapに紐づくSampleのセンサ画像（カメラまたはLiDARまたはRADER）上に、Mapのアノテーション（Map Expansion）を重ねて表示する
+- `Map Selection`プルダウンメニューで選択したMapに紐づくSampleのセンサ画像（カメラまたはLiDARまたはRADER）上に、Mapのアノテーション（Map expansion）を重ねて表示する
 - ポリゴン、ライン、ポイントで表示するアノテーションはMap画面と同じ
 - これらのアノテーションのポリゴン、ライン、ポイントは、クリックできるようにする
 - アノテーションの凡例はUIコンポーネントとして別に置く
@@ -173,9 +173,9 @@ Sample画面の点群・BBox等の可視性を管理する。
 - カメラ内部パラメータ（camera_intrinsic）を使って3D→2D投影する
 - 投影計算は src/lib/coordinateUtils.ts に集約する
 
-### Map Expansion描画（Map/Sample&Map画面）
+### Map expansion描画（Map/Sample&Map画面）
 - Deck.glのGeoJsonLayerを使用する
-- センサー画像上へのMap Expansionオーバーレイも
+- センサー画像上へのMap expansionオーバーレイも
   Deck.glのBitmapLayer（ベース画像）+ GeoJsonLayerで実現する
 
 ## Directory Structure

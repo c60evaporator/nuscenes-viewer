@@ -105,7 +105,7 @@ export default function SampleMapViewer({
 
       {/* 下 1/3 */}
       <div className="flex min-h-0" style={{ flex: '1 0 0' }}>
-        {/* 左: MapViewer（Map Expansion + Ego Pose） */}
+        {/* 左: MapViewer（Map expansion + Ego Pose） */}
         <div className="flex-1 min-w-0 overflow-hidden" style={{ borderRight: '1px solid #374151' }}>
           <MapViewer
             mapToken={mapToken}

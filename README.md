@@ -7,7 +7,7 @@
 
 <div align="center">
 
-English | 🇯🇵 [日本語版はこちら](docs/README_ja.md)
+**English** | 🇯🇵 [日本語版はこちら](docs/README_ja.md)
 
 </div>
 
@@ -24,12 +24,13 @@ nuscenes-viewer is an open source visualization and annotation tool for the nuSc
 - **Multi-faceted Annotation**
   Annotate using Konva 2D graphics, a Unity-like gizmo, GUI buttons, and keyboard shortcuts. Bounding boxes are displayed across camera images, BEV point clouds, and 3D point clouds simultaneously.
 
-- **Map Expansion Compatibility**
+- **Map expansion Compatibility**
   Visualize map features as interactive polygons and lines to instantly grasp the full structure of an HD map.
 
 ## Prerequisites
+
 - Docker & Docker Compose
-- nuScenes dataset ([license required]())
+- nuScenes dataset ([license required](https://www.nuscenes.org/nuscenes#download))
 - Chrome browser
 
 ## Getting Started
@@ -43,7 +44,7 @@ git clone https://github.com/c60evaporator/nuscenes-viewer.git
 
 Please place the nuScenes dataset or make a symbolic link as follows.
 
-If you want to download the nuScenes dataset from scratch, [see here]().
+If you want to download the nuScenes dataset from scratch, [see here](docs/nuscenes_download.md).
 
 ```
 root/
@@ -58,10 +59,10 @@ root/
         ├─ sweeps
         └─ maps
             :
-            └─ expansion <- Map Expansion
+            └─ expansion <- Map expansion
 ```
 
-Also you can specify another dataset path by `.env`.
+Also you can specify another dataset path by changing `NUSCENES_DATAROOT` variable in `.env`.
 
 ### 3. Configure environment variables
 
@@ -104,12 +105,14 @@ make prod
 
 ### 5. Migration and data import (Only first time)
 
+This app must load the nuScenes metadata to PostGIS DB before using it, so please run the following commands.
+
 ```bash
-# Migration
+# Migration (make sure the db container is launched in advance)
 make migrate
 # Import Mini dataset
 docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0-mini
-# Import Map Expansion
+# Import Map expansion
 docker compose exec api python scripts/import_nuscenes_map.py
 ```
 
@@ -124,10 +127,11 @@ Now you can open the app `http://localhost:3000` by Chrome browser. If you launc
 ## Usage
 ### Visualization
 ### Annotation (Bounding Box)
-### Annotation (Map Expansion)
+### Annotation (Map expansion)
 
 ## Roadmap
 
+- [ ] CAN bus expansion
 - [ ] AI-assisted annotation
     - [ ] Automated bounding box annotation by 3D object detection (e.g. BEVFormer, BEVFusion)
     - [ ] Validation for unmatched instances based on the location and the appearance

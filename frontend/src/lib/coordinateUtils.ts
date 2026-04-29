@@ -355,6 +355,26 @@ export function quaternionToEulerDeg(q: number[]): { yaw: number; pitch: number;
 }
 
 /**
+ * オイラー角 (degree, ZYX順: yaw=Z, pitch=Y, roll=X) → クォータニオン [w, x, y, z]
+ * quaternionToEulerDeg の逆変換
+ */
+export function eulerDegToQuaternion(yaw: number, pitch: number, roll: number): number[] {
+  const cy = Math.cos((yaw   * Math.PI / 180) / 2)
+  const sy = Math.sin((yaw   * Math.PI / 180) / 2)
+  const cp = Math.cos((pitch * Math.PI / 180) / 2)
+  const sp = Math.sin((pitch * Math.PI / 180) / 2)
+  const cr = Math.cos((roll  * Math.PI / 180) / 2)
+  const sr = Math.sin((roll  * Math.PI / 180) / 2)
+
+  return [
+    cy * cp * cr + sy * sp * sr,  // w
+    cy * cp * sr - sy * sp * cr,  // x
+    sy * cp * sr + cy * sp * cr,  // y
+    sy * cp * cr - cy * sp * sr,  // z
+  ]
+}
+
+/**
  * WGS84 経緯度 → NuScenes メートル座標
  * backend/app/converters/geometry.py の wgs84_to_local と同じ変換（localToWgs84 の逆）
  * @returns [x, y]（ローカルメートル座標）

@@ -13,9 +13,9 @@
 
 ## Demo
 
-<img src=docs/images/screenshot_sample.png>
+<img src=docs/images/screenshot_sample.png width=80%>
 
-<img src=docs/images/screenshot_samplemap.png>
+<img src=docs/images/screenshot_samplemap.png width=80%>
 
 ## Features
 

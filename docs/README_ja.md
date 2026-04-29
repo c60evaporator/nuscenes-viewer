@@ -13,9 +13,9 @@
 
 ## デモ
 
-<img src=images/screenshot_sample.png>
+<img src=images/screenshot_sample.png width=70%>
 
-<img src=images/screenshot_samplemap.png>
+<img src=images/screenshot_samplemap.png width=70%>
 
 ## 機能一覧
 

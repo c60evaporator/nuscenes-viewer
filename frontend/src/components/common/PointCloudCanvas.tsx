@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePointCloud } from '@/api/sensorData'
 import { useBasemap } from '@/api/maps'
-import { drawPointCloud, drawBBox2D, type BevViewParams } from '@/lib/canvasUtils'
+import { drawPointCloud, drawBBox2D, sensorToBevPixel, type BevViewParams } from '@/lib/canvasUtils'
 import { bboxCornersToGlobal, globalToSensor, globalToMapPixel, NUSCENES_MAP_META } from '@/lib/coordinateUtils'
+import EditingBBoxLayer from './EditingBBoxLayer'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -70,6 +71,14 @@ export default function PointCloudCanvas({
 
   const axesLimitMeters = 40
 
+  const viewParams = useMemo<BevViewParams>(() => ({
+    width:   canvasSize,
+    height:  canvasSize,
+    scale:   (canvasSize / (axesLimitMeters * 2)) * zoom,
+    offsetX: panOffset.x,
+    offsetY: panOffset.y,
+  }), [canvasSize, zoom, panOffset, axesLimitMeters])
+
   const { data, isLoading, isError } = usePointCloud(sampleDataToken, refSensorToken)
   const { data: bitmap } = useBasemap(location ?? null)
 
@@ -107,26 +116,18 @@ export default function PointCloudCanvas({
     const canvas = canvasRef.current
     if (!canvas || !data) return
 
-    const size = canvas.clientWidth || 400
-    canvas.width  = size
-    canvas.height = size
+    const { width, height } = viewParams
+    canvas.width  = width
+    canvas.height = height
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     // 黒背景
     ctx.fillStyle = '#111'
-    ctx.fillRect(0, 0, size, size)
+    ctx.fillRect(0, 0, width, height)
 
     const points = data.points
-
-    const viewParams: BevViewParams = {
-      width:   size,
-      height:  size,
-      scale:   (size / (axesLimitMeters * 2)) * zoom,
-      offsetX: panOffset.x,
-      offsetY: panOffset.y,
-    }
 
     // basemap 切り出し・回転描画（devkit の render_ego_centric_map() 相当）
     if (bitmap && egoPose && location) {
@@ -192,7 +193,7 @@ export default function PointCloudCanvas({
             rotCanvas,
             cropSize - effectivePx, cropSize - effectivePx,
             effectivePx * 2,        effectivePx * 2,
-            0, 0, size, size,
+            0, 0, width, height,
           )
           ctx.globalAlpha = 1.0
         }
@@ -200,8 +201,8 @@ export default function PointCloudCanvas({
     }
     // 点群描画（Y軸反転して地図の座標系に合わせる）
     ctx.save()
-    ctx.translate(0, size)   // Y軸の基点を下端に移動
-    ctx.scale(1, -1)         // Y軸反転
+    ctx.translate(0, height)   // Y軸の基点を下端に移動
+    ctx.scale(1, -1)           // Y軸反転
     drawPointCloud(ctx, points, viewParams, {
       pointSize: pointSize ?? 2,
       colorMode: 'intensity',
@@ -210,20 +211,11 @@ export default function PointCloudCanvas({
     // BBox 描画（egoPose と lidarCalibSensor が揃っている場合のみ）
     const newBBoxRects: BBoxRect[] = []
     if (annotations && egoPose && lidarCalibSensor) {
-      const { width, height, scale, offsetX, offsetY } = viewParams
-      const cx = width  / 2
-      const cy = height / 2
-
-      const toPixel = (x: number, y: number): [number, number] => [
-        cx + (y - offsetY) * scale,
-        cy - (x - offsetX) * scale,
-      ]
-
       for (const ann of annotations) {
         const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
         const corners2D = globalCorners.map((corner) => {
           const sensorPt = globalToSensor(corner, egoPose, lidarCalibSensor)
-          return toPixel(sensorPt[0], sensorPt[1])
+          return sensorToBevPixel(sensorPt[0], sensorPt[1], viewParams)
         }) as [number, number][]
 
         const allX = corners2D.map((c) => c[0])
@@ -246,7 +238,7 @@ export default function PointCloudCanvas({
     }
     ctx.restore()  // 点群、BBox 描画後に restore して点群描画の座標系を元に戻す
     bboxRectsRef.current = newBBoxRects
-  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, editingInstanceToken, location, pointSize, zoom, panOffset, axesLimitMeters])
+  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, editingInstanceToken, location, pointSize, viewParams])
 
   const hitTestBBox = useCallback((screenX: number, screenY: number): string | null => {
     const canvas = canvasRef.current
@@ -322,22 +314,29 @@ export default function PointCloudCanvas({
 
   return (
     <div ref={containerRef} className={className} style={containerStyle}>
-      <canvas
-        ref={canvasRef}
-        style={{
-          width:      canvasSize,
-          height:     canvasSize,
-          display:    'block',
-          background: '#111',
-          flexShrink: 0,
-          cursor,
-        }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onClick={handleClick}
-      />
+      <div style={{ position: 'relative', width: canvasSize, height: canvasSize, flexShrink: 0 }}>
+        <canvas
+          ref={canvasRef}
+          style={{
+            width:      canvasSize,
+            height:     canvasSize,
+            display:    'block',
+            background: '#111',
+            cursor,
+          }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onClick={handleClick}
+        />
+        <EditingBBoxLayer
+          size={canvasSize}
+          viewParams={viewParams}
+          egoPose={egoPose}
+          lidarCalibSensor={lidarCalibSensor}
+        />
+      </div>
     </div>
   )
 }

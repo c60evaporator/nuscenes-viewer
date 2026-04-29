@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { drawEgoPoses, drawBBox2D } from '@/lib/canvasUtils'
+import { drawEgoPoses, drawBBox2D, sensorToBevPixel } from '@/lib/canvasUtils'
+import type { BevViewParams } from '@/lib/canvasUtils'
 import type { EgoPosePoint } from '@/types/sensor'
 
 // Minimal CanvasRenderingContext2D mock
@@ -127,5 +128,34 @@ describe('drawBBox2D', () => {
   it('does not draw label when not provided', () => {
     drawBBox2D(ctx, makeCorners(), '#fff')
     expect(ctx.fillText).not.toHaveBeenCalled()
+  })
+})
+
+describe('sensorToBevPixel', () => {
+  const baseView: BevViewParams = {
+    width: 400, height: 400, scale: 5, offsetX: 0, offsetY: 0,
+  }
+
+  it('原点 (0, 0) は Canvas中央に変換される', () => {
+    expect(sensorToBevPixel(0, 0, baseView)).toEqual([200, 200])
+  })
+
+  it('sensor座標 x=10 (前方10m) は Canvas上方向 (py < 200)', () => {
+    const [, py] = sensorToBevPixel(10, 0, baseView)
+    expect(py).toBe(200 - 10 * 5)
+  })
+
+  it('sensor座標 y=10 (左10m) は Canvas右方向 (px > 200)', () => {
+    const [px] = sensorToBevPixel(0, 10, baseView)
+    expect(px).toBe(200 + 10 * 5)
+  })
+
+  it('zoomとpanOffsetが反映される', () => {
+    const view: BevViewParams = {
+      width: 400, height: 400, scale: 10, offsetX: 5, offsetY: 0,
+    }
+    // sensor x=5 (= offsetX) は中央に来るはず
+    const [, py] = sensorToBevPixel(5, 0, view)
+    expect(py).toBe(200)
   })
 })

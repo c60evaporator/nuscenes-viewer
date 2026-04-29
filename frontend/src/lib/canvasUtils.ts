@@ -132,6 +132,28 @@ export interface BevViewParams {
   offsetY: number   // 画面中心の y オフセット (m)
 }
 
+/**
+ * センサー座標 (x, y) を BEV Canvas の Y軸反転後ピクセル座標に変換する
+ * PointCloudCanvas 内の toPixel 関数と完全に同じ計算式
+ *
+ * @param sensorX  センサー座標系の x (前方が +)
+ * @param sensorY  センサー座標系の y (左が +)
+ * @param view     BEVビューパラメータ (zoom/pan反映済み)
+ * @returns        Canvas/Konva ピクセル座標 [px, py]
+ */
+export function sensorToBevPixel(
+  sensorX: number,
+  sensorY: number,
+  view:    BevViewParams,
+): [number, number] {
+  const cx = view.width  / 2
+  const cy = view.height / 2
+  return [
+    cx + (sensorY - view.offsetY) * view.scale,
+    cy - (sensorX - view.offsetX) * view.scale,
+  ]
+}
+
 export function drawPointCloud(
   ctx:        CanvasRenderingContext2D,
   points:     number[][],

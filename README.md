@@ -12,7 +12,10 @@
 </div>
 
 ## Demo
-<!-- GIF -->
+
+<img src=docs/images/screenshot_sample.png>
+
+<img src=docs/images/screenshot_samplemap.png>
 
 ## Features
 

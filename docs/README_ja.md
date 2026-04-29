@@ -49,7 +49,7 @@ git clone https://github.com/c60evaporator/nuscenes-viewer.git
 ### 2. nuScenesデータの配置
 
 以下のフォルダ構成で、nuScenesデータセットを設置するかシンボリックリンクを貼ってください。
-（nuScenesデータセットのダウンロード方法は、[こちらを参照してください](docs/nuscenes_download_ja.md)）。
+（nuScenesデータセットのダウンロード方法は、[こちらを参照してください](nuscenes_download_ja.md)）。
 
 ```
 root/

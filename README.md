@@ -14,7 +14,7 @@
 ## Demo
 
 ![Visualization demo](docs/images/demo_visualization.gif)
-![Annotation demo](docs/images/demo_annotation.gif)
+<!-- ![Annotation demo](docs/images/demo_annotation.gif) -->
 
 ## Features
 

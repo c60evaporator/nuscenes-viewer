@@ -64,15 +64,24 @@ export default function InstanceViewer({
     rotation:    lidarCalib.rotation,
   } : undefined
 
+  // クリックされたBBoxがあればその translation を、なければ currentAnnotation の translation を使う
+  const effectiveTranslation = useMemo(() => {
+    if (highlightAnnToken) {
+      const ann = (sampleAnnotations ?? []).find((a) => a.token === highlightAnnToken)
+      if (ann) return ann.translation
+    }
+    return currentAnnotation?.translation ?? null
+  }, [highlightAnnToken, sampleAnnotations, currentAnnotation])
+
   // フロント計算によるカメラランキング
   const rankedCameras = useMemo(() => {
-    if (!currentAnnotation || !currentEgoPose) return []
+    if (!effectiveTranslation || !currentEgoPose) return []
     return rankCamerasByScore(
-      currentAnnotation.translation,
+      effectiveTranslation,
       currentEgoPose,
       Object.values(calibSensorMap),
     )
-  }, [currentAnnotation, currentEgoPose, calibSensorMap])
+  }, [effectiveTranslation, currentEgoPose, calibSensorMap])
 
   const bestCameraSensor = rankedCameras[0]
 

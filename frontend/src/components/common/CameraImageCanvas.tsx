@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSensorImage } from '@/api/sensorData'
 import { project3DTo2D, bboxCornersToGlobal, projectMapCoordsToCamera } from '@/lib/coordinateUtils'
 import { drawBBox2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint, drawProjectedArrow, drawProjectedLabel } from '@/lib/canvasUtils'
@@ -7,6 +7,7 @@ import { MAP_PROJECTION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor } from '@/types/sensor'
 import type { GeoJSONFeatureCollection, GeoJSONMapFeature, MapLayer } from '@/types/map'
+import EditingBBoxCameraLayer from './EditingBBoxCameraLayer'
 
 // ── マップフィーチャー ヒットテスト ────────────────────────────────────────────
 
@@ -239,6 +240,11 @@ export default function CameraImageCanvas({
   const containerRef          = useRef<HTMLDivElement>(null)
   const imgCanvasRef          = useRef<HTMLCanvasElement>(null)
   const bboxCanvasRef         = useRef<HTMLCanvasElement>(null)
+  const [layout, setLayout]   = useState<{
+    displayW: number; displayH: number
+    offsetX:  number; offsetY:  number
+    scaleX:   number; scaleY:   number
+  } | null>(null)
   const bboxRectsRef          = useRef<BBoxRect[]>([])
   const projectedFeaturesRef  = useRef<ProjectedFeatureHit[]>([])
   const drawBBoxesRef         = useRef<(() => void) | null>(null)
@@ -293,16 +299,17 @@ export default function CameraImageCanvas({
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, displayW, displayH)
 
+    // 元画像座標 → bboxCanvas 座標へのスケール
+    const scaleX = displayW / naturalWidth
+    const scaleY = displayH / naturalHeight
+    setLayout({ displayW, displayH, offsetX, offsetY, scaleX, scaleY })
+
     if (!annotations || !egoPose || !calibratedSensor.camera_intrinsic) return
 
     const calibArray = {
       translation: calibratedSensor.translation,
       rotation:    calibratedSensor.rotation,
     }
-
-    // 元画像座標 → bboxCanvas 座標へのスケール
-    const scaleX = displayW / naturalWidth
-    const scaleY = displayH / naturalHeight
 
     const intrinsic = calibratedSensor.camera_intrinsic
     const newBBoxRects: BBoxRect[] = []
@@ -463,6 +470,13 @@ export default function CameraImageCanvas({
         ref={bboxCanvasRef}
         style={{ pointerEvents: 'none' }}
       />
+      {layout && (
+        <EditingBBoxCameraLayer
+          {...layout}
+          calibratedSensor={calibratedSensor}
+          egoPose={egoPose}
+        />
+      )}
     </div>
   )
 }

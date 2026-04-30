@@ -105,9 +105,9 @@ export default function AnnotationViewer({
 
   return (
     <div className="flex w-full h-full">
-      {/* 左列: カメラ × 2 + Map（各 1/3） */}
+      {/* 左列: カメラ + Map（各 1/2） */}
       <div className="flex-1 min-w-0 flex flex-col" style={{ borderRight: '1px solid #374151' }}>
-        {/* 1番目に映りの良いカメラ */}
+        {/* 最適カメラ */}
         <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900" style={{ borderBottom: '1px solid #374151' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
             {bestCameraSensor?.channel ?? 'CAMERA'}
@@ -126,14 +126,6 @@ export default function AnnotationViewer({
           ) : (
             <Placeholder text="No Camera" />
           )}
-        </div>
-
-        {/* 2番目のカメラスロット (Step 4 追加でカメラ表示は1枠のみに変更、レイアウト再編は別Step) */}
-        <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900" style={{ borderBottom: '1px solid #374151' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-            CAMERA 2
-          </div>
-          <Placeholder text="Camera 2 (removed)" />
         </div>
 
         {/* 地図（現在サンプルの ego pose） */}

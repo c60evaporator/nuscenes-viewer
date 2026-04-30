@@ -7,7 +7,7 @@
 // ── 内部ヘルパー ──────────────────────────────────────────────────────────────
 
 /** クォータニオン [w, x, y, z] → 3×3 回転行列 */
-function quatToRotMat(q: number[]): number[][] {
+export function quatToRotMat(q: number[]): number[][] {
   const [w, x, y, z] = q
   return [
     [1 - 2*(y*y + z*z),  2*(x*y - z*w),    2*(x*z + y*w)],
@@ -536,4 +536,48 @@ export function globalToSensor(
     [R_cs[0][2], R_cs[1][2], R_cs[2][2]],
   ]
   return matVecMul(R_cs_T, vecSub(p_ego, calibSensor.translation))
+}
+
+// ── BBox 編集ユーティリティ ───────────────────────────────────────────────────
+
+/**
+ * ego座標系のオフセットベクトルをグローバル座標系に変換する（純粋なベクトル回転のみ）
+ * ego_pose の translation は適用しない
+ */
+export function egoOffsetToGlobalOffset(
+  egoOffset: number[],
+  egoPose:   { rotation: number[] },
+): number[] {
+  const R = quatToRotMat(egoPose.rotation)
+  return [
+    R[0][0] * egoOffset[0] + R[0][1] * egoOffset[1] + R[0][2] * egoOffset[2],
+    R[1][0] * egoOffset[0] + R[1][1] * egoOffset[1] + R[1][2] * egoOffset[2],
+    R[2][0] * egoOffset[0] + R[2][1] * egoOffset[1] + R[2][2] * egoOffset[2],
+  ]
+}
+
+/**
+ * クォータニオンの積 q1 * q2 を計算する ([w, x, y, z] 形式)
+ * グローバル軸での回転を追加する場合は q_global * q_current の順で呼ぶ
+ */
+export function multiplyQuaternions(q1: number[], q2: number[]): number[] {
+  const [w1, x1, y1, z1] = q1
+  const [w2, x2, y2, z2] = q2
+  return [
+    w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+    w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+    w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+    w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+  ]
+}
+
+/**
+ * 軸角度からクォータニオンを生成する ([w, x, y, z] 形式)
+ * @param axis     回転軸 [x, y, z]（単位ベクトル）
+ * @param angleRad 回転角度（ラジアン、右手の法則）
+ */
+export function axisAngleToQuaternion(axis: number[], angleRad: number): number[] {
+  const half = angleRad / 2
+  const s    = Math.sin(half)
+  return [Math.cos(half), axis[0] * s, axis[1] * s, axis[2] * s]
 }

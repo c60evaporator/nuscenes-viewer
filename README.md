@@ -13,10 +13,6 @@
 
 ## Demo
 
-<img src=docs/images/screenshot_sample.png width=80%>
-
-<img src=docs/images/screenshot_samplemap.png width=80%>
-
 ![Visualization demo](docs/images/demo_visualization.gif)
 ![Annotation demo](docs/images/demo_annotation.gif)
 
@@ -27,11 +23,15 @@ nuscenes-viewer is an open source visualization and annotation tool for the nuSc
 - **User-friendly GUI**
   Browse and select scenes, samples, instances, and annotations from a clean interface, then visualize them with interactive images and bounding boxes.
 
+<img src=docs/images/screenshot_sample.png width=50%>
+
 - **Multi-faceted Annotation**
   Annotate using Konva 2D graphics, a Unity-like gizmo, GUI buttons, and keyboard shortcuts. Bounding boxes are displayed across camera images, BEV point clouds, and 3D point clouds simultaneously.
 
 - **Map expansion Compatibility**
   Visualize map features as interactive polygons and lines to instantly grasp the full structure of an HD map.
+
+<img src=docs/images/screenshot_samplemap.png width=50%>
 
 ## Prerequisites
 

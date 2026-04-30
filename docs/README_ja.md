@@ -13,9 +13,8 @@
 
 ## デモ
 
-<img src=images/screenshot_sample.png width=70%>
-
-<img src=images/screenshot_samplemap.png width=70%>
+![Visualization demo](docs/images/demo_visualization.gif)
+![Annotation demo](docs/images/demo_annotation.gif)
 
 ## 機能一覧
 
@@ -24,11 +23,15 @@ nuscenes-viewerは、オープンソースのnuScenesデータセット可視化
 - **ユーザーフレンドリーなUI**
   シーン、サンプル、インスタンス、アノテーションなど、nuScenesデータセットの各要素を直感的に選択し、インタラクティブに可視化できます。これにより多数のデータの全体像と、個々のデータの詳細両方を、効率的に把握することができます。
 
+<img src=docs/images/screenshot_sample.png width=40%>
+
 - **多角的なアノテーション**
   BEV LiDAR画像とKonva.jsによる2Dバウンディングボックス操作、3D点群とUnityライクなUIによる3Dバウンディングボックス編集、その他GUIボタンやキーボードを用いて、アノテーションを多角的に視覚化、編集することができます。
 
 - **Map expansion対応**
   nuScenes本体だけでなくMap expansion（HDマップ）も、インタラクティブなポリゴンとラインを用いて可視化する機能を持ちます。ただ2Dマップ上に表示するだけでなく、カメラ画像上に重ねて表示する機能も持ちます。これによりHDマップの全体像を効率よく把握することができます。
+
+<img src=docs/images/screenshot_samplemap.png width=40%>
 
 ## 前提条件
 

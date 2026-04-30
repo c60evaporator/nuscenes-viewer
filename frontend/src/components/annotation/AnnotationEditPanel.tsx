@@ -3,13 +3,21 @@ import { useCategories } from '@/api/categories'
 import { useInstances } from '@/api/instances'
 import { useSceneSamples } from '@/api/scenes'
 import { quaternionToEulerDeg } from '@/lib/coordinateUtils'
+import { useLongPressButton } from '@/hooks/useLongPressButton'
+import {
+    translateAnnotation,
+    rotateAnnotation,
+    resizeAnnotation,
+} from '@/lib/bboxEditOps'
 import { useEditStore } from '@/store/editStore'
 import type { Annotation } from '@/types/annotation'
+import type { EgoPosePoint } from '@/types/sensor'
 
 interface Props {
   annotation:             Annotation | null
   sceneToken:             string | null
   allowedInstanceTokens?: Set<string> | null
+  egoPose?:               EgoPosePoint | null
 }
 
 // ── スタイル定数 ────────────────────────────────────────────────────────────
@@ -89,11 +97,48 @@ const selectFor = (enabled: boolean): React.CSSProperties => ({
 
 const ctrlBtnFor = (enabled: boolean): React.CSSProperties => ({
   ...BTN,
-  color:  enabled ? '#D1D5DB' : BTN.color,
+  background: enabled ? '#2563EB' : BTN.background,
+  color:  enabled ? '#FFFFFF' : BTN.color,
   cursor: enabled ? 'pointer' : 'not-allowed',
 })
 
 // ── サブコンポーネント ───────────────────────────────────────────────────────
+
+function BBoxButtonRow({ children, last = false }: { children: React.ReactNode; last?: boolean }) {
+  return (
+    <div style={{
+      display:             'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)',
+      gap:                 '4px',
+      marginBottom:        last ? 0 : '4px',
+    }}>
+      {children}
+    </div>
+  )
+}
+
+function CtrlButton({
+  label, enabled, onTick, onRelease,
+}: {
+  label:     string
+  enabled:   boolean
+  onTick:    () => void
+  onRelease: () => void
+}) {
+  const press = useLongPressButton({
+    onTick:    enabled ? onTick    : () => {},
+    onRelease: enabled ? onRelease : () => {},
+  })
+  return (
+    <button
+      disabled={!enabled}
+      style={ctrlBtnFor(enabled)}
+      {...(enabled ? press : {})}
+    >
+      {label}
+    </button>
+  )
+}
 
 function TripleInputRow({ label, vals, placeholders, enabled = false }: {
   label:        string
@@ -134,7 +179,7 @@ function ReadOnlyRow({ label, value }: { label: string; value?: string | null })
 // ── メインコンポーネント ────────────────────────────────────────────────────
 
 export default function AnnotationEditPanel({
-  annotation, sceneToken, allowedInstanceTokens,
+  annotation, sceneToken, allowedInstanceTokens, egoPose,
 }: Props) {
   const { data: visibilities = [] } = useVisibilities()
   const { data: attributes   = [] } = useAttributes()
@@ -144,11 +189,13 @@ export default function AnnotationEditPanel({
   const instances = instancesRes?.items ?? []
 
   // editStore
-  const editMode          = useEditStore((s) => s.mode)
-  const editSession       = useEditStore((s) => s.session)
-  const currentAnnotation = useEditStore((s) => s.getCurrentAnnotation())
-  const isDirty           = useEditStore((s) => s.isDirty())
-  const endSession        = useEditStore((s) => s.endSession)
+  const editMode            = useEditStore((s) => s.mode)
+  const editSession         = useEditStore((s) => s.session)
+  const currentAnnotation   = useEditStore((s) => s.getCurrentAnnotation())
+  const isDirty             = useEditStore((s) => s.isDirty())
+  const endSession          = useEditStore((s) => s.endSession)
+  const updateSessionLive   = useEditStore((s) => s.updateSessionLive)
+  const commitChange        = useEditStore((s) => s.commitChange)
 
   // session中はストア優先、それ以外はprops.annotation
   const displayAnnotation = currentAnnotation ?? annotation
@@ -166,8 +213,9 @@ export default function AnnotationEditPanel({
   const checkedAttrTokens = new Set((displayAnnotation?.attributes ?? []).map((a) => a.token))
 
   // ── 有効/無効の判定値 ─────────────────────────────────────────────────────
-  const isEditing = editMode !== 'view'
-  const isAdd     = editMode === 'add'
+  const isEditing          = editMode !== 'view'
+  const isAdd              = editMode === 'add'
+  const ctrlButtonsEnabled = isEditing && currentAnnotation !== null && egoPose != null
 
   // instance ドロップダウンの表示値・有効状態・選択肢
   const instanceEnabled = isAdd && isInstanceSelectable
@@ -222,28 +270,54 @@ export default function AnnotationEditPanel({
         <div style={{ textAlign: 'center', fontSize: '11px', color: '#9CA3AF', marginBottom: '6px' }}>
           Bounding box ctrl
         </div>
-        {/* 回転ボタン行 + 並進ボタン行 */}
-        {[
-          ['↺', '▲', '↻'],
-          ['◄', '▼', '►'],
-        ].map((row, ri) => (
-          <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: '4px' }}>
-            {row.map((label) => (
-              <button key={label} disabled={!isEditing} style={ctrlBtnFor(isEditing)}>{label}</button>
-            ))}
-          </div>
-        ))}
-        {/* サイズボタン行 */}
-        {[
-          ['+W', '+L', '+H'],
-          ['−W', '−L', '−H'],
-        ].map((row, ri) => (
-          <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: ri === 0 ? '4px' : 0 }}>
-            {row.map((label) => (
-              <button key={label} disabled={!isEditing} style={ctrlBtnFor(isEditing)}>{label}</button>
-            ))}
-          </div>
-        ))}
+        {/* 1行目: ↺ ▲ ↻ */}
+        <BBoxButtonRow>
+          <CtrlButton label="↺" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ rotation: rotateAnnotation(currentAnnotation, false).rotation }) }}
+            onRelease={commitChange} />
+          <CtrlButton label="▲" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation || !egoPose) return; updateSessionLive({ translation: translateAnnotation(currentAnnotation, 'y+', egoPose).translation }) }}
+            onRelease={commitChange} />
+          <CtrlButton label="↻" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ rotation: rotateAnnotation(currentAnnotation, true).rotation }) }}
+            onRelease={commitChange} />
+        </BBoxButtonRow>
+        {/* 2行目: ◄ ▼ ► */}
+        <BBoxButtonRow>
+          <CtrlButton label="◄" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation || !egoPose) return; updateSessionLive({ translation: translateAnnotation(currentAnnotation, 'x-', egoPose).translation }) }}
+            onRelease={commitChange} />
+          <CtrlButton label="▼" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation || !egoPose) return; updateSessionLive({ translation: translateAnnotation(currentAnnotation, 'y-', egoPose).translation }) }}
+            onRelease={commitChange} />
+          <CtrlButton label="►" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation || !egoPose) return; updateSessionLive({ translation: translateAnnotation(currentAnnotation, 'x+', egoPose).translation }) }}
+            onRelease={commitChange} />
+        </BBoxButtonRow>
+        {/* 3行目: +W +L +H */}
+        <BBoxButtonRow>
+          <CtrlButton label="+W" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 0, +1).size }) }}
+            onRelease={commitChange} />
+          <CtrlButton label="+L" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 1, +1).size }) }}
+            onRelease={commitChange} />
+          <CtrlButton label="+H" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 2, +1).size }) }}
+            onRelease={commitChange} />
+        </BBoxButtonRow>
+        {/* 4行目: −W −L −H */}
+        <BBoxButtonRow last>
+          <CtrlButton label="−W" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 0, -1).size }) }}
+            onRelease={commitChange} />
+          <CtrlButton label="−L" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 1, -1).size }) }}
+            onRelease={commitChange} />
+          <CtrlButton label="−H" enabled={ctrlButtonsEnabled}
+            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 2, -1).size }) }}
+            onRelease={commitChange} />
+        </BBoxButtonRow>
       </div>
 
       {/* ── translation / size / rotation ─────────────────────────────── */}

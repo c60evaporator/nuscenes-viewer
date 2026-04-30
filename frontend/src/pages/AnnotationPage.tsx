@@ -264,6 +264,13 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // Ego Poses
   const { data: egoPoses } = useSceneEgoPoses(selectedSceneToken)
 
+  // 編集中BBoxに対応するego_pose（AnnotationEditPanel の並進ボタン用）
+  const editingEgoPose = useMemo(() => {
+    const st = editSession?.fixedSampleToken
+    if (!st || !egoPoses) return null
+    return egoPoses.find((p) => p.sample_token === st) ?? null
+  }, [editSession?.fixedSampleToken, egoPoses])
+
   // Case 3 用: InstanceSummary → Instance 型マッピング
   const instanceListItems = useMemo<Instance[]>(
     () => (instanceSummaries ?? []).map((is) => ({
@@ -498,6 +505,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
             annotation={selectedAnnotation}
             sceneToken={selectedSceneToken}
             allowedInstanceTokens={allowedInstanceTokens}
+            egoPose={editingEgoPose}
           />
         </RightPane>
       }

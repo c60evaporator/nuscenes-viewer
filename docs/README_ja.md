@@ -13,8 +13,8 @@
 
 ## デモ
 
-![Visualization demo](docs/images/demo_visualization.gif)
-![Annotation demo](docs/images/demo_annotation.gif)
+![Visualization demo](images/demo_visualization.gif)
+![Annotation demo](images/demo_annotation.gif)
 
 ## 機能一覧
 

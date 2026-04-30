@@ -303,7 +303,7 @@ export default function AnnotationEditPanel({
             onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 1, +1).size }) }}
             onRelease={commitChange} />
           <CtrlButton label="+H" enabled={ctrlButtonsEnabled}
-            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 2, +1).size }) }}
+            onTick={() => { if (!currentAnnotation) return; const r = resizeAnnotation(currentAnnotation, 2, +1); updateSessionLive({ size: r.size, translation: r.translation }) }}
             onRelease={commitChange} />
         </BBoxButtonRow>
         {/* 4行目: −W −L −H */}
@@ -315,7 +315,7 @@ export default function AnnotationEditPanel({
             onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 1, -1).size }) }}
             onRelease={commitChange} />
           <CtrlButton label="−H" enabled={ctrlButtonsEnabled}
-            onTick={() => { if (!currentAnnotation) return; updateSessionLive({ size: resizeAnnotation(currentAnnotation, 2, -1).size }) }}
+            onTick={() => { if (!currentAnnotation) return; const r = resizeAnnotation(currentAnnotation, 2, -1); updateSessionLive({ size: r.size, translation: r.translation }) }}
             onRelease={commitChange} />
         </BBoxButtonRow>
       </div>

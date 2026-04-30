@@ -102,20 +102,39 @@ describe('resizeAnnotation', () => {
         expect(resizeAnnotation(baseAnn, 1, +1).size[1]).toBeCloseTo(4.1, 5)
     })
 
-    it('+H で height が +0.1', () => {
-        expect(resizeAnnotation(baseAnn, 2, +1).size[2]).toBeCloseTo(1.6, 5)
+    it('+H で height が +0.1 かつ translation_z が +0.05 (下面固定)', () => {
+        const updated = resizeAnnotation(baseAnn, 2, +1)
+        expect(updated.size[2]).toBeCloseTo(1.6, 5)
+        expect(updated.translation[2]).toBeCloseTo(1.05, 5)
+        expect(updated.translation[0]).toBeCloseTo(baseAnn.translation[0], 5)
+        expect(updated.translation[1]).toBeCloseTo(baseAnn.translation[1], 5)
+    })
+
+    it('-H で height が -0.1 かつ translation_z が -0.05 (下面固定)', () => {
+        const updated = resizeAnnotation(baseAnn, 2, -1)
+        expect(updated.size[2]).toBeCloseTo(1.4, 5)
+        expect(updated.translation[2]).toBeCloseTo(0.95, 5)
+    })
+
+    it('-H でクランプ時は translation_z の移動量も実際の縮小量に追従', () => {
+        const tiny: Annotation = { ...baseAnn, size: [2, 4, 0.15] }
+        const updated = resizeAnnotation(tiny, 2, -1)
+        expect(updated.size[2]).toBeCloseTo(SIZE_MIN, 5)
+        // 実際の縮小量: 0.15 - 0.1 = 0.05 → translation_z -= 0.025
+        expect(updated.translation[2]).toBeCloseTo(1 - 0.025, 5)
     })
 
     it('-W で width が -0.1', () => {
         expect(resizeAnnotation(baseAnn, 0, -1).size[0]).toBeCloseTo(1.9, 5)
     })
 
-    it('縮小は SIZE_MIN でクランプ', () => {
+    it('縮小は SIZE_MIN でクランプ (W)', () => {
         const tiny: Annotation = { ...baseAnn, size: [0.15, 4, 1.5] }
         expect(resizeAnnotation(tiny, 0, -1).size[0]).toBeCloseTo(SIZE_MIN, 5)
     })
 
-    it('translation は変更されない (中心固定)', () => {
+    it('W/L の変更では translation は変わらない (中心固定)', () => {
         expect(resizeAnnotation(baseAnn, 0, +1).translation).toEqual(baseAnn.translation)
+        expect(resizeAnnotation(baseAnn, 1, +1).translation).toEqual(baseAnn.translation)
     })
 })

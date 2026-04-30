@@ -77,7 +77,12 @@ export default function InstanceViewer({
   const bestCameraSensor = rankedCameras[0]
 
   // Camera (1st best)
+  // rankCamerasByScore でチャンネルを選択し、calibrated_sensor_token で正確なキャリブを取得
+  // （calibSensorMap は token キーなので、サンプルデータに紐づく正確なセンサーを参照できる）
   const cameraBrief   = bestCameraSensor ? sampleDataMap?.[bestCameraSensor.channel] : undefined
+  const cameraCalib   = cameraBrief?.calibrated_sensor_token
+    ? calibSensorMap[cameraBrief.calibrated_sensor_token]
+    : undefined
   const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
 
   // highlightAnnToken → instance_token（canvas の highlightInstanceToken 用）
@@ -105,10 +110,10 @@ export default function InstanceViewer({
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
             {bestCameraSensor?.channel ?? 'CAMERA'}
           </div>
-          {bestCameraSensor && cameraBrief ? (
+          {bestCameraSensor && cameraBrief && cameraCalib ? (
             <CameraImageCanvas
               sampleDataToken={cameraBrief.token}
-              calibratedSensor={bestCameraSensor}
+              calibratedSensor={cameraCalib}
               egoPose={cameraEgoPose}
               annotations={sampleAnnotations ?? []}
               highlightInstanceToken={highlightInstanceToken}

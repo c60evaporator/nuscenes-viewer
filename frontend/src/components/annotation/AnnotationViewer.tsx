@@ -60,8 +60,11 @@ export default function AnnotationViewer({
     ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)) as EgoPosePoint | undefined
 
   // LiDAR
+  // calibSensorMap は token キーなので、sampleDataMap の calibrated_sensor_token で引く
   const lidarBrief = sampleDataMap?.['LIDAR_TOP']
-  const lidarCalib = calibSensorMap['LIDAR_TOP']
+  const lidarCalib = lidarBrief?.calibrated_sensor_token
+    ? calibSensorMap[lidarBrief.calibrated_sensor_token]
+    : undefined
   const lidarCalibArray = lidarCalib ? {
     translation: lidarCalib.translation,
     rotation:    lidarCalib.rotation,
@@ -80,7 +83,11 @@ export default function AnnotationViewer({
   const bestCameraSensor = rankedCameras[0]
 
   // Camera (1st best)
+  // チャンネル選択後、calibrated_sensor_token でサンプルに紐づく正確なキャリブを取得
   const cameraBrief   = bestCameraSensor ? sampleDataMap?.[bestCameraSensor.channel] : undefined
+  const cameraCalib   = cameraBrief?.calibrated_sensor_token
+    ? calibSensorMap[cameraBrief.calibrated_sensor_token]
+    : undefined
   const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
 
   const handleBBoxClick = (annToken: string) => {
@@ -105,10 +112,10 @@ export default function AnnotationViewer({
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
             {bestCameraSensor?.channel ?? 'CAMERA'}
           </div>
-          {bestCameraSensor && cameraBrief ? (
+          {bestCameraSensor && cameraBrief && cameraCalib ? (
             <CameraImageCanvas
               sampleDataToken={cameraBrief.token}
-              calibratedSensor={bestCameraSensor}
+              calibratedSensor={cameraCalib}
               egoPose={cameraEgoPose}
               annotations={sampleAnnotations}
               highlightInstanceToken={instanceToken ?? undefined}

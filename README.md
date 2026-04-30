@@ -17,6 +17,9 @@
 
 <img src=docs/images/screenshot_samplemap.png width=80%>
 
+![Visualization demo](docs/images/demo_visualization.gif)
+![Annotation demo](docs/images/demo_annotation.gif)
+
 ## Features
 
 nuscenes-viewer is an open source visualization and annotation tool for the nuScenes-formatted dataset.

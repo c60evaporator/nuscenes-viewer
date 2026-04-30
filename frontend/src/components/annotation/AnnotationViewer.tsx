@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import MapCanvas from '@/components/common/MapCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
 import { useSampleSensorData, useSampleAnnotations } from '@/api/samples'
-import { useInstanceBestCamera } from '@/api/instances'
+import { useEditStore } from '@/store/editStore'
+import { rankCamerasByScore } from '@/lib/cameraSelection'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 import type { Annotation } from '@/types/annotation'
 
@@ -42,8 +44,17 @@ export default function AnnotationViewer({
   const sampleAnnotations = workingAnnotation
     ? [...(sampleAnnotationsRaw ?? []), workingAnnotation]
     : (sampleAnnotationsRaw ?? [])
-  const { data: bestCamera }         = useInstanceBestCamera(instanceToken, sampleToken, 1)
-  const { data: secondBestCamera }   = useInstanceBestCamera(instanceToken, sampleToken, 2)
+
+  const currentAnnotation = useEditStore((s) => s.getCurrentAnnotation())
+
+  // 編集中BBox優先、なければ instanceToken 経由でリストから探す
+  const targetAnnotation = useMemo(() => {
+    if (currentAnnotation) return currentAnnotation
+    if (instanceToken) {
+      return (sampleAnnotationsRaw ?? []).find((a) => a.instance_token === instanceToken) ?? null
+    }
+    return null
+  }, [currentAnnotation, instanceToken, sampleAnnotationsRaw])
 
   const currentEgoPose = (sampleDataMap?.['LIDAR_TOP']?.ego_pose
     ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)) as EgoPosePoint | undefined
@@ -56,15 +67,21 @@ export default function AnnotationViewer({
     rotation:    lidarCalib.rotation,
   } : undefined
 
-  // Camera (1st best)
-  const cameraBrief   = bestCamera ? sampleDataMap?.[bestCamera.channel] : undefined
-  const cameraCalib   = bestCamera ? calibSensorMap[bestCamera.channel] : undefined
-  const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
+  // フロント計算によるカメラランキング
+  const rankedCameras = useMemo(() => {
+    if (!targetAnnotation || !currentEgoPose) return []
+    return rankCamerasByScore(
+      targetAnnotation.translation,
+      currentEgoPose,
+      Object.values(calibSensorMap),
+    )
+  }, [targetAnnotation, currentEgoPose, calibSensorMap])
 
-  // Camera (2nd best)
-  const camera2Brief   = secondBestCamera ? sampleDataMap?.[secondBestCamera.channel] : undefined
-  const camera2Calib   = secondBestCamera ? calibSensorMap[secondBestCamera.channel] : undefined
-  const camera2EgoPose = camera2Brief?.ego_pose ?? currentEgoPose
+  const bestCameraSensor = rankedCameras[0]
+
+  // Camera (1st best)
+  const cameraBrief   = bestCameraSensor ? sampleDataMap?.[bestCameraSensor.channel] : undefined
+  const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
 
   const handleBBoxClick = (annToken: string) => {
     const ann = (sampleAnnotations ?? []).find((a) => a.token === annToken)
@@ -86,12 +103,12 @@ export default function AnnotationViewer({
         {/* 1番目に映りの良いカメラ */}
         <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900" style={{ borderBottom: '1px solid #374151' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-            {bestCamera?.channel ?? 'CAMERA'}
+            {bestCameraSensor?.channel ?? 'CAMERA'}
           </div>
-          {bestCamera && cameraCalib ? (
+          {bestCameraSensor && cameraBrief ? (
             <CameraImageCanvas
-              sampleDataToken={bestCamera.sample_data_token}
-              calibratedSensor={cameraCalib}
+              sampleDataToken={cameraBrief.token}
+              calibratedSensor={bestCameraSensor}
               egoPose={cameraEgoPose}
               annotations={sampleAnnotations}
               highlightInstanceToken={instanceToken ?? undefined}
@@ -104,25 +121,12 @@ export default function AnnotationViewer({
           )}
         </div>
 
-        {/* 2番目に映りの良いカメラ */}
+        {/* 2番目のカメラスロット (Step 4 追加でカメラ表示は1枠のみに変更、レイアウト再編は別Step) */}
         <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900" style={{ borderBottom: '1px solid #374151' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-            {secondBestCamera?.channel ?? 'CAMERA 2'}
+            CAMERA 2
           </div>
-          {secondBestCamera && camera2Calib ? (
-            <CameraImageCanvas
-              sampleDataToken={secondBestCamera.sample_data_token}
-              calibratedSensor={camera2Calib}
-              egoPose={camera2EgoPose}
-              annotations={sampleAnnotations}
-              highlightInstanceToken={instanceToken ?? undefined}
-              editingInstanceToken={editingInstanceToken}
-              onBBoxClick={handleBBoxClick}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No Camera 2" />
-          )}
+          <Placeholder text="Camera 2 (removed)" />
         </div>
 
         {/* 地図（現在サンプルの ego pose） */}

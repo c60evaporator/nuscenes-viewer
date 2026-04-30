@@ -3,7 +3,7 @@ import MapCanvas from '@/components/common/MapCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
 import { useSampleSensorData, useSampleAnnotations } from '@/api/samples'
-import { useInstanceBestCamera } from '@/api/instances'
+import { rankCamerasByScore } from '@/lib/cameraSelection'
 import type { InstanceAnnotation } from '@/types/annotation'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 
@@ -40,7 +40,6 @@ export default function InstanceViewer({
 
   const { data: sampleDataMap }     = useSampleSensorData(sampleToken)
   const { data: sampleAnnotations } = useSampleAnnotations(sampleToken)
-  const { data: bestCamera }        = useInstanceBestCamera(instanceToken, sampleToken, 1)
 
   // 現在サンプルの ego pose（devkit 準拠: LIDAR_TOP の ego_pose を優先）
   const currentEgoPose = (sampleDataMap?.['LIDAR_TOP']?.ego_pose
@@ -65,11 +64,20 @@ export default function InstanceViewer({
     rotation:    lidarCalib.rotation,
   } : undefined
 
+  // フロント計算によるカメラランキング
+  const rankedCameras = useMemo(() => {
+    if (!currentAnnotation || !currentEgoPose) return []
+    return rankCamerasByScore(
+      currentAnnotation.translation,
+      currentEgoPose,
+      Object.values(calibSensorMap),
+    )
+  }, [currentAnnotation, currentEgoPose, calibSensorMap])
+
+  const bestCameraSensor = rankedCameras[0]
+
   // Camera (1st best)
-  const cameraBrief   = bestCamera ? sampleDataMap?.[bestCamera.channel] : undefined
-  const cameraCalib   = cameraBrief?.calibrated_sensor_token
-    ? calibSensorMap[cameraBrief.calibrated_sensor_token]
-    : undefined
+  const cameraBrief   = bestCameraSensor ? sampleDataMap?.[bestCameraSensor.channel] : undefined
   const cameraEgoPose = cameraBrief?.ego_pose ?? currentEgoPose
 
   // highlightAnnToken → instance_token（canvas の highlightInstanceToken 用）
@@ -95,12 +103,12 @@ export default function InstanceViewer({
         {/* Camera (best) */}
         <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900" style={{ borderRight: '1px solid #374151' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-            {bestCamera?.channel ?? 'CAMERA'}
+            {bestCameraSensor?.channel ?? 'CAMERA'}
           </div>
-          {bestCamera && cameraCalib ? (
+          {bestCameraSensor && cameraBrief ? (
             <CameraImageCanvas
-              sampleDataToken={bestCamera.sample_data_token}
-              calibratedSensor={cameraCalib}
+              sampleDataToken={cameraBrief.token}
+              calibratedSensor={bestCameraSensor}
               egoPose={cameraEgoPose}
               annotations={sampleAnnotations ?? []}
               highlightInstanceToken={highlightInstanceToken}

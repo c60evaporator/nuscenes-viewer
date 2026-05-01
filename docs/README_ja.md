@@ -98,6 +98,8 @@ cp .env.example .env
 
 以下コマンドでコンテナを起動します。
 
+起動前に必要な初期化スクリプトの実行権限は、`make dev` と `make prod` の中で自動付与されます。
+
 dev（開発構成）の場合
 
 ```bash
@@ -108,6 +110,12 @@ production（製品向け構成）の場合
 
 ```bash
 make prod
+```
+
+Makefile を使わずに `docker compose up` を直接実行する場合は、先に以下を実行してください。
+
+```bash
+chmod +x db/initdb.d/*.sh
 ```
 
 ### 5. DBマイグレーションとnuScenesデータセットのインポート（初回起動時のみ）

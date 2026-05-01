@@ -97,6 +97,8 @@ cp .env.example .env
 
 Launch all containers
 
+Before startup, ensure init scripts are executable. This is handled automatically by `make dev` and `make prod`.
+
 For dev
 
 ```bash
@@ -107,6 +109,12 @@ For production
 
 ```bash
 make prod
+```
+
+If you run Docker Compose directly instead of Makefile, run this once before `docker compose up`:
+
+```bash
+chmod +x db/initdb.d/*.sh
 ```
 
 ### 5. Migration and data import (Only first time)

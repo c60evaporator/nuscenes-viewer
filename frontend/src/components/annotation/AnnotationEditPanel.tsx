@@ -1,13 +1,15 @@
+import { useState, useEffect, useRef } from 'react'
 import { useVisibilities, useAttributes } from '@/api/annotations'
 import { useCategories } from '@/api/categories'
 import { useInstances } from '@/api/instances'
 import { useSceneSamples } from '@/api/scenes'
-import { quaternionToEulerDeg } from '@/lib/coordinateUtils'
+import { quaternionToEulerDeg, eulerDegToQuaternion } from '@/lib/coordinateUtils'
 import { useLongPressButton } from '@/hooks/useLongPressButton'
 import {
     translateAnnotation,
     rotateAnnotation,
     resizeAnnotation,
+    SIZE_MIN,
 } from '@/lib/bboxEditOps'
 import { useEditStore } from '@/store/editStore'
 import type { Annotation } from '@/types/annotation'
@@ -140,11 +142,69 @@ function CtrlButton({
   )
 }
 
-function TripleInputRow({ label, vals, placeholders, enabled = false }: {
+interface EditableInputProps {
+  value:       number | undefined
+  placeholder: string
+  enabled:     boolean
+  onCommit:    (parsed: number) => void
+}
+
+function EditableInput({ value, placeholder, enabled, onCommit }: EditableInputProps) {
+  const fmt = (v: number | undefined) => (v !== undefined ? v.toFixed(3) : '')
+  const [localValue, setLocalValue] = useState(fmt(value))
+  const [isTyping,   setIsTyping]   = useState(false)
+  const inputRef     = useRef<HTMLInputElement>(null)
+  const cancelingRef = useRef(false)
+
+  useEffect(() => {
+    if (!isTyping) setLocalValue(fmt(value))
+  }, [value, isTyping])
+
+  const commit = () => {
+    if (cancelingRef.current) {
+      cancelingRef.current = false
+      return
+    }
+    const parsed = parseFloat(localValue)
+    if (Number.isFinite(parsed)) {
+      onCommit(parsed)
+    } else {
+      setLocalValue(fmt(value))
+    }
+    setIsTyping(false)
+  }
+
+  const cancel = () => {
+    cancelingRef.current = true
+    setLocalValue(fmt(value))
+    setIsTyping(false)
+    inputRef.current?.blur()
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      disabled={!enabled}
+      value={localValue}
+      placeholder={placeholder}
+      style={{ ...inputFor(enabled), textAlign: 'center' }}
+      onFocus={() => setIsTyping(true)}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter')  { e.preventDefault(); commit() }
+        if (e.key === 'Escape') { e.preventDefault(); cancel() }
+      }}
+      onBlur={commit}
+    />
+  )
+}
+
+function EditableTripleRow({ label, values, placeholders, enabled, onCommit }: {
   label:        string
-  vals:         (string | number)[]
+  values:       (number | undefined)[]
   placeholders: string[]
-  enabled?:     boolean
+  enabled:      boolean
+  onCommit:     (index: 0 | 1 | 2, parsed: number) => void
 }) {
   return (
     <div style={{ marginBottom: '5px' }}>
@@ -152,14 +212,13 @@ function TripleInputRow({ label, vals, placeholders, enabled = false }: {
         {label}
       </span>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px' }}>
-        {vals.map((v, i) => (
-          <input
+        {values.map((v, i) => (
+          <EditableInput
             key={i}
-            disabled={!enabled}
             value={v}
             placeholder={placeholders[i]}
-            style={{ ...inputFor(enabled), textAlign: 'center' }}
-            onChange={() => {}}
+            enabled={enabled}
+            onCommit={(parsed) => onCommit(i as 0 | 1 | 2, parsed)}
           />
         ))}
       </div>
@@ -216,6 +275,7 @@ export default function AnnotationEditPanel({
   const isEditing          = editMode !== 'view'
   const isAdd              = editMode === 'add'
   const ctrlButtonsEnabled = isEditing && currentAnnotation !== null && egoPose != null
+  const inputsEnabled      = isEditing && currentAnnotation !== null
 
   // instance ドロップダウンの表示値・有効状態・選択肢
   const instanceEnabled = isAdd && isInstanceSelectable
@@ -321,23 +381,47 @@ export default function AnnotationEditPanel({
       </div>
 
       {/* ── translation / size / rotation ─────────────────────────────── */}
-      <TripleInputRow
+      <EditableTripleRow
         label="translation"
-        vals={[fmt3(displayAnnotation?.translation[0]), fmt3(displayAnnotation?.translation[1]), fmt3(displayAnnotation?.translation[2])]}
+        values={[displayAnnotation?.translation[0], displayAnnotation?.translation[1], displayAnnotation?.translation[2]]}
         placeholders={['x', 'y', 'z']}
-        enabled={isEditing}
+        enabled={inputsEnabled}
+        onCommit={(index, parsed) => {
+          if (!currentAnnotation) return
+          const t = [...currentAnnotation.translation] as [number, number, number]
+          t[index] = parsed
+          updateSessionLive({ translation: t })
+          commitChange()
+        }}
       />
-      <TripleInputRow
+      <EditableTripleRow
         label="size"
-        vals={[fmt3(displayAnnotation?.size[0]), fmt3(displayAnnotation?.size[1]), fmt3(displayAnnotation?.size[2])]}
+        values={[displayAnnotation?.size[0], displayAnnotation?.size[1], displayAnnotation?.size[2]]}
         placeholders={['W', 'L', 'H']}
-        enabled={isEditing}
+        enabled={inputsEnabled}
+        onCommit={(index, parsed) => {
+          if (!currentAnnotation) return
+          const s = [...currentAnnotation.size] as [number, number, number]
+          s[index] = Math.max(SIZE_MIN, parsed)
+          updateSessionLive({ size: s })
+          commitChange()
+        }}
       />
-      <TripleInputRow
+      <EditableTripleRow
         label="rotation"
-        vals={[euler?.yaw ?? '', euler?.pitch ?? '', euler?.roll ?? '']}
+        values={[euler?.yaw, euler?.pitch, euler?.roll]}
         placeholders={['yaw', 'pitch', 'roll']}
-        enabled={isEditing}
+        enabled={inputsEnabled}
+        onCommit={(index, parsed) => {
+          if (!currentAnnotation) return
+          const cur = euler ?? { yaw: 0, pitch: 0, roll: 0 }
+          const e = { ...cur }
+          if (index === 0) e.yaw   = parsed
+          if (index === 1) e.pitch = parsed
+          if (index === 2) e.roll  = parsed
+          updateSessionLive({ rotation: eulerDegToQuaternion(e.yaw, e.pitch, e.roll) })
+          commitChange()
+        }}
       />
 
       {/* ── visibility ────────────────────────────────────────────────── */}

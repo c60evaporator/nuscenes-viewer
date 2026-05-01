@@ -13,7 +13,7 @@
 
 ## デモ
 
-![Visualization demo](images/demo_visualization.gif)
+<img src=images/demo_visualization.gif width=80%>
 <!-- ![Annotation demo](images/demo_annotation.gif) -->
 
 ## 機能一覧

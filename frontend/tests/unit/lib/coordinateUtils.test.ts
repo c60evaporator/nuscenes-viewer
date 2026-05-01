@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { project3DTo2D, egoPoseToPixel, bboxCornersToGlobal } from '@/lib/coordinateUtils'
+import { project3DTo2D, egoPoseToPixel, bboxCornersToGlobal, quaternionToEulerDeg, eulerDegToQuaternion } from '@/lib/coordinateUtils'
 
 // Identity ego pose and sensor: no rotation, no translation
 const IDENTITY_POSE = {
@@ -113,5 +113,41 @@ describe('bboxCornersToGlobal', () => {
     expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(l)  // x=前方=length
     expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(w)  // y=左右=width
     expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(h)
+  })
+})
+
+describe('quaternionToEulerDeg / eulerDegToQuaternion 往復変換', () => {
+  it('単位クォータニオン → euler (0,0,0) → 単位クォータニオン', () => {
+    const e = quaternionToEulerDeg([1, 0, 0, 0])
+    expect(e.yaw).toBeCloseTo(0, 5)
+    expect(e.pitch).toBeCloseTo(0, 5)
+    expect(e.roll).toBeCloseTo(0, 5)
+    const q2 = eulerDegToQuaternion(e.yaw, e.pitch, e.roll)
+    expect(q2[0]).toBeCloseTo(1, 5)
+    expect(q2[1]).toBeCloseTo(0, 5)
+    expect(q2[2]).toBeCloseTo(0, 5)
+    expect(q2[3]).toBeCloseTo(0, 5)
+  })
+
+  it('z軸まわり90度回転の往復', () => {
+    const q1 = [Math.cos(Math.PI / 4), 0, 0, Math.sin(Math.PI / 4)]
+    const e  = quaternionToEulerDeg(q1)
+    expect(e.yaw).toBeCloseTo(90, 3)
+    const q2 = eulerDegToQuaternion(e.yaw, e.pitch, e.roll)
+    expect(q2[0]).toBeCloseTo(q1[0], 5)
+    expect(q2[3]).toBeCloseTo(q1[3], 5)
+  })
+
+  it('複合回転の往復 (yaw=45, pitch=10, roll=5)', () => {
+    const q1 = eulerDegToQuaternion(45, 10, 5)
+    const e  = quaternionToEulerDeg(q1)
+    expect(e.yaw).toBeCloseTo(45, 2)
+    expect(e.pitch).toBeCloseTo(10, 2)
+    expect(e.roll).toBeCloseTo(5, 2)
+    const q2 = eulerDegToQuaternion(e.yaw, e.pitch, e.roll)
+    expect(q2[0]).toBeCloseTo(q1[0], 4)
+    expect(q2[1]).toBeCloseTo(q1[1], 4)
+    expect(q2[2]).toBeCloseTo(q1[2], 4)
+    expect(q2[3]).toBeCloseTo(q1[3], 4)
   })
 })

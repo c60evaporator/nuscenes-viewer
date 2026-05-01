@@ -20,12 +20,25 @@ export function drawEgoPoses(
   const toPixel = (t: number[]): [number, number] =>
     egoPoseToPixel(t, location, displaySize)
 
+  // basemapが大きいほどサイズを拡大補正（基準: 幅3000px想定）
+  const sizeScale = displaySize[0] / 3000
+
+  const dotRadius    = Math.round(4  * sizeScale)
+  const currentRadius= Math.round(8  * sizeScale)
+  const endRadius    = Math.round(6  * sizeScale)
+  const fontSize     = Math.round(14 * sizeScale)
+  const lineWidth    = Math.max(2 * sizeScale, 1)
+  const labelPadX    = Math.round(8  * sizeScale)
+  const labelOffsetX = Math.round(10 * sizeScale)
+
   ctx.save()
 
   // 軌跡ライン
   ctx.beginPath()
   ctx.strokeStyle = 'rgba(100, 160, 255, 0.6)'
-  ctx.lineWidth   = 1.5
+  ctx.lineWidth   = lineWidth
+  ctx.lineJoin    = 'round'
+  ctx.lineCap     = 'round'
   poses.forEach((pose, i) => {
     const [px, py] = toPixel(pose.translation)
     if (i === 0) ctx.moveTo(px, py)
@@ -40,24 +53,43 @@ export function drawEgoPoses(
     const isFirst   = i === 0
     const isLast    = i === poses.length - 1
 
+    const radius = isCurrent ? currentRadius : (isFirst || isLast) ? endRadius : dotRadius
+    const color  = isCurrent ? '#FF4444' : isFirst ? '#44FF88' : isLast ? '#FFAA44' : 'rgba(100, 160, 255, 0.8)'
+
     ctx.beginPath()
-    if (isCurrent) {
-      ctx.arc(px, py, 7, 0, Math.PI * 2)
-      ctx.fillStyle = '#FF4444'
-    } else if (isFirst || isLast) {
-      ctx.arc(px, py, 5, 0, Math.PI * 2)
-      ctx.fillStyle = isFirst ? '#44FF88' : '#FFAA44'
-    } else {
-      ctx.arc(px, py, 3, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(100, 160, 255, 0.8)'
-    }
+    ctx.arc(px, py, radius, 0, Math.PI * 2)
+    ctx.fillStyle = color
     ctx.fill()
 
-    // Start / End ラベル
+    // Start / End ラベル（背景付き角丸）
     if (showStartEnd && (isFirst || isLast)) {
-      ctx.font      = 'bold 11px sans-serif'
-      ctx.fillStyle = isFirst ? '#44FF88' : '#FFAA44'
-      ctx.fillText(isFirst ? 'Start' : 'End', px + 8, py + 4)
+      const label = isFirst ? 'Start' : 'End'
+      const lx    = px + labelOffsetX
+      const ly    = py
+
+      ctx.font = `500 ${fontSize}px system-ui, -apple-system, sans-serif`
+      const tw = ctx.measureText(label).width
+
+      // 背景
+      const bgX = lx - labelPadX / 2
+      const bgY = ly - fontSize * 0.75
+      const bgW = tw + labelPadX
+      const bgH = fontSize * 1.4
+
+      ctx.fillStyle = color
+      ctx.beginPath()
+      if (ctx.roundRect) {
+        ctx.roundRect(bgX, bgY, bgW, bgH, 4 * sizeScale)
+      } else {
+        ctx.rect(bgX, bgY, bgW, bgH)
+      }
+      ctx.fill()
+
+      // テキスト
+      ctx.fillStyle    = '#000000'
+      ctx.textAlign    = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(label, lx, ly)
     }
   })
 

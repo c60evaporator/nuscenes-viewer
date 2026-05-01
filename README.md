@@ -87,7 +87,7 @@ cp .env.example .env
 | `POSTGRES_APP_PASSWORD` | Password for `POSTGRES_APP_USER` | **Change this** |
 | `POSTGRES_DB` | Database name | `nusc_viewer` |
 | `PGADMIN_EMAIL` | pgAdmin login email (dev only) | `pgadmin@sample.com` |
-| `PGADMIN_PASSWORD` | pgAdmin login password (dev only) | `pgadmin` |
+| `PGADMIN_PASSWORD` | pgAdmin login password (dev only) | **Change this** |
 | `NUSCENES_DATAROOT` | Path to the nuScenes dataset on the host | `./data/nuscenes` |
 
 > **Note:** In production, set `NUSCENES_DATAROOT` to an absolute path.

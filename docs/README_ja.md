@@ -39,13 +39,6 @@ nuscenes-viewerは、オープンソースのnuScenesデータセット可視化
 - nuScenes dataset ([登録が必要](https://www.nuscenes.org/nuscenes#download))
 - Chromeブラウザ
 
-## DBのマイグレーション
-
-```bash
-docker compose up -d db
-docker compose run --rm migrations   # initial + add_indexes の2マイグレーションが適用される          
-```
-
 ## セットアップ
 ### 1. リポジトリのクローン
 
@@ -88,14 +81,14 @@ cp .env.example .env
 
 | Variable | Description | Default |
 |---|---|---|
-| `APP_ENV` | Runtime environment (`development` \| `production`) | `development` |
-| `POSTGRES_USER` | DB user with DDL permissions (for migrations) | `nusc_migrator` |
-| `POSTGRES_PASSWORD` | Password for `POSTGRES_USER` | **絶対に変更してください** |
-| `POSTGRES_APP_USER` | DB user for the API (limited permissions) | `nusc_app` |
-| `POSTGRES_APP_PASSWORD` | Password for `POSTGRES_APP_USER` | **絶対に変更してください** |
-| `POSTGRES_DB` | Database name | `nusc_viewer` |
-| `PGADMIN_EMAIL` | pgAdmin login email (dev only) | `pgadmin@sample.com` |
-| `PGADMIN_PASSWORD` | pgAdmin login password (dev only) | `pgadmin` |
+| `APP_ENV` | 環境選択 (`development` \| `production`) | `development` |
+| `POSTGRES_USER` | マイグレーション用のユーザー名（DDLパーミッションあり） | `nusc_migrator` |
+| `POSTGRES_PASSWORD` | `POSTGRES_USER`のパスワード | **絶対に変更してください** |
+| `POSTGRES_APP_USER` | API用のユーザー名（制限されたパーミッション） | `nusc_app` |
+| `POSTGRES_APP_PASSWORD` | `POSTGRES_APP_USER`のパスワード | **絶対に変更してください** |
+| `POSTGRES_DB` | PostGISのデータベース名 | `nusc_viewer` |
+| `PGADMIN_EMAIL` | pgAdminログイン用のemail (dev only) | `pgadmin@sample.com` |
+| `PGADMIN_PASSWORD` | pgAdminログイン用のpassword (dev only) | **変更してください** |
 | `NUSCENES_DATAROOT` | Path to the nuScenes dataset on the host | `./data/nuscenes` |
 
 > **Note:** In production, set `NUSCENES_DATAROOT` to an absolute path.
@@ -103,15 +96,15 @@ cp .env.example .env
 
 ### 4. 起動
 
-Launch all containers
+以下コマンドでコンテナを起動します。
 
-For dev
+dev（開発構成）の場合
 
 ```bash
 make dev
 ```
 
-For production
+production（製品向け構成）の場合
 
 ```bash
 make prod

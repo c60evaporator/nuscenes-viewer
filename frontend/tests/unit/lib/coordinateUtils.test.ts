@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { project3DTo2D, egoPoseToPixel, bboxCornersToGlobal, quaternionToEulerDeg, eulerDegToQuaternion } from '@/lib/coordinateUtils'
+import { project3DTo2D, egoPoseToPixel, bboxCornersToGlobal, quaternionToEulerDeg, eulerDegToQuaternion, globalToSensor, sensorToGlobal } from '@/lib/coordinateUtils'
 
 // Identity ego pose and sensor: no rotation, no translation
 const IDENTITY_POSE = {
@@ -149,5 +149,44 @@ describe('quaternionToEulerDeg / eulerDegToQuaternion 往復変換', () => {
     expect(q2[1]).toBeCloseTo(q1[1], 4)
     expect(q2[2]).toBeCloseTo(q1[2], 4)
     expect(q2[3]).toBeCloseTo(q1[3], 4)
+  })
+})
+
+describe('globalToSensor / sensorToGlobal 往復変換', () => {
+  const identity = { translation: [0, 0, 0], rotation: [1, 0, 0, 0] }
+  const egoPose = {
+    translation: [100, 200, 0],
+    rotation:    [Math.cos(Math.PI / 4), 0, 0, Math.sin(Math.PI / 4)],  // z軸90度
+  }
+  const calibSensor = {
+    translation: [1, 0, 1.5],
+    rotation:    [1, 0, 0, 0],
+  }
+
+  it('単位 egoPose + 単位 calibSensor での往復', () => {
+    const original = [10, 20, 1]
+    const sensor   = globalToSensor(original, identity, identity)
+    const global   = sensorToGlobal(sensor, identity, identity)
+    expect(global[0]).toBeCloseTo(original[0], 5)
+    expect(global[1]).toBeCloseTo(original[1], 5)
+    expect(global[2]).toBeCloseTo(original[2], 5)
+  })
+
+  it('複雑な ego/calib での往復', () => {
+    const original = [105, 210, 2]
+    const sensor   = globalToSensor(original, egoPose, calibSensor)
+    const global   = sensorToGlobal(sensor, egoPose, calibSensor)
+    expect(global[0]).toBeCloseTo(original[0], 5)
+    expect(global[1]).toBeCloseTo(original[1], 5)
+    expect(global[2]).toBeCloseTo(original[2], 5)
+  })
+
+  it('sensorToGlobal から globalToSensor の順でも往復が成立する', () => {
+    const sensorPt = [3, -2, 1]
+    const global   = sensorToGlobal(sensorPt, egoPose, calibSensor)
+    const back     = globalToSensor(global, egoPose, calibSensor)
+    expect(back[0]).toBeCloseTo(sensorPt[0], 5)
+    expect(back[1]).toBeCloseTo(sensorPt[1], 5)
+    expect(back[2]).toBeCloseTo(sensorPt[2], 5)
   })
 })

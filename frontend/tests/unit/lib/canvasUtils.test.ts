@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { drawEgoPoses, drawBBox2D, sensorToBevPixel } from '@/lib/canvasUtils'
+import { drawEgoPoses, drawBBox2D, sensorToBevPixel, bevPixelToSensor } from '@/lib/canvasUtils'
 import type { BevViewParams } from '@/lib/canvasUtils'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -157,5 +157,34 @@ describe('sensorToBevPixel', () => {
     // sensor x=5 (= offsetX) は中央に来るはず
     const [, py] = sensorToBevPixel(5, 0, view)
     expect(py).toBe(200)
+  })
+})
+
+describe('sensorToBevPixel と bevPixelToSensor の往復変換', () => {
+  const view: BevViewParams = { width: 400, height: 400, scale: 5, offsetX: 1, offsetY: 2 }
+
+  it('任意の sensor 座標 → ピクセル → sensor で元に戻る', () => {
+    const sx = 10, sy = -5
+    const [px, py] = sensorToBevPixel(sx, sy, view)
+    const [rx, ry] = bevPixelToSensor(px, py, view)
+    expect(rx).toBeCloseTo(sx, 5)
+    expect(ry).toBeCloseTo(sy, 5)
+  })
+
+  it('原点 (offsetX, offsetY) は画面中央にマップされ往復も正確', () => {
+    const [px, py] = sensorToBevPixel(view.offsetX, view.offsetY, view)
+    expect(px).toBeCloseTo(view.width / 2, 5)
+    expect(py).toBeCloseTo(view.height / 2, 5)
+    const [rx, ry] = bevPixelToSensor(px, py, view)
+    expect(rx).toBeCloseTo(view.offsetX, 5)
+    expect(ry).toBeCloseTo(view.offsetY, 5)
+  })
+
+  it('負の sensor 座標でも往復が正確', () => {
+    const sx = -8, sy = 3
+    const [px, py] = sensorToBevPixel(sx, sy, view)
+    const [rx, ry] = bevPixelToSensor(px, py, view)
+    expect(rx).toBeCloseTo(sx, 5)
+    expect(ry).toBeCloseTo(sy, 5)
   })
 })

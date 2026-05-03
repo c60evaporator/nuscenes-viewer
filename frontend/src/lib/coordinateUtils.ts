@@ -581,3 +581,32 @@ export function axisAngleToQuaternion(axis: number[], angleRad: number): number[
   const s    = Math.sin(half)
   return [Math.cos(half), axis[0] * s, axis[1] * s, axis[2] * s]
 }
+
+/**
+ * センサー座標系の点をグローバル座標系に変換する（globalToSensor の逆変換）
+ *
+ * @param sensorPoint センサー座標系の [x, y, z]
+ * @param egoPose     自車位置 { translation, rotation }
+ * @param calibSensor キャリブ済みセンサー { translation, rotation }
+ * @returns           グローバル座標系の [x, y, z]
+ */
+export function sensorToGlobal(
+  sensorPoint: number[],
+  egoPose:     { translation: number[]; rotation: number[] },
+  calibSensor: { translation: number[]; rotation: number[] },
+): number[] {
+  // sensor → ego: p_ego = R_cs * sensorPoint + calibSensor.translation
+  const R_cs = quatToRotMat(calibSensor.rotation)
+  const p_ego = [
+    R_cs[0][0]*sensorPoint[0] + R_cs[0][1]*sensorPoint[1] + R_cs[0][2]*sensorPoint[2] + calibSensor.translation[0],
+    R_cs[1][0]*sensorPoint[0] + R_cs[1][1]*sensorPoint[1] + R_cs[1][2]*sensorPoint[2] + calibSensor.translation[1],
+    R_cs[2][0]*sensorPoint[0] + R_cs[2][1]*sensorPoint[1] + R_cs[2][2]*sensorPoint[2] + calibSensor.translation[2],
+  ]
+  // ego → global: p_global = R_ego * p_ego + egoPose.translation
+  const R_ego = quatToRotMat(egoPose.rotation)
+  return [
+    R_ego[0][0]*p_ego[0] + R_ego[0][1]*p_ego[1] + R_ego[0][2]*p_ego[2] + egoPose.translation[0],
+    R_ego[1][0]*p_ego[0] + R_ego[1][1]*p_ego[1] + R_ego[1][2]*p_ego[2] + egoPose.translation[1],
+    R_ego[2][0]*p_ego[0] + R_ego[2][1]*p_ego[1] + R_ego[2][2]*p_ego[2] + egoPose.translation[2],
+  ]
+}

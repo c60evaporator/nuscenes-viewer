@@ -186,6 +186,28 @@ export function sensorToBevPixel(
   ]
 }
 
+/**
+ * BEV Layer-local ピクセル座標 → センサー座標系の (x, y) に逆変換する
+ * sensorToBevPixel の逆関数。Konva の node.position() 等の Layer-local 座標を入力する。
+ *
+ * @param konvaX Layer-local x 座標
+ * @param konvaY Layer-local y 座標 (Layer scaleY=-1 適用後)
+ * @param view   BEVビューパラメータ
+ * @returns      センサー座標系の [sensorX, sensorY] (m)
+ */
+export function bevPixelToSensor(
+  konvaX: number,
+  konvaY: number,
+  view:   BevViewParams,
+): [number, number] {
+  const cx = view.width  / 2
+  const cy = view.height / 2
+  return [
+    (cy - konvaY) / view.scale + view.offsetX,
+    (konvaX - cx) / view.scale + view.offsetY,
+  ]
+}
+
 export function drawPointCloud(
   ctx:        CanvasRenderingContext2D,
   points:     number[][],

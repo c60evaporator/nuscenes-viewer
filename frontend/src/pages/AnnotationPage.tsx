@@ -15,6 +15,7 @@ import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import { useEditStore } from '@/store/editStore'
+import { useEditKeyboardShortcuts } from '@/hooks/useEditKeyboardShortcuts'
 import type { CalibratedSensor } from '@/types/sensor'
 import type { Annotation, Instance } from '@/types/annotation'
 import type { TabId } from '@/components/layout/Header'
@@ -270,6 +271,9 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     if (!st || !egoPoses) return null
     return egoPoses.find((p) => p.sample_token === st) ?? null
   }, [editSession?.fixedSampleToken, egoPoses])
+
+  // キーボードショートカット
+  useEditKeyboardShortcuts({ egoPose: editingEgoPose })
 
   // Case 3 用: InstanceSummary → Instance 型マッピング
   const instanceListItems = useMemo<Instance[]>(

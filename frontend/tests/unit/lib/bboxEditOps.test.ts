@@ -138,3 +138,39 @@ describe('resizeAnnotation', () => {
         expect(resizeAnnotation(baseAnn, 1, +1).translation).toEqual(baseAnn.translation)
     })
 })
+
+describe('multiplier', () => {
+    it('translateAnnotation: multiplier=10 で10倍移動する', () => {
+        const updated = translateAnnotation(baseAnn, 'x+', identityEgo, 10)
+        expect(updated.translation[0]).toBeCloseTo(11, 5)
+    })
+
+    it('rotateAnnotation: multiplier=10 で10倍回転する', () => {
+        const updated = rotateAnnotation(baseAnn, false, 10)
+        expect(updated.rotation[0]).toBeCloseTo(Math.cos(25 * Math.PI / 180), 5)
+        expect(updated.rotation[3]).toBeCloseTo(Math.sin(25 * Math.PI / 180), 5)
+    })
+
+    it('resizeAnnotation: multiplier=10 で10倍サイズ変更する', () => {
+        const updated = resizeAnnotation(baseAnn, 0, +1, 10)
+        expect(updated.size[0]).toBeCloseTo(3.0, 5)
+    })
+
+    it('multiplier省略時は1倍 (デフォルト)', () => {
+        const a = translateAnnotation(baseAnn, 'x+', identityEgo)
+        const b = translateAnnotation(baseAnn, 'x+', identityEgo, 1)
+        expect(a.translation).toEqual(b.translation)
+    })
+})
+
+describe('z軸方向の並進', () => {
+    it('z+ で translation_z が +0.1', () => {
+        const updated = translateAnnotation(baseAnn, 'z+', identityEgo)
+        expect(updated.translation[2]).toBeCloseTo(1.1, 5)
+    })
+
+    it('z- で translation_z が -0.1', () => {
+        const updated = translateAnnotation(baseAnn, 'z-', identityEgo)
+        expect(updated.translation[2]).toBeCloseTo(0.9, 5)
+    })
+})

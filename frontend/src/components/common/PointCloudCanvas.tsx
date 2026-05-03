@@ -43,8 +43,9 @@ export default function PointCloudCanvas({
   refSensorToken,
   className,
 }: PointCloudCanvasProps) {
-  const canvasRef    = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const canvasRef          = useRef<HTMLCanvasElement>(null)
+  const containerRef       = useRef<HTMLDivElement>(null)
+  const innerContainerRef  = useRef<HTMLDivElement>(null)
   const bboxRectsRef = useRef<BBoxRect[]>([])
   const [canvasSize, setCanvasSize] = useState(400)
   const [zoom, setZoom]             = useState(1.0)
@@ -83,12 +84,16 @@ export default function PointCloudCanvas({
   const { data: bitmap } = useBasemap(location ?? null)
 
   // ホイールズーム（passive: false でスクロール防止）
+  // innerContainerRef にリスナーを付けることで、Konva Stageが上に乗っていても
+  // Konva canvasからbubbleしたwheelイベントを捕捉できる
   // data を依存配列に含めることで、データ取得後に canvas がマウントされた際にリスナーを再登録する
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const innerContainer = innerContainerRef.current
+    if (!innerContainer) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
+      const canvas = canvasRef.current
+      if (!canvas) return
       const ZOOM_FACTOR = e.deltaY < 0 ? 1.15 : 1 / 1.15
       const MIN_ZOOM = 0.2, MAX_ZOOM = 20
       setZoom((prev) => {
@@ -108,8 +113,8 @@ export default function PointCloudCanvas({
         return next
       })
     }
-    canvas.addEventListener('wheel', onWheel, { passive: false })
-    return () => canvas.removeEventListener('wheel', onWheel)
+    innerContainer.addEventListener('wheel', onWheel, { passive: false })
+    return () => innerContainer.removeEventListener('wheel', onWheel)
   }, [data, axesLimitMeters])
 
   useEffect(() => {
@@ -253,13 +258,14 @@ export default function PointCloudCanvas({
     return null
   }, [])
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (window.getComputedStyle(e.target as HTMLElement).cursor === 'move') return
     dragRef.current = { startX: e.clientX, startY: e.clientY,
                         startPanX: panOffset.x, startPanY: panOffset.y }
     setCursor('grabbing')
   }
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (dragRef.current) {
       const dx = e.clientX - dragRef.current.startX
       const dy = e.clientY - dragRef.current.startY
@@ -279,7 +285,7 @@ export default function PointCloudCanvas({
     setCursor('grab')
   }
 
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!onBBoxClick) return
     if (dragRef.current) return
     const token = hitTestBBox(e.clientX, e.clientY)
@@ -314,7 +320,15 @@ export default function PointCloudCanvas({
 
   return (
     <div ref={containerRef} className={className} style={containerStyle}>
-      <div style={{ position: 'relative', width: canvasSize, height: canvasSize, flexShrink: 0 }}>
+      <div
+        ref={innerContainerRef}
+        style={{ position: 'relative', width: canvasSize, height: canvasSize, flexShrink: 0, cursor }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onClick={handleClick}
+      >
         <canvas
           ref={canvasRef}
           style={{
@@ -322,13 +336,7 @@ export default function PointCloudCanvas({
             height:     canvasSize,
             display:    'block',
             background: '#111',
-            cursor,
           }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onClick={handleClick}
         />
         <EditingBBoxLayer
           size={canvasSize}

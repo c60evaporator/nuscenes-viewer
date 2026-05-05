@@ -6,11 +6,12 @@ from alembic import context
 
 # Import Base (re-exported from app.models to ensure all models are registered)
 from app.models import Base  # noqa: F401
+from app.core.config import settings
 
 config = context.config
 
 # Convert asyncpg URL to psycopg2 (Alembic uses synchronous driver)
-db_url = os.environ["DATABASE_URL"].replace(
+db_url = settings.DATABASE_URL.replace(
     "postgresql+asyncpg://", "postgresql+psycopg2://"
 )
 config.set_main_option("sqlalchemy.url", db_url)

@@ -149,6 +149,7 @@ Now you can open the app `http://localhost:3000` by Chrome browser. If you launc
 - [ ] AI-assisted annotation
     - [ ] Automated bounding box annotation by 3D object detection (e.g. BEVFormer, BEVFusion)
     - [ ] Validation for unmatched instances based on the location and the appearance
+    - [ ] Align bounding box bottom to the nearest bounding box
 - [ ] Inference and evaluation GUI for AI models
     - [ ] 3D object detection
     - [ ] Multiple object tracking (MOT)

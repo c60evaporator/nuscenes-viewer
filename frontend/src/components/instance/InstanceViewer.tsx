@@ -27,7 +27,6 @@ function Placeholder({ text }: { text: string }) {
 }
 
 export default function InstanceViewer({
-  instanceToken,
   currentAnnotation,
   allAnnotations,
   location,

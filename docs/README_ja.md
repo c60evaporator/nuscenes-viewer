@@ -147,6 +147,7 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 - [ ] アノテーションのAIアシスト機能
     - [ ] BEVFormer等の3D物体検出によるBBoxアノテーション提案
     - [ ] 同一インスタンスの他のBBoxと明らかに位置や見た目が異なるアノテーションを追加しようとしたときの警告機能（一度登録してしまうと修正が面倒なため）
+    - [ ] バウンディングボックスの底面を最寄りのバウンディングボックスに合わせる機能（高さ合わせが大変なため）
 - [ ] 各種AIモデルの推論可視化と性能評価GUI
     - [ ] Detection画面（3D object detection）
     - [ ] Tracking画面（Multiple object tracking: MOT）

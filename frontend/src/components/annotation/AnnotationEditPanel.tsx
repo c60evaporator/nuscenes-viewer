@@ -268,7 +268,6 @@ export default function AnnotationEditPanel({
     ? quaternionToEulerDeg(displayAnnotation.rotation)
     : null
 
-  const fmt3 = (v: number | undefined) => (v !== undefined ? v.toFixed(3) : '')
   const checkedAttrTokens = new Set((displayAnnotation?.attributes ?? []).map((a) => a.token))
 
   // ── 有効/無効の判定値 ─────────────────────────────────────────────────────

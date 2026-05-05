@@ -33,6 +33,23 @@ export default function SensorCell({
   const currentEgoPose = lidarBriefForEgo?.ego_pose
     ?? (sampleToken ? egoPoses.find((p) => p.sample_token === sampleToken) : undefined)
     ?? egoPoses[0]
+  const isEgoPosePoint = (
+    pose: EgoPosePoint | { translation: number[]; rotation: number[] } | undefined,
+  ): pose is EgoPosePoint => {
+    return !!pose
+      && typeof (pose as EgoPosePoint).sample_token === 'string'
+      && typeof (pose as EgoPosePoint).timestamp === 'number'
+  }
+  const pointCloudEgoPose = currentEgoPose
+    ? (isEgoPosePoint(currentEgoPose)
+        ? currentEgoPose
+        : {
+            sample_token: sampleToken ?? '',
+            timestamp: 0,
+            translation: currentEgoPose.translation,
+            rotation: currentEgoPose.rotation,
+          })
+    : undefined
 
   // カメラチャンネルの場合のみ、そのカメラ自身の ego_pose を取得
   const camBrief = channel.startsWith('CAM_') ? sampleDataMap[channel] : null
@@ -93,7 +110,7 @@ export default function SensorCell({
         <PointCloudCanvas
           sampleDataToken={brief.token}
           annotations={annotations}
-          egoPose={currentEgoPose}
+          egoPose={pointCloudEgoPose}
           lidarCalibSensor={isRadar ? lidarTopCalibArray : lidarCalibArray}
           refSensorToken={isRadar ? lidarCalibToken : null}
           location={location}

@@ -52,7 +52,7 @@ function computeBounds(
   return isFinite(west) ? [west, south, east, north] : null
 }
 
-export default function MapViewer({ mapToken, location, onFeatureClick, selectedFeature, selectedLayer, egoPoses, currentSampleToken }: MapViewerProps) {
+export default function MapViewer({ mapToken, location, onFeatureClick, selectedFeature, egoPoses, currentSampleToken }: MapViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const enabledLayers = useMapLayerStore((s) => s.enabledLayers)
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBasemap } from '@/api/maps'
 import { drawEgoPoses } from '@/lib/canvasUtils'
-import { egoPoseToPixel, NUSCENES_MAP_META } from '@/lib/coordinateUtils'
+import { egoPoseToPixel } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
 
 interface MapCanvasProps {

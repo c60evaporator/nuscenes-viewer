@@ -1,5 +1,6 @@
 // バックエンドの schemas/sensor.py と対応
 import type { GeoJSONPoint } from './common'
+import type { Point3D, Quaternion } from './common'
 
 // センサーの種類
 export type SensorModality = 'camera' | 'lidar' | 'radar'

@@ -81,6 +81,7 @@ cp .env.example .env
 | Variable | Description | Default |
 |---|---|---|
 | `APP_ENV` | Runtime environment (`development` \| `production`) | `development` |
+| `DEPLOY_ENV` | Deployment envirionment (`local` \| `aws`) | `local` |
 | `POSTGRES_USER` | DB user with DDL permissions (for migrations) | `nusc_migrator` |
 | `POSTGRES_PASSWORD` | Password for `POSTGRES_USER` | **Change this** |
 | `POSTGRES_APP_USER` | DB user for the API (limited permissions) | `nusc_app` |

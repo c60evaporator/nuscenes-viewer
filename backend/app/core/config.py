@@ -8,7 +8,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    NUSCENES_DATAROOT: str = "/data/nuscenes"
+    DEPLOY_ENV: str = "local"  # "local" or "aws"
+    S3_DATA_BUCKET: str = ""  # Only used for AWS deployments, can be left empty for local development
+    NUSCENES_DATAROOT: str = "/data/nuscenes"  # Only used for local development, ignored in AWS deployments
     CORS_ORIGINS: list[str] = ["*"]
     DB_ECHO: bool = False
     APP_CONFIG_PATH: str = "/app/config/settings.yml"

@@ -37,7 +37,6 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_APP_USER}  # Application user for FastAPI
       - POSTGRES_PASSWORD=${POSTGRES_APP_PASSWORD}
-      - ENV=${APP_ENV:-development}
       - PYTHONPATH=/app
     depends_on:
       db:

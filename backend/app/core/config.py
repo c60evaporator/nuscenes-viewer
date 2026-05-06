@@ -8,7 +8,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    ENV: str = "development"
     NUSCENES_DATAROOT: str = "/data/nuscenes"
     CORS_ORIGINS: list[str] = ["*"]
     DB_ECHO: bool = False

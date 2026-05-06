@@ -13,6 +13,7 @@ from app.dependencies import get_db
 from app.repositories.map import MapRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.map import GeoJSONFeatureCollection, MapLayer, MapMetaResponse
+from app.lib.storage import read_file
 
 router = APIRouter(tags=["maps"])
 
@@ -74,12 +75,15 @@ async def get_map_basemap(location: str):
     filename = _BASEMAP_FILENAMES.get(location)
     if filename is None:
         raise HTTPException(status_code=404, detail="Basemap not found")
-    path = Path(settings.NUSCENES_DATAROOT) / "maps" / filename
-    if not path.exists():
+
+    # Read the image data from storage (e.g., S3 or local filesystem)
+    try:
+        data = read_file(f"maps/{filename}")
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Basemap not found")
 
     Image.MAX_IMAGE_PIXELS = None  # trusted local files from NuScenes dataset
-    img = Image.open(path)
+    img = Image.open(io.BytesIO(data))
     img.thumbnail((4096, 4096), Image.LANCZOS)
 
     buf = io.BytesIO()

@@ -1,8 +1,9 @@
 from pathlib import Path
+import io
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.sensor import SensorConverter
@@ -15,6 +16,7 @@ from app.schemas.sensor import (
     EgoPoseResponse,
     SensorResponse,
 )
+from app.lib.storage import read_file
 
 _IMAGE_FORMATS = {"jpg", "jpeg", "png"}
 
@@ -112,11 +114,18 @@ async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="SampleData not found")
     if sd.fileformat.lower() not in _IMAGE_FORMATS:
         raise HTTPException(status_code=400, detail=f"Not an image: {sd.fileformat}")
-    path = Path(settings.NUSCENES_DATAROOT) / sd.filename
-    if not path.exists():
+
+    try:
+        data = read_file(sd.filename)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Image file not found")
+
     media_type = "image/png" if sd.fileformat.lower() == "png" else "image/jpeg"
-    return FileResponse(path, media_type=media_type)
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type=media_type,
+        headers={"Content-Length": str(len(data))}
+    )
 
 
 # ── SampleData pointcloud ─────────────────────────────────────────────────────
@@ -131,21 +140,23 @@ async def get_sensor_data_pointcloud(
     if not sd:
         raise HTTPException(status_code=404, detail="SampleData not found")
 
-    path = Path(settings.NUSCENES_DATAROOT) / sd.filename
-
     # ── LiDAR（.pcd.bin）──────────────────────────────────────────
     if sd.filename.endswith(".pcd.bin"):
-        if not path.exists():
+        try:
+            data = read_file(sd.filename)
+        except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Pointcloud file not found")
-        pts = np.fromfile(str(path), dtype=np.float32).reshape(-1, 5)
+        pts = np.frombuffer(data, dtype=np.float32).reshape(-1, 5)
         points = pts[:, :4].tolist()
         return {"points": points, "num_points": len(points)}
 
     # ── RADAR（.pcd）──────────────────────────────────────────────
     if sd.filename.endswith(".pcd") and sd.fileformat.lower() == "pcd":
-        if not path.exists():
+        try:
+            data = read_file(sd.filename)
+        except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Pointcloud file not found")
-        points = _parse_pcd(path)
+        points = _parse_pcd_bytes(data)  # ← bytes版に変更
         if ref_sensor_token and points:
             points = await _transform_to_ref_sensor(
                 points, sd.calibrated_sensor_token, ref_sensor_token, db,
@@ -195,11 +206,8 @@ async def _transform_to_ref_sensor(
     ]
 
 
-def _parse_pcd(path: Path) -> list[list[float]]:
-    """標準PCD形式（binary）をパースしてx,y,z,intensityのリストを返す"""
-    with open(path, "rb") as f:
-        content = f.read()
-
+def _parse_pcd_bytes(content: bytes) -> list[list[float]]:
+    """標準PCD形式（binary/ascii）をbytesからパースしてx,y,z,intensityのリストを返す"""
     # ヘッダーを行単位で読み、DATA行の直後からデータ開始
     header_lines = []
     pos = 0
@@ -215,8 +223,8 @@ def _parse_pcd(path: Path) -> list[list[float]]:
             data_type = line.split()[1]
             break
 
+    # 以降は元の_parse_pcdと同じ処理
     data_start = pos
-
     fields: list[str] = []
     size:   list[int] = []
     types:  list[str] = []
@@ -243,7 +251,7 @@ def _parse_pcd(path: Path) -> list[list[float]]:
             return {4: np.float32, 8: np.float64}.get(s, np.float32)
         elif t == "I":
             return {1: np.int8, 2: np.int16, 4: np.int32, 8: np.int64}.get(s, np.int32)
-        else:  # "U"
+        else: # U (unsigned int) or others
             return {1: np.uint8, 2: np.uint16, 4: np.uint32, 8: np.uint64}.get(s, np.uint32)
 
     dtypes = [get_dtype(s, t) for s, t in zip(size, types)]

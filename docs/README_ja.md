@@ -82,6 +82,7 @@ cp .env.example .env
 | Variable | Description | Default |
 |---|---|---|
 | `APP_ENV` | 環境選択 (`development` \| `production`) | `development` |
+| `DEPLOY_ENV` | デプロイ環境 (`local` \| `aws`) | `local` |
 | `POSTGRES_USER` | マイグレーション用のユーザー名（DDLパーミッションあり） | `nusc_migrator` |
 | `POSTGRES_PASSWORD` | `POSTGRES_USER`のパスワード | **絶対に変更してください** |
 | `POSTGRES_APP_USER` | API用のユーザー名（制限されたパーミッション） | `nusc_app` |
@@ -91,8 +92,9 @@ cp .env.example .env
 | `PGADMIN_PASSWORD` | pgAdminログイン用のpassword (dev only) | **変更してください** |
 | `NUSCENES_DATAROOT` | Path to the nuScenes dataset on the host | `./data/nuscenes` |
 
-> **Note:** In production, set `NUSCENES_DATAROOT` to an absolute path.
-> `PGADMIN_*` variables are only used in development (`docker-compose.yml`) and ignored in production.
+> `APP_ENV`が`production`のとき、`NUSCENES_DATAROOT`は絶対パスを指定してください
+> AWSデプロイ時は`NUSCENES_DATAROOT`は不要です
+> `APP_ENV`が`production`のとき、`PGADMIN_*`は使用されません
 
 ### 4. 起動
 

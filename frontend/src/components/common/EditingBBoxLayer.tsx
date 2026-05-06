@@ -1,11 +1,17 @@
-import { useRef } from 'react'
-import { Stage, Layer, Line } from 'react-konva'
+import { useEffect, useRef } from 'react'
+import { Stage, Layer, Rect, Transformer } from 'react-konva'
 import type Konva from 'konva'
 import { useEditStore } from '@/store/editStore'
-import { bboxCornersToGlobal, globalToSensor, sensorToGlobal } from '@/lib/coordinateUtils'
+import {
+    bboxCornersToGlobal,
+    globalToSensor,
+    sensorToGlobal,
+    multiplyQuaternions,
+    axisAngleToQuaternion,
+} from '@/lib/coordinateUtils'
 import { sensorToBevPixel, bevPixelToSensor, type BevViewParams } from '@/lib/canvasUtils'
+import { SIZE_MIN } from '@/lib/bboxEditOps'
 import type { EgoPosePoint } from '@/types/sensor'
-import type { Annotation } from '@/types/annotation'
 
 interface Props {
     size:             number
@@ -14,28 +20,15 @@ interface Props {
     lidarCalibSensor: { translation: number[]; rotation: number[] } | undefined
 }
 
-/** BBox 上面4頂点の Layer-local ピクセル座標を計算する */
-function computeTopCornersPx(
-    ann:              Annotation,
-    egoPose:          EgoPosePoint,
-    lidarCalibSensor: { translation: number[]; rotation: number[] },
-    viewParams:       BevViewParams,
-): [number, number][] {
-    const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
-    const sensorCorners = globalCorners.map((c) => globalToSensor(c, egoPose, lidarCalibSensor))
-    // 上面4頂点: 前右(0), 前左(1), 後左(5), 後右(4) — zs配列より上面は [0,1,4,5]
-    const top = [sensorCorners[0], sensorCorners[1], sensorCorners[5], sensorCorners[4]]
-    return top.map((c) => sensorToBevPixel(c[0], c[1], viewParams))
-}
-
 /**
- * BEV (LIDAR_TOP) 上に編集中BBoxを Konva で描画・ドラッグ操作するレイヤー
+ * BEV (LIDAR_TOP) 上に編集中BBoxを Konva の Rect + Transformer で表示・編集する
  *
  * - editStore.session が null なら何も描画しない
- * - 編集中BBoxの上面 (4隅) をオレンジ矩形枠で表示
- * - ドラッグで並進移動。ドラッグ中は Konva の position offset で表示、
- *   他ビューは updateSessionLive でリアルタイム同期
- * - 1ドラッグ = 1履歴ステップ (ドラッグ終了時に commitChange)
+ * - 上面の中心位置・サイズ (W,L)・yaw を Rect で表現
+ * - draggable で並進、Transformer でリサイズ・回転
+ * - 中心固定リサイズ (centeredScaling)
+ * - z, height は不変 (BEV平面操作)
+ * - 1操作 = 1履歴ステップ (操作終了時に commitChange)
  */
 export default function EditingBBoxLayer({
     size, viewParams, egoPose, lidarCalibSensor,
@@ -45,78 +38,170 @@ export default function EditingBBoxLayer({
     const updateSessionLive = useEditStore((s) => s.updateSessionLive)
     const commitChange      = useEditStore((s) => s.commitChange)
 
-    // ドラッグ中の表示凍結用: points を再計算しないようにする
-    const isDraggingRef           = useRef(false)
-    const frozenAnnotationRef     = useRef<Annotation | null>(null)
-    // ドラッグ開始時の BBox 中心 (Layer-local px)
-    const dragStartCenterPxRef    = useRef<{ x: number; y: number } | null>(null)
-    // ドラッグ開始時の sensor z 座標（BEV 操作中は z を維持する）
-    const dragStartSensorZRef     = useRef<number>(0)
+    const rectRef        = useRef<Konva.Rect>(null)
+    const transformerRef = useRef<Konva.Transformer>(null)
+
+    // 操作中の表示凍結
+    const isInteractingRef    = useRef(false)
+    const frozenAnnotationRef = useRef<typeof currentAnnotation>(null)
+
+    // 操作開始時の状態 (差分計算用)
+    const startSensorZRef             = useRef(0)
+    const transformStartScreenYawRef  = useRef(0)
+    const transformStartQuaternionRef = useRef<number[] | null>(null)
+    const transformStartSizeRef       = useRef<number[] | null>(null)
+
+    // Transformer を Rect にアタッチ (session 切替時に再アタッチ)
+    useEffect(() => {
+        if (rectRef.current && transformerRef.current) {
+            transformerRef.current.nodes([rectRef.current])
+            transformerRef.current.getLayer()?.batchDraw()
+        }
+    }, [session?.targetToken])
 
     if (!session || !currentAnnotation || !egoPose || !lidarCalibSensor) return null
 
-    // 表示用 annotation: ドラッグ中は凍結値を使い、Konva の position offset で動かす
-    const renderedAnnotation = (isDraggingRef.current && frozenAnnotationRef.current)
+    // 操作中は凍結値を使い、他ビューへの毎フレーム更新を避ける
+    const renderedAnnotation = (isInteractingRef.current && frozenAnnotationRef.current)
         ? frozenAnnotationRef.current
         : currentAnnotation
 
-    const topCornersPx = computeTopCornersPx(renderedAnnotation, egoPose, lidarCalibSensor, viewParams)
-    const points = topCornersPx.flat()
+    // ── BBox 上面のピクセル座標を計算 ──────────────────────────────────────────
+    const globalCorners = bboxCornersToGlobal(
+        renderedAnnotation.translation,
+        renderedAnnotation.rotation,
+        renderedAnnotation.size,
+    )
+    const sensorCorners = globalCorners.map((c) => globalToSensor(c, egoPose, lidarCalibSensor))
 
-    // ── ドラッグハンドラ ────────────────────────────────────────────────────────
+    // sensorToBevPixel は Canvas の ctx.translate(0,h);scale(1,-1) で使う座標を返す。
+    // Konva はY軸反転なし (screen Y-down) なので y = size - py で変換する。
+    const toBevKonva = (sX: number, sY: number): [number, number] => {
+        const [px, py] = sensorToBevPixel(sX, sY, viewParams)
+        return [px, size - py]
+    }
 
+    // 上面: [0]=前右, [1]=前左, [5]=後左, [4]=後右
+    const topPx: [number, number][] = [
+        toBevKonva(sensorCorners[0][0], sensorCorners[0][1]),  // 前右
+        toBevKonva(sensorCorners[1][0], sensorCorners[1][1]),  // 前左
+        toBevKonva(sensorCorners[5][0], sensorCorners[5][1]),  // 後左
+        toBevKonva(sensorCorners[4][0], sensorCorners[4][1]),  // 後右
+    ]
+
+    // 中心ピクセル (4隅の重心)
+    const centerX = (topPx[0][0] + topPx[1][0] + topPx[2][0] + topPx[3][0]) / 4
+    const centerY = (topPx[0][1] + topPx[1][1] + topPx[2][1] + topPx[3][1]) / 4
+
+    // 画面 yaw: 後面中心 → 前面中心 の方向 (Konva は時計回りが正)
+    const frontMidX = (topPx[0][0] + topPx[1][0]) / 2
+    const frontMidY = (topPx[0][1] + topPx[1][1]) / 2
+    const rearMidX  = (topPx[2][0] + topPx[3][0]) / 2
+    const rearMidY  = (topPx[2][1] + topPx[3][1]) / 2
+    // Konva Rect の rotation は local Y 軸 (height 方向) の向きで決まる。
+    // local Y のスクリーン方向 = (-sin R, cos R)。これが前後ベクトルと一致する R を求める。
+    // front-rear ベクトルの角度 = screenYawDeg として、R = screenYawDeg - 90° が正しい回転。
+    const screenYawDeg = Math.atan2(frontMidY - rearMidY, frontMidX - rearMidX) * 180 / Math.PI
+
+    // ピクセル単位サイズ
+    const widthPx  = renderedAnnotation.size[0] * viewParams.scale
+    const lengthPx = renderedAnnotation.size[1] * viewParams.scale
+
+    // ── ドラッグハンドラ (並進) ────────────────────────────────────────────────
     const handleDragStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
         e.cancelBubble = true
         e.evt?.stopPropagation?.()
 
-        isDraggingRef.current     = true
+        isInteractingRef.current    = true
         frozenAnnotationRef.current = currentAnnotation
 
-        // BBox 中心の Layer-local 座標 (4頂点の重心)
-        const cx = (topCornersPx[0][0] + topCornersPx[1][0] + topCornersPx[2][0] + topCornersPx[3][0]) / 4
-        const cy = (topCornersPx[0][1] + topCornersPx[1][1] + topCornersPx[2][1] + topCornersPx[3][1]) / 4
-        dragStartCenterPxRef.current = { x: cx, y: cy }
-
-        // ドラッグ中は z を変えないので開始時の sensor z を記録
         const startSensor = globalToSensor(currentAnnotation.translation, egoPose, lidarCalibSensor)
-        dragStartSensorZRef.current = startSensor[2]
+        startSensorZRef.current = startSensor[2]
     }
 
     const handleDragMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        const startCenter = dragStartCenterPxRef.current
-        if (!startCenter || !egoPose || !lidarCalibSensor) return
-
-        const node   = e.target as Konva.Line
-        const offset = node.position()   // Layer-local ドラッグオフセット
-
-        // 開始時中心 + オフセット = 現在の中心 (Layer-local)
-        const newCenterX = startCenter.x + offset.x
-        const newCenterY = startCenter.y + offset.y
-
-        // Layer-local → センサー座標 → グローバル座標
-        const [sensorX, sensorY] = bevPixelToSensor(newCenterX, newCenterY, viewParams)
+        const node = e.target as Konva.Rect
+        // node.x()/node.y() は Konva screen 座標 (Y-down)。bevPixelToSensor は
+        // Canvas user-space 座標 (Y-flip 前) を期待するので y を反転する。
+        const [sensorX, sensorY] = bevPixelToSensor(node.x(), size - node.y(), viewParams)
         const newGlobal = sensorToGlobal(
-            [sensorX, sensorY, dragStartSensorZRef.current],
+            [sensorX, sensorY, startSensorZRef.current],
             egoPose,
             lidarCalibSensor,
         )
-
         updateSessionLive({ translation: newGlobal })
     }
 
     const handleDragEnd = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        // 最終位置で確定
         handleDragMove(e)
         commitChange()
-
-        // Konva の position offset をリセット (次回描画で points から正しく再描画される)
-        const node = e.target as Konva.Line
-        node.position({ x: 0, y: 0 })
-
-        // 凍結解除
-        isDraggingRef.current       = false
+        isInteractingRef.current    = false
         frozenAnnotationRef.current = null
-        dragStartCenterPxRef.current = null
+        startSensorZRef.current     = 0
+    }
+
+    // ── Transform ハンドラ (リサイズ・回転) ───────────────────────────────────
+    const handleTransformStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        e.cancelBubble = true
+        e.evt?.stopPropagation?.()
+
+        isInteractingRef.current    = true
+        frozenAnnotationRef.current = currentAnnotation
+
+        const node = e.target as Konva.Rect
+        transformStartScreenYawRef.current  = node.rotation()
+        transformStartQuaternionRef.current = [...currentAnnotation.rotation]
+        transformStartSizeRef.current       = [...currentAnnotation.size]
+
+        const startSensor = globalToSensor(currentAnnotation.translation, egoPose, lidarCalibSensor)
+        startSensorZRef.current = startSensor[2]
+    }
+
+    const handleTransform = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        if (!transformStartQuaternionRef.current || !transformStartSizeRef.current) return
+
+        const node = e.target as Konva.Rect
+
+        // サイズ (px → m、スケール反映)
+        const newWidthM  = Math.max(SIZE_MIN, (node.width()  * node.scaleX())  / viewParams.scale)
+        const newLengthM = Math.max(SIZE_MIN, (node.height() * node.scaleY()) / viewParams.scale)
+
+        // 回転差分 → グローバル quaternion
+        // 画面の時計回り = BEV上の時計回り = グローバル z 軸負方向回転
+        const deltaYawRad = (node.rotation() - transformStartScreenYawRef.current) * Math.PI / 180
+        const qDelta      = axisAngleToQuaternion([0, 0, 1], -deltaYawRad)
+        const newQuaternion = multiplyQuaternions(qDelta, transformStartQuaternionRef.current)
+
+        // 中心 → グローバル translation (Konva screen Y → bevPixelToSensor 用に反転)
+        const [sensorX, sensorY] = bevPixelToSensor(node.x(), size - node.y(), viewParams)
+        const newGlobalTranslation = sensorToGlobal(
+            [sensorX, sensorY, startSensorZRef.current],
+            egoPose,
+            lidarCalibSensor,
+        )
+
+        updateSessionLive({
+            translation: newGlobalTranslation,
+            rotation:    newQuaternion,
+            size:        [newWidthM, newLengthM, transformStartSizeRef.current[2]],
+        })
+    }
+
+    const handleTransformEnd = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        handleTransform(e)
+        commitChange()
+
+        // scale をリセット (新サイズは width/height に直接反映済み)
+        const node = e.target as Konva.Rect
+        node.scaleX(1)
+        node.scaleY(1)
+
+        isInteractingRef.current            = false
+        frozenAnnotationRef.current         = null
+        transformStartScreenYawRef.current  = 0
+        transformStartQuaternionRef.current = null
+        transformStartSizeRef.current       = null
+        startSensorZRef.current             = 0
     }
 
     return (
@@ -125,17 +210,26 @@ export default function EditingBBoxLayer({
             height={size}
             style={{ position: 'absolute', top: 0, left: 0 }}
         >
-            {/* Y軸反転: PointCloudCanvas の ctx.translate(0,h) + scale(1,-1) と同等 */}
-            <Layer scaleY={-1} y={size}>
-                <Line
-                    points={points}
-                    closed={true}
+            <Layer>
+                <Rect
+                    ref={rectRef}
+                    x={centerX}
+                    y={centerY}
+                    width={widthPx}
+                    height={lengthPx}
+                    offsetX={widthPx / 2}
+                    offsetY={lengthPx / 2}
+                    rotation={screenYawDeg - 90}
                     stroke='#FF8C00'
                     strokeWidth={2}
+                    fill='transparent'
                     draggable={true}
                     onDragStart={handleDragStart}
                     onDragMove={handleDragMove}
                     onDragEnd={handleDragEnd}
+                    onTransformStart={handleTransformStart}
+                    onTransform={handleTransform}
+                    onTransformEnd={handleTransformEnd}
                     onMouseEnter={(e) => {
                         const stage = e.target.getStage()
                         if (stage) stage.container().style.cursor = 'move'
@@ -143,6 +237,30 @@ export default function EditingBBoxLayer({
                     onMouseLeave={(e) => {
                         const stage = e.target.getStage()
                         if (stage) stage.container().style.cursor = ''
+                    }}
+                />
+                <Transformer
+                    ref={transformerRef}
+                    rotateEnabled={true}
+                    centeredScaling={true}
+                    enabledAnchors={[
+                        'top-left', 'top-right',
+                        'bottom-left', 'bottom-right',
+                        'middle-left', 'middle-right',
+                        'top-center', 'bottom-center',
+                    ]}
+                    anchorFill='#FFFFFF'
+                    anchorStroke='#FF8C00'
+                    anchorSize={8}
+                    borderStroke='#FF8C00'
+                    borderDash={[4, 4]}
+                    keepRatio={false}
+                    rotateAnchorOffset={20}
+                    boundBoxFunc={(_, newBox) => {
+                        const minPx = SIZE_MIN * viewParams.scale
+                        if (newBox.width  < minPx) newBox.width  = minPx
+                        if (newBox.height < minPx) newBox.height = minPx
+                        return newBox
                     }}
                 />
             </Layer>

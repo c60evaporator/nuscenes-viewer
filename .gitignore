@@ -25,3 +25,4 @@ frontend/.vite/
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 frontend/.env.production
+.env.make

@@ -19,6 +19,8 @@ app = FastAPI(
     title="NuScenes Viewer API",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=None if settings.DEPLOY_ENV == "aws" else "/docs",
+    redoc_url=None if settings.DEPLOY_ENV == "aws" else "/redoc",
 )
 
 app.add_middleware(

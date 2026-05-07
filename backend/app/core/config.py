@@ -22,11 +22,13 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     @model_validator(mode="after")
     def build_database_url(self) -> "Settings":
+        ssl_suffix = "?ssl=require" if self.DEPLOY_ENV == "aws" else ""
         self.DATABASE_URL = (
             f"postgresql+asyncpg://"
             f"{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}"
             f"/{self.POSTGRES_DB}"
+            f"{ssl_suffix}"
         )
         return self
 

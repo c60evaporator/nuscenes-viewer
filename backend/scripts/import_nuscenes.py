@@ -3,6 +3,7 @@ import asyncio
 import logging
 
 from app.json_conversion.to_nusc_db import import_all
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,6 +16,6 @@ parser.add_argument("--dataset-version", default="v1.0-trainval")
 args = parser.parse_args()
 
 asyncio.run(import_all(
-    data_root="/data/nuscenes",
+    data_root=settings.NUSCENES_DATAROOT,
     version=args.dataset_version,
 ))

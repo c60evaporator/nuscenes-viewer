@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+import io
 
 from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -33,6 +34,7 @@ from app.models.annotation import (
 )
 from app.models.scene import Log, Sample, Scene
 from app.models.sensor import CalibratedSensor, EgoPose, SampleData, Sensor
+from app.lib.storage import read_file
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +42,18 @@ logger = logging.getLogger(__name__)
 # ── ヘルパー ──────────────────────────────────────────────────────────────────
 
 def _load(data_root: str, version: str, filename: str) -> list[dict]:
-    path = os.path.join(data_root, version, filename)
-    with open(path) as f:
-        return json.load(f)
+    """
+    ローカル環境: data_root/version/filename から読み込む
+    AWS環境:     S3の version/filename から読み込む
+    """
+    if settings.DEPLOY_ENV == "local":
+        path = os.path.join(data_root, version, filename)
+        with open(path) as f:
+            return json.load(f)
+    else:
+        key = f"{version}/{filename}"
+        data = read_file(key)
+        return json.load(io.BytesIO(data))
 
 
 _ASYNCPG_MAX_PARAMS = 32767

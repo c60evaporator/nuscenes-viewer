@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from app.json_conversion.to_map_db import import_all_maps
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,5 +11,5 @@ logging.basicConfig(
 )
 
 asyncio.run(import_all_maps(
-    data_root="/data/nuscenes",
+    data_root=settings.NUSCENES_DATAROOT,
 ))

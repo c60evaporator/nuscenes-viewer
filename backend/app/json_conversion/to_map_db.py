@@ -9,6 +9,7 @@ import os
 import time
 from math import cos, radians
 from uuid import UUID, uuid5, NAMESPACE_URL
+import io
 
 from geoalchemy2.shape import from_shape
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon
@@ -41,6 +42,7 @@ from app.models.map import (
     CarparkArea,
     TrafficLight,
 )
+from app.lib.storage import read_file
 
 logger = logging.getLogger(__name__)
 
@@ -571,11 +573,17 @@ async def import_map(
         NuScenes データルートディレクトリ。
     """
     t0 = time.perf_counter()
-    path = os.path.join(data_root, "maps", "expansion", f"{location}.json")
-    logger.info("[%s] Loading map: %s", location, path)
+    relative_path = f"maps/expansion/{location}.json"
+    logger.info("[%s] Loading map: %s", location, relative_path)
 
-    with open(path) as f:
-        raw = json.load(f)
+    if settings.DEPLOY_ENV == "local": # ローカル環境ではファイルシステムから直接読み込む（開発用）。本番環境ではストレージから読み込む。
+        path = os.path.join(data_root, "maps", "expansion", f"{location}.json")
+        with open(path) as f:
+            raw = json.load(f)
+    else: # 本番環境ではストレージから読み込む（S3 など）。ストレージアクセスは遅い可能性があるため、全データを一度に読み込んでから JSON パースする。
+        data = read_file(relative_path)
+        raw = json.load(io.BytesIO(data))
+
     logger.info("[%s] JSON loaded (%.1fs), validating schema...", location, time.perf_counter() - t0)
 
     data = MapExpansion.model_validate(raw)

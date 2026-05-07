@@ -46,6 +46,7 @@ export default function EditingBBoxLayer({
     const frozenAnnotationRef = useRef<typeof currentAnnotation>(null)
 
     // 操作開始時の状態 (差分計算用)
+    const startGlobalZRef             = useRef(0)
     const startSensorZRef             = useRef(0)
     const transformStartScreenYawRef  = useRef(0)
     const transformStartQuaternionRef = useRef<number[] | null>(null)
@@ -115,6 +116,7 @@ export default function EditingBBoxLayer({
         isInteractingRef.current    = true
         frozenAnnotationRef.current = currentAnnotation
 
+        startGlobalZRef.current = currentAnnotation.translation[2]
         const startSensor = globalToSensor(currentAnnotation.translation, egoPose, lidarCalibSensor)
         startSensorZRef.current = startSensor[2]
     }
@@ -129,7 +131,8 @@ export default function EditingBBoxLayer({
             egoPose,
             lidarCalibSensor,
         )
-        updateSessionLive({ translation: newGlobal })
+        // BEV操作はXY平面のみ。センサー傾きによるZ結合を防ぐため、global Z は固定する。
+        updateSessionLive({ translation: [newGlobal[0], newGlobal[1], startGlobalZRef.current] })
     }
 
     const handleDragEnd = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -137,6 +140,7 @@ export default function EditingBBoxLayer({
         commitChange()
         isInteractingRef.current    = false
         frozenAnnotationRef.current = null
+        startGlobalZRef.current     = 0
         startSensorZRef.current     = 0
     }
 
@@ -153,6 +157,7 @@ export default function EditingBBoxLayer({
         transformStartQuaternionRef.current = [...currentAnnotation.rotation]
         transformStartSizeRef.current       = [...currentAnnotation.size]
 
+        startGlobalZRef.current = currentAnnotation.translation[2]
         const startSensor = globalToSensor(currentAnnotation.translation, egoPose, lidarCalibSensor)
         startSensorZRef.current = startSensor[2]
     }
@@ -181,7 +186,8 @@ export default function EditingBBoxLayer({
         )
 
         updateSessionLive({
-            translation: newGlobalTranslation,
+            // BEV操作はXY平面のみ。センサー傾きによるZ結合を防ぐため、global Z は固定する。
+            translation: [newGlobalTranslation[0], newGlobalTranslation[1], startGlobalZRef.current],
             rotation:    newQuaternion,
             size:        [newWidthM, newLengthM, transformStartSizeRef.current[2]],
         })
@@ -201,6 +207,7 @@ export default function EditingBBoxLayer({
         transformStartScreenYawRef.current  = 0
         transformStartQuaternionRef.current = null
         transformStartSizeRef.current       = null
+        startGlobalZRef.current             = 0
         startSensorZRef.current             = 0
     }
 

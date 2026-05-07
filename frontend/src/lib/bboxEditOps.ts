@@ -33,13 +33,14 @@ export function translateAnnotation(
         DIRECTION_VECTORS[direction][1] * multiplier,
         DIRECTION_VECTORS[direction][2] * multiplier,
     ]
-    const globalOffset = egoOffsetToGlobalOffset(base, egoPose)
+    const globalOffset   = egoOffsetToGlobalOffset(base, egoPose)
+    const isHorizontal   = direction === 'x+' || direction === 'x-' || direction === 'y+' || direction === 'y-'
     return {
         ...ann,
         translation: [
             ann.translation[0] + globalOffset[0],
             ann.translation[1] + globalOffset[1],
-            ann.translation[2] + globalOffset[2],
+            isHorizontal ? ann.translation[2] : ann.translation[2] + base[2],
         ],
     }
 }

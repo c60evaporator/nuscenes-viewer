@@ -11,7 +11,7 @@ from app.schemas.sensor import SampleEgoPoseResponse
 router = APIRouter(prefix="/scenes", tags=["scenes"])
 
 
-@router.get("/", response_model=PaginatedResponse[SceneResponse])
+@router.get("", response_model=PaginatedResponse[SceneResponse])
 async def list_scenes(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),

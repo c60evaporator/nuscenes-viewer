@@ -18,7 +18,7 @@ router = APIRouter(prefix="/instances", tags=["instances"])
 
 # ── GET /instances ────────────────────────────────────────────────────────────
 
-@router.get("/", response_model=PaginatedResponse[InstanceResponse])
+@router.get("", response_model=PaginatedResponse[InstanceResponse])
 async def list_instances(
     scene_token:   str | None = Query(None, description="SceneでInstanceを絞り込む"),
     category_name: str | None = Query(None, description="Category名で絞り込む（部分一致）"),

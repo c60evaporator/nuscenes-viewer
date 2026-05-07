@@ -10,7 +10,7 @@ from app.schemas.common import PaginatedResponse
 router = APIRouter(prefix="/annotations", tags=["annotations"])
 
 
-@router.get("/", response_model=PaginatedResponse[AnnotationResponse])
+@router.get("", response_model=PaginatedResponse[AnnotationResponse])
 async def list_annotations(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),

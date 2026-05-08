@@ -56,10 +56,11 @@ deploy-frontend:
 		-t $(PROJECT_NAME)-frontend-builder \
 		-f frontend/Dockerfile \
 		./frontend
+	docker rm -f fe-builder >/dev/null 2>&1 || true
 	docker create --name fe-builder $(PROJECT_NAME)-frontend-builder
 	rm -rf ./frontend/dist
 	docker cp fe-builder:/app/dist ./frontend/dist
-	docker rm fe-builder
+	docker rm -f fe-builder
 	aws s3 cp ./frontend/dist/index.html $(S3_STATIC)/index.html \
 		--cache-control "no-cache, no-store, must-revalidate" \
 		--region $(REGION)

@@ -3,7 +3,7 @@ import io
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.sensor import SensorConverter
@@ -116,7 +116,7 @@ async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Not an image: {sd.fileformat}")
 
     if settings.DEPLOY_ENV == "aws":
-        return RedirectResponse(url=get_presigned_url(sd.filename), status_code=307)
+        return JSONResponse({"url": get_presigned_url(sd.filename)})
 
     try:
         data = read_file(sd.filename)

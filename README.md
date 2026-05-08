@@ -2,6 +2,7 @@
 [![license](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/c60evaporator/nuscenes-viewer/blob/main/LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+[![Demo](https://img.shields.io/badge/Demo-Live-brightgreen?logo=amazon-aws)](https://dtq47wxfkxb2n.cloudfront.net)
 
 **A web-based viewer and annotation tool for the nuScenes autonomous driving dataset.**
 
@@ -12,6 +13,11 @@
 </div>
 
 ## Demo
+
+🌐 **[Live Demo](https://dtq47wxfkxb2n.cloudfront.net)** — nuScenes mini dataset
+
+> ⚠️ This demo uses the [nuScenes dataset](https://www.nuscenes.org/nuscenes) under the [nuScenes license](https://www.nuscenes.org/terms-of-use).
+> Please note that the demo server may be occasionally.
 
 ![Visualization demo](docs/images/demo_visualization.gif)
 <!-- ![Annotation demo](docs/images/demo_annotation.gif) -->
@@ -146,6 +152,7 @@ Now you can open the app `http://localhost:3000` by Chrome browser. If you launc
 
 ## Roadmap
 
+- [ ] Map expansion annotation
 - [ ] CAN bus expansion
 - [ ] AI-assisted annotation
     - [ ] Automated bounding box annotation by 3D object detection (e.g. BEVFormer, BEVFusion)

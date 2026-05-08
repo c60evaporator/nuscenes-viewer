@@ -3,7 +3,7 @@ import io
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.sensor import SensorConverter
@@ -16,7 +16,7 @@ from app.schemas.sensor import (
     EgoPoseResponse,
     SensorResponse,
 )
-from app.lib.storage import read_file
+from app.lib.storage import get_presigned_url, read_file
 
 _IMAGE_FORMATS = {"jpg", "jpeg", "png"}
 
@@ -115,6 +115,9 @@ async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
     if sd.fileformat.lower() not in _IMAGE_FORMATS:
         raise HTTPException(status_code=400, detail=f"Not an image: {sd.fileformat}")
 
+    if settings.DEPLOY_ENV == "aws":
+        return RedirectResponse(url=get_presigned_url(sd.filename), status_code=307)
+
     try:
         data = read_file(sd.filename)
     except FileNotFoundError:
@@ -124,7 +127,7 @@ async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
     return StreamingResponse(
         io.BytesIO(data),
         media_type=media_type,
-        headers={"Content-Length": str(len(data))}
+        headers={"Content-Length": str(len(data)), "Cache-Control": "public, max-age=86400"},
     )
 
 

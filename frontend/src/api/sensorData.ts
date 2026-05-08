@@ -34,6 +34,8 @@ export function usePointCloud(token: string | null, refSensorToken?: string | nu
       const params = refSensorToken ? `?ref_sensor_token=${refSensorToken}` : ''
       return apiFetch<PointCloud>(`/sensor-data/${token}/pointcloud${params}`)
     },
-    enabled: !!token,
+    enabled:   !!token,
+    staleTime: Infinity,
+    gcTime:    30 * 60 * 1000,
   })
 }

@@ -67,31 +67,35 @@ _BASEMAP_FILENAMES: dict[str, str] = {
     "singapore-queenstown":     "93406b464a165eaba6d9de76ca09f5da.png",
 }
 
+_basemap_cache: dict[str, bytes] = {}
+
+
+def _process_basemap(location: str) -> bytes:
+    filename = _BASEMAP_FILENAMES[location]
+    data = read_file(f"maps/{filename}")
+    Image.MAX_IMAGE_PIXELS = None  # trusted local files from NuScenes dataset
+    img = Image.open(io.BytesIO(data))
+    img.thumbnail((4096, 4096), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
 
 @router.get("/maps/{location}/basemap")
 async def get_map_basemap(location: str):
     if not re.match(r'^[a-zA-Z0-9_-]+$', location):
         raise HTTPException(status_code=400, detail="Invalid location name")
-    filename = _BASEMAP_FILENAMES.get(location)
-    if filename is None:
+    if location not in _BASEMAP_FILENAMES:
         raise HTTPException(status_code=404, detail="Basemap not found")
 
-    # Read the image data from storage (e.g., S3 or local filesystem)
-    try:
-        data = read_file(f"maps/{filename}")
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Basemap not found")
-
-    Image.MAX_IMAGE_PIXELS = None  # trusted local files from NuScenes dataset
-    img = Image.open(io.BytesIO(data))
-    img.thumbnail((4096, 4096), Image.LANCZOS)
-
-    buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
-    buf.seek(0)
+    if location not in _basemap_cache:
+        try:
+            _basemap_cache[location] = _process_basemap(location)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Basemap not found")
 
     return StreamingResponse(
-        buf,
+        io.BytesIO(_basemap_cache[location]),
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=86400"},
     )

@@ -57,6 +57,7 @@ deploy-frontend:
 		-f frontend/Dockerfile \
 		./frontend
 	docker create --name fe-builder $(PROJECT_NAME)-frontend-builder
+	rm -rf ./frontend/dist
 	docker cp fe-builder:/app/dist ./frontend/dist
 	docker rm fe-builder
 	aws s3 cp ./frontend/dist/index.html $(S3_STATIC)/index.html \
@@ -67,6 +68,7 @@ deploy-frontend:
 		--cache-control "public, max-age=31536000, immutable" \
 		--delete \
 		--region $(REGION)
+	rm -rf ./frontend/dist
 	aws cloudfront create-invalidation \
 		--distribution-id $(DISTRIBUTION_ID) \
 		--paths "/*"

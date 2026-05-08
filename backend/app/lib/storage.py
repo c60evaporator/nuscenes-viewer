@@ -4,6 +4,7 @@ from pathlib import Path
 
 import boto3
 import botocore.exceptions
+from botocore.config import Config
 
 from app.core.config import settings
 
@@ -14,7 +15,12 @@ def _is_local() -> bool:
 
 @functools.lru_cache(maxsize=1)
 def _s3_client():
-    return boto3.client("s3", region_name="ap-northeast-1")
+    return boto3.client(
+        "s3",
+        region_name="ap-northeast-1",
+        endpoint_url="https://s3.ap-northeast-1.amazonaws.com",  # To avoid unforeseen redirection that may cause CORS issues
+        config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
+    )
 
 
 def read_file(relative_path: str) -> bytes:

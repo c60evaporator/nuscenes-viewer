@@ -47,7 +47,10 @@ deploy-backend:
 		--cluster $(CLUSTER) \
 		--service $(SERVICE) \
 		--force-new-deployment \
-		--region $(REGION)
+		--region $(REGION) \
+		--no-cli-pager \
+		--query 'service.{serviceName:serviceName,status:status,taskDefinition:taskDefinition,rolloutState:deployments[0].rolloutState}' \
+		--output table
 	@echo "Deployment triggered. Check ECS console for task status."
 
 deploy-frontend:

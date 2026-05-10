@@ -53,7 +53,7 @@ export default function AnnotationThreeView({
             <Canvas
                 camera={{
                     up:       [0, 0, 1],
-                    position: [20, -20, 30],
+                    position: [-20, -20, 30],
                     fov:      50,
                     near:     0.1,
                     far:      1000,
@@ -107,8 +107,9 @@ function PointCloudMesh({ points }: { points: number[][] }) {
 
         for (let i = 0; i < N; i++) {
             const [x, y, z, intensity] = points[i]
-            positions[i * 3]     = x
-            positions[i * 3 + 1] = y
+            // LIDAR_TOP → Ego: world_X=前=lidar_Y, world_Y=左=-lidar_X, world_Z=上=lidar_Z
+            positions[i * 3]     = y
+            positions[i * 3 + 1] = -x
             positions[i * 3 + 2] = z
 
             const normalized = Math.min((intensity ?? 0) / 255, 1)
@@ -150,6 +151,9 @@ function BBoxMesh({
         const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
         const sensorCorners = globalCorners.map((c) => globalToSensor(c, egoPose, lidarCalibSensor))
 
+        // LIDAR_TOP → Ego: world_X=前=lidar_Y, world_Y=左=-lidar_X, world_Z=上=lidar_Z
+        const displayCorners = sensorCorners.map((c) => [c[1], -c[0], c[2]])
+
         // 12辺のインデックスペア
         // 0:前右上, 1:前左上, 2:前左下, 3:前右下
         // 4:後右上, 5:後左上, 6:後左下, 7:後右下
@@ -160,18 +164,18 @@ function BBoxMesh({
         ]
         const lineVertices = new Float32Array(edges.length * 6)
         edges.forEach(([a, b], i) => {
-            lineVertices[i * 6]     = sensorCorners[a][0]
-            lineVertices[i * 6 + 1] = sensorCorners[a][1]
-            lineVertices[i * 6 + 2] = sensorCorners[a][2]
-            lineVertices[i * 6 + 3] = sensorCorners[b][0]
-            lineVertices[i * 6 + 4] = sensorCorners[b][1]
-            lineVertices[i * 6 + 5] = sensorCorners[b][2]
+            lineVertices[i * 6]     = displayCorners[a][0]
+            lineVertices[i * 6 + 1] = displayCorners[a][1]
+            lineVertices[i * 6 + 2] = displayCorners[a][2]
+            lineVertices[i * 6 + 3] = displayCorners[b][0]
+            lineVertices[i * 6 + 4] = displayCorners[b][1]
+            lineVertices[i * 6 + 5] = displayCorners[b][2]
         })
 
         // クリック判定用 AABB (軸並行bounding box)
-        const xs = sensorCorners.map((c) => c[0])
-        const ys = sensorCorners.map((c) => c[1])
-        const zs = sensorCorners.map((c) => c[2])
+        const xs = displayCorners.map((c) => c[0])
+        const ys = displayCorners.map((c) => c[1])
+        const zs = displayCorners.map((c) => c[2])
         const minX = Math.min(...xs), maxX = Math.max(...xs)
         const minY = Math.min(...ys), maxY = Math.max(...ys)
         const minZ = Math.min(...zs), maxZ = Math.max(...zs)

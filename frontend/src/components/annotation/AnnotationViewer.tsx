@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import MapCanvas from '@/components/common/MapCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
+import AnnotationThreeView from '@/components/annotation/AnnotationThreeView'
 import { useSampleSensorData, useSampleAnnotations } from '@/api/samples'
 import { useEditStore } from '@/store/editStore'
 import { rankCamerasByScore } from '@/lib/cameraSelection'
@@ -167,9 +168,24 @@ export default function AnnotationViewer({
           )}
         </div>
 
-        {/* Three.js 3D点群表示 予約スペース */}
-        <div className="flex-1 min-h-0 flex items-center justify-center bg-gray-900">
-          <span style={{ color: '#555', fontSize: 11 }}>3D Point Cloud - Three.js (Coming Soon)</span>
+        {/* Three.js 3D点群表示 */}
+        <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900">
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
+            3D VIEW
+          </div>
+          {lidarBrief ? (
+            <AnnotationThreeView
+              sampleDataToken={lidarBrief.token}
+              annotations={sampleAnnotations}
+              egoPose={currentEgoPose}
+              lidarCalibSensor={lidarCalibArray}
+              highlightInstanceToken={instanceToken ?? undefined}
+              editingInstanceToken={editingInstanceToken}
+              onBBoxClick={handleBBoxClick}
+            />
+          ) : (
+            <Placeholder text="No LIDAR_TOP" />
+          )}
         </div>
       </div>
     </div>

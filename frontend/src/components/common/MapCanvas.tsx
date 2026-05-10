@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBasemap } from '@/api/maps'
-import { drawEgoPoses } from '@/lib/canvasUtils'
+import { drawEgoPoses, drawEgoPosesBackground } from '@/lib/canvasUtils'
 import { egoPoseToPixel } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -11,6 +11,8 @@ interface MapCanvasProps {
   cropToContent?: boolean                  // ego pose 範囲に自動ズーム（デフォルト false）
   showStartEnd?:  boolean                  // Start/End ラベル（デフォルト true）
   centerPoint?:   [number, number] | null  // センタリングしたいメートル座標 [x, y]
+  backgroundEgoPoseGroups?: EgoPosePoint[][] // 背景として薄く表示するシーングループ
+  fitToMap?: boolean                       // true → 初期ズームを地図全体表示に固定
   className?:     string
 }
 
@@ -21,6 +23,8 @@ export default function MapCanvas({
   cropToContent = false,
   showStartEnd  = true,
   centerPoint,
+  backgroundEgoPoseGroups,
+  fitToMap      = false,
   className,
 }: MapCanvasProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
@@ -79,12 +83,17 @@ export default function MapCanvas({
     canvas.height = bitmap.height
     ctx.drawImage(bitmap, 0, 0)
 
-    if (egoPoses.length === 0) return
-
     const displaySize: [number, number] = [bitmap.width, bitmap.height]
 
+    // 背景シーン群を薄く先に描画
+    if (backgroundEgoPoseGroups && backgroundEgoPoseGroups.length > 0) {
+      drawEgoPosesBackground(ctx, backgroundEgoPoseGroups, displaySize, location)
+    }
+
+    if (egoPoses.length === 0) return
+
     drawEgoPoses(ctx, egoPoses, currentIndex, displaySize, location, showStartEnd)
-  }, [bitmap, egoPoses, currentIndex, showStartEnd, location])
+  }, [bitmap, egoPoses, currentIndex, showStartEnd, location, backgroundEgoPoseGroups])
 
   // cropToContent: ego poses の範囲にズームし、重心をコンテナ中央にセンタリング
   useEffect(() => {
@@ -115,9 +124,9 @@ export default function MapCanvas({
     })
   }, [cropToContent, egoPoses, bitmap, location, containerSize])
 
-  // centerPoint: 指定座標をコンテナ中央に合わせる（cropToContent=true のときは cropToContent が担うため除外）
+  // centerPoint: 指定座標をコンテナ中央に合わせる（cropToContent=true / fitToMap=true のときは除外）
   useEffect(() => {
-    if (!centerPoint || !bitmap || cropToContent) return
+    if (!centerPoint || !bitmap || cropToContent || fitToMap) return
     if (containerSize.w === 0 || containerSize.h === 0) return
     const [cx, cy] = egoPoseToPixel(
       [centerPoint[0], centerPoint[1], 0],
@@ -128,7 +137,7 @@ export default function MapCanvas({
       x: containerSize.w / 2 - cx * zoomRef.current,
       y: containerSize.h / 2 - cy * zoomRef.current,
     })
-  }, [centerPoint, bitmap, location, cropToContent, containerSize])
+  }, [centerPoint, bitmap, location, cropToContent, fitToMap, containerSize])
 
   // location または軌跡（先頭 ego pose）が変わったらリセット
   const trajectoryKey = egoPoses[0]?.sample_token ?? ''
@@ -140,6 +149,14 @@ export default function MapCanvas({
   useEffect(() => {
     if (!pendingReset) return
     if (containerSize.w === 0 || !bitmap) return
+
+    // fitToMap: 地図全体が見えるズームに固定（軌跡ベースのズームをスキップ）
+    if (fitToMap) {
+      setZoom(calcMinZoom())
+      setOffset({ x: 0, y: 0 })
+      setPendingReset(false)
+      return
+    }
 
     // cropToContent モードは cropToContent effect に委ねる
     if (cropToContent) {
@@ -179,7 +196,7 @@ export default function MapCanvas({
       y: containerSize.h / 2 - cy * newZoom,
     })
     setPendingReset(false)
-  }, [pendingReset, containerSize, bitmap, egoPoses, location, cropToContent, centerPoint])
+  }, [pendingReset, containerSize, bitmap, egoPoses, location, cropToContent, centerPoint, fitToMap])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true)

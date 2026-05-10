@@ -114,7 +114,11 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
         </RightPane>
       }
     >
-      <SceneViewer sceneToken={currentSceneToken} location={currentMapLocation} />
+      <SceneViewer
+        sceneToken={currentSceneToken}
+        location={currentMapLocation}
+        allSceneTokens={filteredScenes.map((s) => s.token)}
+      />
     </MainLayout>
   )
 }

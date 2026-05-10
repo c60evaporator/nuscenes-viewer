@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import { apiFetch } from './client'
 import type { Scene, Sample, SceneListResponse } from '../types/scene'
 import type { EgoPosePoint } from '../types/sensor'
@@ -34,4 +34,20 @@ export function useSceneEgoPoses(token: string | null) {
     queryFn:  () => apiFetch<EgoPosePoint[]>(`/scenes/${token}/ego-poses`),
     enabled:  !!token,
   })
+}
+
+/** 複数シーンの Ego-poses を並列取得し、シーンごとのグループ配列で返す */
+export function useAllScenesEgoPoses(sceneTokens: string[]) {
+  const results = useQueries({
+    queries: sceneTokens.map((token) => ({
+      queryKey:  ['scene-ego-poses', token],
+      queryFn:   () => apiFetch<EgoPosePoint[]>(`/scenes/${token}/ego-poses`),
+      staleTime: Infinity,
+    })),
+  })
+  const groups = results
+    .map((r) => r.data)
+    .filter((d): d is EgoPosePoint[] => d !== undefined)
+  const isLoading = results.some((r) => r.isLoading)
+  return { data: groups, isLoading }
 }

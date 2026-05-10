@@ -96,6 +96,50 @@ export function drawEgoPoses(
   ctx.restore()
 }
 
+/**
+ * 複数シーンの Ego-poses を背景として薄く描画する（全シーン表示用）
+ * 各グループが 1 シーン分の配列。グループ間に線は引かない。
+ */
+export function drawEgoPosesBackground(
+  ctx:         CanvasRenderingContext2D,
+  poseGroups:  EgoPosePoint[][],
+  displaySize: [number, number],
+  location:    string,
+): void {
+  if (poseGroups.length === 0) return
+
+  const sizeScale = displaySize[0] / 3000
+  const lineWidth = Math.max(1.5 * sizeScale, 0.5)
+  const dotRadius = Math.max(1.5 * sizeScale, 1)
+
+  ctx.save()
+  poseGroups.forEach((poses) => {
+    if (poses.length === 0) return
+    const toPixel = (t: number[]): [number, number] => egoPoseToPixel(t, location, displaySize)
+
+    ctx.beginPath()
+    ctx.strokeStyle = 'rgba(100, 160, 255, 0.2)'
+    ctx.lineWidth   = lineWidth
+    ctx.lineJoin    = 'round'
+    ctx.lineCap     = 'round'
+    poses.forEach((pose, i) => {
+      const [px, py] = toPixel(pose.translation)
+      if (i === 0) ctx.moveTo(px, py)
+      else         ctx.lineTo(px, py)
+    })
+    ctx.stroke()
+
+    poses.forEach((pose) => {
+      const [px, py] = toPixel(pose.translation)
+      ctx.beginPath()
+      ctx.arc(px, py, dotRadius, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(100, 160, 255, 0.25)'
+      ctx.fill()
+    })
+  })
+  ctx.restore()
+}
+
 // ── BBox 2D 描画 ─────────────────────────────────────────────────────────────
 
 /**

@@ -144,7 +144,7 @@ export default function MapViewer({ mapToken, location, onFeatureClick, selected
           Math.log2(360 / lonRange) + Math.log2(w / 512) - 1,
           Math.log2(180 / latRange) + Math.log2(h / 512) - 1,
           18,
-        )
+        ) + 1  // Map画面専用: 地図全体表示より一段階ズームアップ
         setViewState((prev) => ({
           ...prev,
           main: { longitude: lon, latitude: lat, zoom: Math.max(zoom, 1), pitch: 0, bearing: 0 },

@@ -130,7 +130,31 @@ export default function MapViewer({ mapToken, location, onFeatureClick, selected
       return
     }
 
-    // ── フォールバック: GeoJSON フィーチャーの bounds ───────────────────────
+    // ── フォールバック①: basemap 全体の bounds（GeoJSON 読み込み前でも即座に表示）
+    // egoPoses がない（Map 画面）場合のみ適用
+    if ((!egoPoses || egoPoses.length === 0) && location) {
+      const bbounds = getBasemapBounds(location)
+      if (bbounds) {
+        const [bwest, bsouth, beast, bnorth] = bbounds
+        const lon      = (bwest  + beast)  / 2
+        const lat      = (bsouth + bnorth) / 2
+        const latRange = bnorth - bsouth
+        const lonRange = beast  - bwest
+        const zoom = Math.min(
+          Math.log2(360 / lonRange) + Math.log2(w / 512) - 1,
+          Math.log2(180 / latRange) + Math.log2(h / 512) - 1,
+          18,
+        )
+        setViewState((prev) => ({
+          ...prev,
+          main: { longitude: lon, latitude: lat, zoom: Math.max(zoom, 1), pitch: 0, bearing: 0 },
+        }))
+        setViewInitialized(true)
+        return
+      }
+    }
+
+    // ── フォールバック②: GeoJSON フィーチャーの bounds ──────────────────────
     const collections = Object.values(layerData).filter(Boolean)
     if (collections.length === 0) return
     const bounds = computeBounds(collections as GeoJSONFeatureCollection[])

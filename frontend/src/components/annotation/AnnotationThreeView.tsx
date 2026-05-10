@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, memo } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Line } from '@react-three/drei'
 import { usePointCloud } from '@/api/sensorData'
@@ -140,7 +140,7 @@ function PointCloudMesh({ points }: { points: number[][] }) {
     )
 }
 
-function BBoxMesh({
+const BBoxMesh = memo(function BBoxMesh({
     ann, egoPose, lidarCalibSensor, color, lineWidth, onClick,
 }: {
     ann:              Annotation
@@ -211,4 +211,12 @@ function BBoxMesh({
             )}
         </group>
     )
-}
+},
+// onClick は毎レンダリングで参照が変わるが動作は同一なので比較から除外する
+(prev, next) =>
+    prev.ann              === next.ann              &&
+    prev.egoPose          === next.egoPose          &&
+    prev.lidarCalibSensor === next.lidarCalibSensor &&
+    prev.color            === next.color            &&
+    prev.lineWidth        === next.lineWidth
+)

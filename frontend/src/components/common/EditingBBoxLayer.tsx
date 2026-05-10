@@ -45,6 +45,10 @@ export default function EditingBBoxLayer({
     const isInteractingRef    = useRef(false)
     const frozenAnnotationRef = useRef<typeof currentAnnotation>(null)
 
+    // rAF スロットリング (updateSessionLive を 60Hz に制限)
+    const dragRafRef      = useRef<number | null>(null)
+    const transformRafRef = useRef<number | null>(null)
+
     // 操作開始時の状態 (差分計算用)
     const startGlobalZRef             = useRef(0)
     const startSensorZRef             = useRef(0)
@@ -121,11 +125,10 @@ export default function EditingBBoxLayer({
         startSensorZRef.current = startSensor[2]
     }
 
-    const handleDragMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        const node = e.target as Konva.Rect
+    const flushDrag = (nodeX: number, nodeY: number) => {
         // node.x()/node.y() は Konva screen 座標 (Y-down)。bevPixelToSensor は
         // Canvas user-space 座標 (Y-flip 前) を期待するので y を反転する。
-        const [sensorX, sensorY] = bevPixelToSensor(node.x(), size - node.y(), viewParams)
+        const [sensorX, sensorY] = bevPixelToSensor(nodeX, size - nodeY, viewParams)
         const newGlobal = sensorToGlobal(
             [sensorX, sensorY, startSensorZRef.current],
             egoPose,
@@ -135,8 +138,20 @@ export default function EditingBBoxLayer({
         updateSessionLive({ translation: [newGlobal[0], newGlobal[1], startGlobalZRef.current] })
     }
 
+    const handleDragMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        const node = e.target as Konva.Rect
+        const x = node.x(), y = node.y()
+        if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current)
+        dragRafRef.current = requestAnimationFrame(() => {
+            flushDrag(x, y)
+            dragRafRef.current = null
+        })
+    }
+
     const handleDragEnd = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        handleDragMove(e)
+        if (dragRafRef.current !== null) { cancelAnimationFrame(dragRafRef.current); dragRafRef.current = null }
+        const node = e.target as Konva.Rect
+        flushDrag(node.x(), node.y())
         commitChange()
         isInteractingRef.current    = false
         frozenAnnotationRef.current = null
@@ -162,10 +177,8 @@ export default function EditingBBoxLayer({
         startSensorZRef.current = startSensor[2]
     }
 
-    const handleTransform = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const flushTransform = (node: Konva.Rect) => {
         if (!transformStartQuaternionRef.current || !transformStartSizeRef.current) return
-
-        const node = e.target as Konva.Rect
 
         // サイズ (px → m、スケール反映)
         const newWidthM  = Math.max(SIZE_MIN, (node.width()  * node.scaleX())  / viewParams.scale)
@@ -193,12 +206,23 @@ export default function EditingBBoxLayer({
         })
     }
 
+    const handleTransform = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        const node = e.target as Konva.Rect
+        if (transformRafRef.current !== null) cancelAnimationFrame(transformRafRef.current)
+        // node は Konva の mutable オブジェクト (安定参照) なので rAF 内で最新値を読める
+        transformRafRef.current = requestAnimationFrame(() => {
+            flushTransform(node)
+            transformRafRef.current = null
+        })
+    }
+
     const handleTransformEnd = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        handleTransform(e)
-        commitChange()
+        if (transformRafRef.current !== null) { cancelAnimationFrame(transformRafRef.current); transformRafRef.current = null }
 
         // scale をリセット (新サイズは width/height に直接反映済み)
         const node = e.target as Konva.Rect
+        flushTransform(node)
+        commitChange()
         node.scaleX(1)
         node.scaleY(1)
 

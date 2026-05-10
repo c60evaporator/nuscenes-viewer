@@ -113,6 +113,10 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
 
   const handleBBoxClick = (annToken: string) => {
     setHighlightAnnToken(annToken)
+    const ann = (sampleAnnotations ?? []).find((a) => a.token === annToken)
+    if (ann?.instance_token) {
+      setInstance(ann.instance_token)
+    }
   }
 
   // highlightAnnToken → instance_token（サンプル全アノテーションから逆引き）

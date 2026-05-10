@@ -27,6 +27,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
   const currentMapLocation = useViewerStore((s) => s.currentMapLocation)
   const currentSampleToken = useViewerStore((s) => s.currentSampleToken)
   const setSample          = useViewerStore((s) => s.setSample)
+  const setInstance        = useViewerStore((s) => s.setInstance)
   const lock               = useNavigationStore((s) => s.lock)
   const lockedSceneToken   = useNavigationStore((s) => s.lockedSceneToken)
 
@@ -126,6 +127,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
       disabled={!currentSampleToken}
       onClick={() => {
         if (!currentSampleToken) return
+        setInstance(highlightInstanceToken)
         // TODO: 将来的には別ウィンドウ対応。現在は同一ウィンドウで遷移
         lock('sample', {
           sceneToken:  selectedSceneToken ?? undefined,

@@ -27,6 +27,7 @@ interface AnnotationPageProps {
 
 export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPageProps) {
   const currentMapLocation      = useViewerStore((s) => s.currentMapLocation)
+  const currentInstanceToken    = useViewerStore((s) => s.currentInstanceToken)
   const lockedSceneToken        = useNavigationStore((s) => s.lockedSceneToken)
   const lockedSampleToken       = useNavigationStore((s) => s.lockedSampleToken)
   const lockedInstanceToken     = useNavigationStore((s) => s.lockedInstanceToken)
@@ -47,7 +48,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
 
   // リスト選択 state（左ペインのリストで選択した値）
   const [listSelectedSampleToken,   setListSelectedSampleToken]   = useState<string | null>(null)
-  const [listSelectedInstanceToken, setListSelectedInstanceToken] = useState<string | null>(null)
+  // Sample画面から遷移時はviewerStoreの選択インスタンスを初期値として引き継ぐ
+  const [listSelectedInstanceToken, setListSelectedInstanceToken] = useState<string | null>(
+    lockSource === 'sample' ? (currentInstanceToken ?? null) : null
+  )
 
   // ロック判定
   const sceneTokenLocked    = !!lockedSceneToken
@@ -190,17 +194,27 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     [samples, instanceSampleTokenSet],
   )
 
-  // Sample フィルタ変更時にリスト選択と編集セッションをリセット
+  // Sample フィルタ変更時にリセット (前回値と比較)
+  const prevEffectiveSampleTokenRef = useRef<string | null | undefined>(undefined)
   useEffect(() => {
-    setListSelectedInstanceToken(null)
-    endSession()
+      if (prevEffectiveSampleTokenRef.current !== undefined &&
+          prevEffectiveSampleTokenRef.current !== effectiveSampleToken) {
+          setListSelectedInstanceToken(null)
+          endSession()
+      }
+      prevEffectiveSampleTokenRef.current = effectiveSampleToken
   }, [effectiveSampleToken])
 
-  // Instance フィルタ変更時にリスト選択と編集セッションをリセット
+  // Instance フィルタ変更時にリセット (前回値と比較)
+  const prevEffectiveInstanceTokenRef = useRef<string | null | undefined>(undefined)
   useEffect(() => {
-    setListSelectedSampleToken(null)
-    setListSelectedInstanceToken(null)
-    endSession()
+      if (prevEffectiveInstanceTokenRef.current !== undefined &&
+          prevEffectiveInstanceTokenRef.current !== effectiveInstanceToken) {
+          setListSelectedSampleToken(null)
+          setListSelectedInstanceToken(null)
+          endSession()
+      }
+      prevEffectiveInstanceTokenRef.current = effectiveInstanceToken
   }, [effectiveInstanceToken])
 
   // Viewer に渡す sampleToken / instanceToken

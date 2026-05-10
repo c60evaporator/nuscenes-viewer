@@ -5,6 +5,7 @@ import RightPane from '@/components/layout/RightPane'
 import { Button } from '@/components/ui/button'
 import SampleFilter from '@/components/sample/SampleFilter'
 import SampleList from '@/components/sample/SampleList'
+import SampleSlider from '@/components/sample/SampleSlider'
 import SampleInfo from '@/components/sample/SampleInfo'
 import SensorGrid from '@/components/sample/SensorGrid'
 import { useScenes } from '@/api/scenes'
@@ -33,6 +34,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
     lockedSceneToken ?? null,
   )
   const [highlightInstanceToken, setHighlightInstanceToken] = useState<string | null>(null)
+  const [currentSampleIndex, setCurrentSampleIndex] = useState(0)
 
   const handleBBoxClick = (annToken: string) => {
     const ann = (annotations ?? []).find((a) => a.token === annToken)
@@ -80,6 +82,19 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
     () => [...(samplesRaw ?? [])].sort((a, b) => a.timestamp - b.timestamp),
     [samplesRaw],
   )
+
+  // リスト選択 → スライダー連動（currentSampleToken または samples が変わった時）
+  useEffect(() => {
+    if (samples.length === 0) return
+    const idx = samples.findIndex((s) => s.token === currentSampleToken)
+    setCurrentSampleIndex(idx >= 0 ? idx : 0)
+  }, [currentSampleToken, samples])
+
+  // スライダー → リスト選択連動
+  const handleSliderChange = (index: number) => {
+    setCurrentSampleIndex(index)
+    if (samples[index]) setSample(samples[index].token)
+  }
 
   // 選択サンプルのデータ
   const { data: sensorDataMap } = useSampleSensorData(currentSampleToken)
@@ -135,6 +150,13 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
               selectedSceneToken={selectedSceneToken}
               onFilterChange={setSelectedSceneToken}
               locked={!!lockedSceneToken}
+            />
+          }
+          footer={
+            <SampleSlider
+              samples={samples}
+              selectedIndex={currentSampleIndex}
+              onIndexChange={handleSliderChange}
             />
           }
         >

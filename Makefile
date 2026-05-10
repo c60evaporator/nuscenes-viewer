@@ -75,5 +75,6 @@ deploy-frontend:
 	rm -rf ./frontend/dist
 	aws cloudfront create-invalidation \
 		--distribution-id $(DISTRIBUTION_ID) \
-		--paths "/*"
+		--paths "/*" \
+		--no-cli-pager
 	@echo "Frontend deployed successfully."

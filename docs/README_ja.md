@@ -2,6 +2,7 @@
 [![license](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/c60evaporator/nuscenes-viewer/blob/main/LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+[![Demo](https://img.shields.io/badge/Demo-Live-brightgreen?logo=amazon-aws)](https://dtq47wxfkxb2n.cloudfront.net)
 
 **自動運転向けnuScenesデータセットのための、Webブラウザで動く可視化・アノテーションツール。**
 
@@ -12,6 +13,11 @@
 </div>
 
 ## デモ
+
+🌐 **[Live Demo](https://dtq47wxfkxb2n.cloudfront.net)** — nuScenes mini dataset
+
+> ⚠️ このデモは[nuScenes dataset](https://www.nuscenes.org/nuscenes)を[nuScenes license](https://www.nuscenes.org/terms-of-use)のもとで使用しています
+> デモアプリは予期せず停止することがあることをご了承ください
 
 <img src=images/demo_visualization.gif width=80%>
 <!-- ![Annotation demo](images/demo_annotation.gif) -->
@@ -145,6 +151,7 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 
 ## ロードマップ
 
+- [ ] Map expansionのアノテーション
 - [ ] CAN bus expansion対応
 - [ ] アノテーションのAIアシスト機能
     - [ ] BEVFormer等の3D物体検出によるBBoxアノテーション提案

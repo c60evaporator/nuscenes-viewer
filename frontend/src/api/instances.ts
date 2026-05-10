@@ -16,7 +16,7 @@ export function useInstances(params?: {
   if (params?.categoryName) qs.set('category_name', params.categoryName)
   return useQuery({
     queryKey: ['instances', params],
-    queryFn:  () => apiFetch<PaginatedResponse<Instance>>(`/instances/?${qs}`),
+    queryFn:  () => apiFetch<PaginatedResponse<Instance>>(`/instances?${qs}`),
   })
 }
 

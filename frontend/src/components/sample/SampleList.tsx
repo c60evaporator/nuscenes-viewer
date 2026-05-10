@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { Sample } from '@/types/scene'
 
 interface SampleListProps {
@@ -16,6 +17,12 @@ function formatTimestamp(ts: number): string {
 }
 
 export default function SampleList({ samples, currentSampleToken, onSelect }: SampleListProps) {
+  const selectedRef = useRef<HTMLLIElement>(null)
+
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [currentSampleToken])
+
   if (samples.length === 0) {
     return <p className="p-3 text-gray-400 text-xs">サンプルがありません</p>
   }
@@ -26,6 +33,7 @@ export default function SampleList({ samples, currentSampleToken, onSelect }: Sa
         const isSelected = sample.token === currentSampleToken
         return (
           <li
+            ref={isSelected ? selectedRef : undefined}
             key={sample.token}
             onClick={() => onSelect(sample.token)}
             className="px-3 py-2 cursor-pointer hover:bg-blue-50 transition-colors"

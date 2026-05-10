@@ -26,7 +26,7 @@ export function drawEgoPoses(
   const dotRadius    = Math.round(4  * sizeScale)
   const currentRadius= Math.round(8  * sizeScale)
   const endRadius    = Math.round(6  * sizeScale)
-  const fontSize     = Math.round(14 * sizeScale)
+  const fontSize     = Math.round(28 * sizeScale)
   const lineWidth    = Math.max(2 * sizeScale, 1)
   const labelPadX    = Math.round(8  * sizeScale)
   const labelOffsetX = Math.round(10 * sizeScale)

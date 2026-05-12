@@ -16,7 +16,7 @@ from app.schemas.sensor import (
     EgoPoseResponse,
     SensorResponse,
 )
-from app.lib.storage import get_presigned_url, read_file
+from app.lib.storage import get_cloudfront_url, read_file
 
 _IMAGE_FORMATS = {"jpg", "jpeg", "png"}
 
@@ -116,13 +116,7 @@ async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Not an image: {sd.fileformat}")
 
     if settings.DEPLOY_ENV == "aws":
-        expires_in = 3600  # 署名付きURLの有効期限（秒）。ユースケースに応じて調整。
-        url = get_presigned_url(sd.filename, expires_in=expires_in)
-        json_ttl = 300  # クライアントがURLを再利用できるように、TTLを署名付きURLの有効期限より短く設定
-        return JSONResponse(
-            {"url": url, "expires_in": expires_in},
-            headers={"Cache-Control": f"private, max-age={json_ttl}"}  # ブラウザにだけキャッシュ（共有キャッシュは避ける）
-        )
+        return JSONResponse({"url": get_cloudfront_url(sd.filename)})
 
     try:
         data = read_file(sd.filename)

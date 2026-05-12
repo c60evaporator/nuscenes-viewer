@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     )
 
     DEPLOY_ENV: str = "local"  # "local" or "aws"
+    CLOUDFRONT_DATA_URL: str = ""  # Only used for AWS deployments, can be left empty for local development
     S3_DATA_BUCKET: str = ""  # Only used for AWS deployments, can be left empty for local development
     NUSCENES_DATAROOT: str = "/data/nuscenes"  # Only used for local development, ignored in AWS deployments
     CORS_ORIGINS: list[str] = ["*"]

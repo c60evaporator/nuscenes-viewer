@@ -26,7 +26,7 @@ def _s3_client():
 def read_file(relative_path: str) -> bytes:
     """
     local: Read file from NUSCENES_DATAROOT / relative_path
-    aws:   Read file from S3_DATA_BUCKET / relative_path
+    aws:   Read file from S3_DATA_BUCKET / data / relative_path
 
     relative_path is in the same format as nuScenes' sd.filename
     Example: "samples/CAM_FRONT/xxxx.jpg"
@@ -38,21 +38,24 @@ def read_file(relative_path: str) -> bytes:
             raise FileNotFoundError(f"File not found: {path}")
         return path.read_bytes()
     try:
-        obj = _s3_client().get_object(Bucket=settings.S3_DATA_BUCKET, Key=relative_path)
+        obj = _s3_client().get_object(Bucket=settings.S3_DATA_BUCKET, Key=f"data/{relative_path}")
         return obj["Body"].read()
     except botocore.exceptions.ClientError as e:
         if e.response["Error"]["Code"] == "NoSuchKey":
-            raise FileNotFoundError(f"S3 key not found: {relative_path}")
+            raise FileNotFoundError(f"S3 key not found: data/{relative_path}")
         raise
 
+def get_cloudfront_url(relative_path: str) -> str:
+    """AWS環境専用。CloudFront経由の固定URLを返し、キャッシュによる高速化を図る。公開データの配信に適している。"""
+    return f"{settings.CLOUDFRONT_DATA_URL}/data/{relative_path}"
 
-def get_presigned_url(relative_path: str, expires_in: int = 3600) -> str:
-    """AWS 環境専用。S3 から直接ダウンロードできる署名付き URL を生成する。"""
+def get_presigned_url(relative_path: str, expires_in: int = 1800) -> str:
+    """AWS 環境専用。S3 から直接ダウンロードできる署名付きURL生成する。認証付き＆同一端末でのアクセスに適している。"""
     return _s3_client().generate_presigned_url(
         "get_object",
         Params={
             "Bucket":               settings.S3_DATA_BUCKET,
-            "Key":                  relative_path,
+            "Key":                  f"data/{relative_path}",
             "ResponseCacheControl": "public, max-age=86400",
         },
         ExpiresIn=expires_in,

@@ -9,11 +9,11 @@ export function useSensorImage(token: string | null) {
       const res = await fetch(`/api/v1/sensor-data/${token}/image`)
       if (!res.ok) throw new Error('image fetch failed')
 
-      // AWS mode: response is {"url": "..."} → fetch from S3 with explicit CORS mode
+      // AWS mode: response is {"url": "..."} → fetch from CloudFront
       if ((res.headers.get('content-type') ?? '').includes('application/json')) {
         const { url } = await res.json() as { url: string }
-        const imgRes = await fetch(url, { mode: 'cors' })
-        if (!imgRes.ok) throw new Error('S3 image fetch failed')
+        const imgRes = await fetch(url)  // mode: 'cors'不要
+        if (!imgRes.ok) throw new Error('CloudFront image fetch failed')
         return createImageBitmap(await imgRes.blob())
       }
 

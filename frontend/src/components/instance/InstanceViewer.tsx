@@ -104,7 +104,7 @@ export default function InstanceViewer({
   if (!currentAnnotation) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-        インスタンスを選択してください
+        Please select an instance
       </div>
     )
   }

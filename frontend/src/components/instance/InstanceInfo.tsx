@@ -15,7 +15,7 @@ function InfoRow({ label, value }: { label: string; value: string | number | nul
 
 export default function InstanceInfo({ instance }: InstanceInfoProps) {
   if (!instance) {
-    return <p className="text-gray-400 text-xs">インスタンスを選択してください</p>
+    return <p className="text-gray-400 text-xs">Please select an instance</p>
   }
 
   return (

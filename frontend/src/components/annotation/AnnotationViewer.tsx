@@ -99,7 +99,7 @@ export default function AnnotationViewer({
   if (!sampleToken) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-        サンプルまたはインスタンスを選択してください
+        Please select a sample or an instance
       </div>
     )
   }

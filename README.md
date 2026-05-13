@@ -20,7 +20,7 @@
 > Please note that the demo server may be occasionally.
 
 ![Visualization demo](docs/images/demo_visualization.gif)
-<!-- ![Annotation demo](docs/images/demo_annotation.gif) -->
+![Annotation demo](docs/images/demo_annotation.gif)
 
 ## Features
 
@@ -147,6 +147,21 @@ Now you can open the app `http://localhost:3000` by Chrome browser. If you launc
 
 ## Usage
 ### Visualization
+
+#### Scene
+
+Select a map from the drop-down menu in the upper-left corner, then choose a scene from the list.
+
+- To view samples within a scene, click the “Samples” button
+- To view instances, click the ‘Instances’ button
+- To view the HD map, click the “Sample & Map” button.
+
+![Annotation demo](docs/images/usage_scene.gif)
+
+#### 
+
+
+
 ### Annotation (Bounding Box)
 ### Annotation (Map expansion)
 

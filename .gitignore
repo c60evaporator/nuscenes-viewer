@@ -2,6 +2,7 @@
 .env
 /data/*
 !/data/.gitkeep
+docs/images/movies
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/

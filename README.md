@@ -21,11 +21,11 @@
 
 **Visualization Demo**
 
-<img src=docs/images/demo_visualization.gif width=80%>
+<img src=docs/images/demo_visualization.gif width=90%>
 
 **Annotation Demo**
 
-<img src=docs/images/demo_annotation.gif width=80%>
+<img src=docs/images/demo_annotation.gif width=90%>
 
 ## Features
 
@@ -186,8 +186,6 @@ Navigate frames using the **slider** or by clicking the list on the left pane.
 ---
 
 ### Annotation (Bounding Box)
-
-<img src=docs/images/usage_annotation.gif width=80%>
 
 Open the annotation editor from the Sample view by clicking **"Annotations"**.
 

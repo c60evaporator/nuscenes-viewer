@@ -164,7 +164,7 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 
 #### Scene — 走行シナリオの閲覧と探索
 
-<img src=images/usage_scene.gif width=80%>
+<img src=images/usage_scene.gif width=70%>
 
 左上のドロップダウンメニューからマップを選択し、リストからシーンを選択します。
 各シーンには約40サンプル（約20秒分の走行データ）が含まれています。
@@ -179,7 +179,7 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 
 #### Sample — フレームごとのセンサーデータの確認
 
-<img src=images/usage_sample.gif width=80%>
+<img src=images/usage_sample.gif width=70%>
 
 左ペインの**スライダー**またはリストをクリックしてフレームを移動します。
 
@@ -201,10 +201,7 @@ Sample画面の**"Annotations"**ボタンからアノテーション編集画面
 
 ### アノテーション（Map Expansion）
 
-Map画面を開いてHDマップフィーチャーの確認・編集ができます。
-
-- **ポリゴンまたはラインをクリック**してマップフィーチャーを選択
-- 対応レイヤー: 走行可能領域・レーン・道路セグメント・横断歩道など
+Comming soon
 
 ## ロードマップ
 

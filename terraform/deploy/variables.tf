@@ -9,3 +9,9 @@ variable "project_name" {
   type        = string
   default     = "nuscenes-viewer"
 }
+
+variable "multi_az" {
+  description = "Enable multi-AZ for VPC endpoints"
+  type        = bool
+  default     = false
+}

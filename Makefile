@@ -34,7 +34,8 @@ deploy-backend:
 	cd terraform/deploy && terraform init -upgrade && \
 		terraform apply -auto-approve \
 		-var="region=$(REGION)" \
-		-var="project_name=$(PROJECT_NAME)"
+		-var="project_name=$(PROJECT_NAME)" \
+		-var="multi_az=$(MULTI_AZ)"
 	aws ecr get-login-password --region $(REGION) | \
 		docker login --username AWS --password-stdin $(ECR_REPO)
 	docker build \
@@ -59,7 +60,8 @@ deploy-backend:
 	sleep 120
 	cd terraform/deploy && terraform destroy -auto-approve \
 		-var="region=$(REGION)" \
-		-var="project_name=$(PROJECT_NAME)"
+		-var="project_name=$(PROJECT_NAME)" \
+		-var="multi_az=$(MULTI_AZ)"
 	@echo "Deployment triggered. Check ECS console for task status."
 
 deploy-frontend:

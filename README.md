@@ -19,8 +19,13 @@
 > ⚠️ This demo uses the [nuScenes dataset](https://www.nuscenes.org/nuscenes) under the [nuScenes license](https://www.nuscenes.org/terms-of-use).
 > Please note that the demo server may be occasionally.
 
-![Visualization demo](docs/images/demo_visualization.gif)
-![Annotation demo](docs/images/demo_annotation.gif)
+**Visualization Demo**
+
+<img src=docs/images/demo_visualization.gif width=80%>
+
+**Annotation Demo**
+
+<img src=docs/images/demo_annotation.gif width=80%>
 
 ## Features
 
@@ -146,24 +151,55 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 Now you can open the app `http://localhost:3000` by Chrome browser. If you launch the app on the remote server, you can access the app by `http://{please specify the host}:3000`.
 
 ## Usage
+
+> 💡 **Quick Start**: Select a map → Choose a scene → Click "Samples"
+
+---
+
 ### Visualization
 
-#### Scene
+#### Scene — Browse and explore driving scenarios
 
-Select a map from the drop-down menu in the upper-left corner, then choose a scene from the list.
+<img src=docs/images/usage_scene.gif width=80%>
 
-- To view samples within a scene, click the “Samples” button
-- To view instances, click the ‘Instances’ button
-- To view the HD map, click the “Sample & Map” button.
+Select a map from the drop-down menu, then choose a scene from the list.
+Each scene contains 40 samples (~20 seconds of driving data).
 
-![Annotation demo](docs/images/usage_scene.gif)
+| Button | What it shows |
+|--------|--------------|
+| **Samples** | Camera images, LiDAR/RADAR point clouds, and bounding box annotations |
+| **Instances** | All tracked objects across the full scene timeline |
+| **Sample & Map** | Sensor data overlaid on the HD map |
 
-#### 
+---
 
+#### Sample
 
+<img src=docs/images/usage_sample.gif width=80%>
+
+Navigate frames using the **slider** or by clicking the list on the left pane.
+
+- **Click a bounding box** or the instance list on the right pane to highlight an object across all sensors simultaneously
+- **Double-click** an instance in the list to jump to the Instance view
+- **Click "Annotations"** to open the annotation editor for the current frame
+
+---
 
 ### Annotation (Bounding Box)
+
+<img src=docs/images/usage_annotation.gif width=80%>
+
+Open the annotation editor from the Sample view by clicking **"Annotations"**.
+
+- **3D point cloud**: Drag handles or use the Unity-like gizmo to resize/rotate
+- **Camera images**: Bounding boxes update in real time across all 6 cameras
+- **Keyboard shortcuts**: `W/A/S/D` to move, `Q/E` to rotate, `Enter` to save
+
+---
+
 ### Annotation (Map expansion)
+
+Comming soon
 
 ## Roadmap
 

@@ -26,3 +26,21 @@ frontend/.vite/
 .DS_Store
 frontend/.env.production
 .env.make
+
+# ── Terraform ─────────────────────────────────────────────────────────────────
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# Variables containing secrets
+*.tfvars
+*.tfvars.json
+# Local config
+.terraformrc
+terraform.rc

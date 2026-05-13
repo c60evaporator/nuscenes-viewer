@@ -4,7 +4,7 @@
 -include .env.make
 
 ECR_REPO       := $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com
-S3_STATIC      := s3://$(PROJECT_NAME)-static-$(ACCOUNT_ID)-$(REGION)-an
+S3_STATIC      := s3://$(PROJECT_NAME)-static
 CLUSTER        := $(PROJECT_NAME)-cluster
 SERVICE        := $(PROJECT_NAME)-service
 
@@ -31,6 +31,10 @@ down:
 	docker compose down
 
 deploy-backend:
+	cd terraform/deploy && terraform init -upgrade && \
+		terraform apply -auto-approve \
+		-var="region=$(REGION)" \
+		-var="project_name=$(PROJECT_NAME)"
 	aws ecr get-login-password --region $(REGION) | \
 		docker login --username AWS --password-stdin $(ECR_REPO)
 	docker build \
@@ -51,6 +55,11 @@ deploy-backend:
 		--no-cli-pager \
 		--query 'service.{serviceName:serviceName,status:status,taskDefinition:taskDefinition,rolloutState:deployments[0].rolloutState}' \
 		--output table
+	@echo "Waiting for ECS task to pull image..."
+	sleep 120
+	cd terraform/deploy && terraform destroy -auto-approve \
+		-var="region=$(REGION)" \
+		-var="project_name=$(PROJECT_NAME)"
 	@echo "Deployment triggered. Check ECS console for task status."
 
 deploy-frontend:

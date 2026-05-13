@@ -26,7 +26,7 @@ project-root/
 │       │   ├── to_nuscenes.py              # NuScenes本体データセットをDBからJSONに変換
 │       │   ├── to_nusc_db.py               # NuScenes本体データセットをJSONからDBに変換
 │       │   ├── schemas_mapexpansion.py     # Map expansionデータセットJSONのPydantic形式スキーマ
-│       │   ├── to_map_db.py               # NMap expansionデータセットをJSONからDBに変換
+│       │   ├── to_map_db.py                # Map expansionデータセットをJSONからDBに変換
 │       │   └── to_mapexpansion.py          # Map expansionデータセットをDBからJSONに変換
 │       ├── core/
 │       │   ├── config.py                   # 環境変数・設定（Pydantic Settings）

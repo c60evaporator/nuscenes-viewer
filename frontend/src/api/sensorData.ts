@@ -12,7 +12,8 @@ export function useSensorImage(token: string | null) {
       // AWS mode: response is {"url": "..."} → fetch from CloudFront
       if ((res.headers.get('content-type') ?? '').includes('application/json')) {
         const { url } = await res.json() as { url: string }
-        const imgRes = await fetch(url)  // mode: 'cors'不要
+        const encodedUrl = url.replace(/\+/g, '%2B')  // CloudFront 経由で '+' がスペースとして解釈される問題への対処
+        const imgRes = await fetch(encodedUrl)  // mode: 'cors'不要
         if (!imgRes.ok) throw new Error('CloudFront image fetch failed')
         return createImageBitmap(await imgRes.blob())
       }

@@ -16,7 +16,7 @@ function InfoRow({ label, value }: { label: string; value: string | number | nul
 export default function SceneInfo({ scene }: SceneInfoProps) {
   if (!scene) {
     return (
-      <p className="text-gray-400 text-xs">シーンを選択してください</p>
+      <p className="text-gray-400 text-xs">Please select a scene</p>
     )
   }
 

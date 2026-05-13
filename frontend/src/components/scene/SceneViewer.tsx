@@ -14,7 +14,7 @@ export default function SceneViewer({ sceneToken, location, allSceneTokens }: Sc
   if (!location) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-        Map を選択してください
+        Please select a scene to view the map.
       </div>
     )
   }

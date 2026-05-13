@@ -21,7 +21,7 @@ function formatVec(v: number[] | null | undefined): string {
 
 export default function AnnotationInfo({ annotation, categoryMap }: AnnotationInfoProps) {
   if (!annotation) {
-    return <p className="text-gray-400 text-xs">アノテーションを選択してください</p>
+    return <p className="text-gray-400 text-xs">Please select an annotation</p>
   }
 
   const categoryName = categoryMap[annotation.category_token] ?? annotation.category_token

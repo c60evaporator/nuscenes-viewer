@@ -248,7 +248,7 @@ export default function MapViewer({ mapToken, location, onFeatureClick, selected
   if (!location || !mapToken) {
     return (
       <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-        Map を選択してください
+        Please select a scene to view the map.
       </div>
     )
   }

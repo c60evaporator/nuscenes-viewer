@@ -32,14 +32,14 @@ export default function SensorSelector({
       <p className="text-gray-300 text-xs font-medium mb-1">Sensor</p>
       <Select value={selectedChannel} onValueChange={onChannelChange}>
         <SelectTrigger className="h-8 text-xs border-gray-500 text-white" style={{ backgroundColor: '#374151' }}>
-          <SelectValue placeholder="センサーを選択" />
+          <SelectValue placeholder="Please select a sensor" />
         </SelectTrigger>
         <SelectContent>
           {availableChannels.map((ch) => (
             <SelectItem key={ch} value={ch} className="text-xs">{ch}</SelectItem>
           ))}
           {availableChannels.length === 0 && (
-            <SelectItem value="__none__" disabled className="text-xs">サンプルを選択してください</SelectItem>
+            <SelectItem value="__none__" disabled className="text-xs">Please select a sample</SelectItem>
           )}
         </SelectContent>
       </Select>

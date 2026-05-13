@@ -60,7 +60,7 @@ export default function SampleInfo({
             <InfoRow label="Next"        value={sample.next} />
           </>
         ) : (
-          <p className="text-gray-400 text-xs">サンプルを選択してください</p>
+          <p className="text-gray-400 text-xs">Please select a sample</p>
         )}
       </div>
 

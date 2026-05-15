@@ -168,6 +168,7 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 
 左上のドロップダウンメニューからマップを選択し、リストからシーンを選択します。
 各シーンには約40サンプル（約20秒分の走行データ）が含まれています。
+右下の各ボタンから、以下の詳細画面に移ることができます。
 
 | ボタン | 表示内容 |
 |--------|----------|
@@ -191,7 +192,7 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 
 ### アノテーション（バウンディングボックス）
 
-Sample画面の**"Annotations"**ボタンからアノテーション編集画面を開きます。
+Sample画面の"**Annotations**"ボタンからアノテーション編集画面を開きます。
 
 - **3D点群**: ハンドルのドラッグまたはUnity風ギズモでサイズ変更・回転
 - **カメラ画像**: 全6カメラのバウンディングボックスがリアルタイムで更新

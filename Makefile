@@ -31,8 +31,8 @@ down:
 	docker compose down
 
 deploy-backend:
-	cd terraform/deploy && terraform init -upgrade && \
-		terraform apply -auto-approve \
+	cd terraform/deploy && AWS_PROFILE=terraform terraform init -upgrade && \
+		AWS_PROFILE=terraform terraform apply -auto-approve \
 		-var="region=$(REGION)" \
 		-var="project_name=$(PROJECT_NAME)" \
 		-var="multi_az=$(MULTI_AZ)"
@@ -58,7 +58,7 @@ deploy-backend:
 		--output table
 	@echo "Waiting for ECS task to pull image..."
 	sleep 120
-	cd terraform/deploy && terraform destroy -auto-approve \
+	cd terraform/deploy && AWS_PROFILE=terraform terraform destroy -auto-approve \
 		-var="region=$(REGION)" \
 		-var="project_name=$(PROJECT_NAME)" \
 		-var="multi_az=$(MULTI_AZ)"

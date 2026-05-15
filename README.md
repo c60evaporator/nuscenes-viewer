@@ -164,6 +164,7 @@ Now you can open the app `http://localhost:3000` by Chrome browser. If you launc
 
 Select a map from the drop-down menu, then choose a scene from the list.
 Each scene contains 40 samples (~20 seconds of driving data).
+From the following buttons on the right pane, you can deep-dive into the dataset
 
 | Button | What it shows |
 |--------|--------------|

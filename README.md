@@ -186,13 +186,111 @@ Navigate frames using the **slider** or by clicking the list on the left pane.
 
 ---
 
+### Annotations (Bounding Boxes)
+
+<img src=docs/images/annotation_bev.png width=70%>
+
+Open the annotation editor by clicking the "**Annotations**" button on the Sample page.
+
+You can edit bounding boxes in four ways:
+
+1. **LIDAR_TOP (BEV)**: Translate by mouse drag, resize and rotate using handles
+2. **3D Point Cloud**: Drag handles or Unity-style gizmos to translate and rotate
+3. **Right pane buttons**: Edit step-by-step using the move/resize/rotate buttons, or enter values directly in the numeric input fields
+4. **Keyboard**: Translate, rotate, and resize using keyboard shortcuts
+
+All edits are synchronized in real time across all views (LIDAR_TOP / camera images / 3D point cloud / right pane numeric fields). Each operation is recorded as one undo step.
+
+#### 1. LIDAR_TOP (BEV)
+
+<img src=docs/images/annotation_bev.png width=50%>
+
+Edit using the orange rectangle overlay displayed on the LIDAR_TOP top-down view.
+
+| Operation | Action |
+|---|---|
+| Drag inside the rectangle | Translate (z-coordinate remains unchanged) |
+| Drag corner or edge-center anchors | Resize (center-fixed, width/length only; height unchanged) |
+| Drag the rotation handle above the rectangle | Rotate around the z-axis (yaw) |
+| Drag outside the rectangle | Pan (view movement) |
+| Mouse wheel | Zoom |
+
+#### 2. 3D Point Cloud
+
+<img src=docs/images/annotation_three.png width=50%>
+
+In the 3D view, the editing BBox is displayed with TransformControls gizmos for translation and rotation.
+
+| Operation | Action |
+|---|---|
+| Move mouse into 3D view + press `W` | Translate mode (arrow handles shown) |
+| Move mouse into 3D view + press `E` | Rotate mode (ring handles shown) |
+| Drag an arrow handle (translate mode) | Translate along the corresponding axis (X=red=forward, Y=green=left, Z=blue=up) |
+| Drag a ring handle (rotate mode) | Rotate around the corresponding axis (3-axis free: yaw/pitch/roll) |
+| Drag outside the gizmo | Rotate view |
+| Right-click drag | Pan view |
+| Mouse wheel | Zoom |
+
+Resizing is not available in the 3D view. Use LIDAR_TOP, the right pane, or keyboard shortcuts to change size.
+
+#### 3. Right Pane Buttons
+
+<img src=docs/images/annotation_button.png width=40%>
+
+Twelve buttons are arranged in the "Bounding box ctrl" area of the right pane. Each button performs one step on click, or repeats continuously while held down (one undo step per press-and-release).
+
+| Button | Action |
+|---|---|
+| ↺ / ↻ | Rotate 5 degrees around the global z-axis (counter-clockwise / clockwise) |
+| ▲ / ▼ / ► / ◄ | Translate 0.1m in ego coordinates (forward / backward / right / left) |
+| +W / -W | Expand/shrink width by 0.1m (center-fixed) |
+| +L / -L | Expand/shrink length by 0.1m (center-fixed) |
+| +H / -H | Expand/shrink height by 0.1m (bottom-fixed, top moves) |
+
+You can also enter values directly in the translation, size, and rotation input fields. Press Enter (or move focus away) to apply, or Escape to cancel.
+
+#### 4. Keyboard
+
+During an editing session, the following shortcuts are active (except when typing in an input field):
+
+| Key | Action |
+|---|---|
+| `→` | Translate in ego_x+ direction (screen right, forward) |
+| `←` | Translate in ego_x- direction |
+| `↑` | Translate in ego_y+ direction (screen up, left) |
+| `↓` | Translate in ego_y- direction |
+| `U` | Translate in ego_z+ direction (up) |
+| `O` | Translate in ego_z- direction (down) |
+| `I` | Expand length |
+| `K` | Shrink length |
+| `J` | Expand width |
+| `L` | Shrink width |
+| `M` | Rotate counter-clockwise around global z-axis (left rotation) |
+| `.` | Rotate clockwise around global z-axis (right rotation) |
+| `Shift + any key` | Larger step (10x) |
+
+Holding a key down triggers continuous execution. One undo step is recorded per key press-and-release.
+
+---
+
 ### Annotation (Bounding Box)
 
 Open the annotation editor from the Sample view by clicking **"Annotations"**.
 
-- **3D point cloud**: Drag handles or use the Unity-like gizmo to resize/rotate
+There are four ways to edit bounding box
+
+1. **3D point cloud**: Drag handles or use the Unity-like gizmo to resize/rotate
 - **Camera images**: Bounding boxes update in real time across all 6 cameras
 - **Keyboard shortcuts**: `W/A/S/D` to move, `Q/E` to rotate, `Enter` to save
+
+##### 1. LIDAR_TOP (BEV)
+
+
+
+##### 2. 3D Pointcloud
+
+
+##### 3. 
 
 ---
 

@@ -1,9 +1,14 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Line } from '@react-three/drei'
+import * as THREE from 'three'
 import { usePointCloud } from '@/api/sensorData'
 import { useEditStore } from '@/store/editStore'
-import { bboxCornersToGlobal, globalToSensor } from '@/lib/coordinateUtils'
+import {
+    bboxCornersToGlobal, globalToSensor,
+    multiplyQuaternions, quaternionConjugate,
+    Q_SENSOR_TO_VIEW, Q_VIEW_TO_SENSOR,
+} from '@/lib/coordinateUtils'
 import EditingBBox3D from '@/components/annotation/EditingBBox3D'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
@@ -20,6 +25,49 @@ interface Props {
 
 const FORM_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
 
+// Canvas 内のカメラを外部 ref に橋渡しする
+function CameraRefBridge({ cameraRefOut }: { cameraRefOut: React.MutableRefObject<THREE.Camera | null> }) {
+    const { camera } = useThree()
+    useEffect(() => { cameraRefOut.current = camera }, [camera, cameraRefOut])
+    return null
+}
+
+// BBox の表示座標系での中心・ローカル軸方向を計算する
+function computeBBoxLocalAxes(
+    ann: Annotation,
+    egoPose: EgoPosePoint,
+    lidarCalibSensor: { translation: number[]; rotation: number[] },
+): {
+    displayCenter: [number, number, number]
+    localX_view:   [number, number, number]
+    localY_view:   [number, number, number]
+} {
+    const q_egoInv   = quaternionConjugate(egoPose.rotation)
+    const q_calibInv = quaternionConjugate(lidarCalibSensor.rotation)
+    const q_sensor   = multiplyQuaternions(q_calibInv, multiplyQuaternions(q_egoInv, ann.rotation))
+    const q_disp     = multiplyQuaternions(
+        multiplyQuaternions(Q_SENSOR_TO_VIEW, q_sensor), Q_VIEW_TO_SENSOR,
+    )
+    const displayQuat = new THREE.Quaternion(q_disp[1], q_disp[2], q_disp[3], q_disp[0])
+    const xv = new THREE.Vector3(1, 0, 0).applyQuaternion(displayQuat)
+    const yv = new THREE.Vector3(0, 1, 0).applyQuaternion(displayQuat)
+
+    const globalCorners  = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
+    const sensorCorners  = globalCorners.map((c) => globalToSensor(c, egoPose, lidarCalibSensor))
+    const displayCorners = sensorCorners.map((c) => [c[1], -c[0], c[2]] as [number, number, number])
+    const center: [number, number, number] = [
+        displayCorners.reduce((s, c) => s + c[0], 0) / 8,
+        displayCorners.reduce((s, c) => s + c[1], 0) / 8,
+        displayCorners.reduce((s, c) => s + c[2], 0) / 8,
+    ]
+
+    return {
+        displayCenter: center,
+        localX_view:   [xv.x, xv.y, xv.z],
+        localY_view:   [yv.x, yv.y, yv.z],
+    }
+}
+
 export default function AnnotationThreeView({
     sampleDataToken,
     annotations,
@@ -35,6 +83,7 @@ export default function AnnotationThreeView({
 
     const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate')
     const orbitControlsRef = useRef<any>(null)
+    const cameraRef        = useRef<THREE.Camera | null>(null)
     const mouseInsideRef   = useRef(false)
 
     // 編集中以外の通常 BBox
@@ -61,6 +110,45 @@ export default function AnnotationThreeView({
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [session])
 
+    // BBox の指定面を正面から見る視点に切り替える
+    const setViewToFace = (axis: 'x' | 'y') => {
+        const ann = useEditStore.getState().getCurrentAnnotation()
+        if (!ann || !egoPose || !lidarCalibSensor) return
+        if (!cameraRef.current || !orbitControlsRef.current) return
+
+        const { displayCenter, localX_view, localY_view } = computeBBoxLocalAxes(ann, egoPose, lidarCalibSensor)
+        const toEgo: [number, number, number] = [-displayCenter[0], -displayCenter[1], -displayCenter[2]]
+        const localAxis = axis === 'x' ? localX_view : localY_view
+        const dot = toEgo[0]*localAxis[0] + toEgo[1]*localAxis[1] + toEgo[2]*localAxis[2]
+        const sign = dot >= 0 ? +1 : -1
+        const axisVec: [number, number, number] = [localAxis[0]*sign, localAxis[1]*sign, localAxis[2]*sign]
+
+        const diag = Math.sqrt(ann.size[0]**2 + ann.size[1]**2 + ann.size[2]**2)
+        const dist = diag * 1.5
+        const camPos: [number, number, number] = [
+            displayCenter[0] + axisVec[0] * dist,
+            displayCenter[1] + axisVec[1] * dist,
+            displayCenter[2] + axisVec[2] * dist,
+        ]
+
+        cameraRef.current.position.set(camPos[0], camPos[1], camPos[2])
+        cameraRef.current.up.set(0, 0, 1)
+        orbitControlsRef.current.target.set(displayCenter[0], displayCenter[1], displayCenter[2])
+        orbitControlsRef.current.update()
+    }
+
+    const buttonEnabled = currentAnnotation !== null && !!egoPose && !!lidarCalibSensor
+    const btnStyle = (enabled: boolean): React.CSSProperties => ({
+        background:   enabled ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.35)',
+        color:        enabled ? '#D1D5DB' : '#6B7280',
+        border:       '1px solid #4B5563',
+        borderRadius: '3px',
+        padding:      '3px 8px',
+        fontSize:     10,
+        cursor:       enabled ? 'pointer' : 'not-allowed',
+        fontFamily:   'inherit',
+    })
+
     if (isLoading || !pointCloud) {
         return (
             <div style={{
@@ -75,7 +163,7 @@ export default function AnnotationThreeView({
 
     return (
         <div
-            style={{ width: '100%', height: '100%', background: '#111' }}
+            style={{ width: '100%', height: '100%', background: '#111', position: 'relative' }}
             onMouseEnter={() => { mouseInsideRef.current = true }}
             onMouseLeave={() => { mouseInsideRef.current = false }}
         >
@@ -88,6 +176,9 @@ export default function AnnotationThreeView({
                     far:      1000,
                 }}
             >
+                {/* Canvas 内のカメラを外部 ref に橋渡し */}
+                <CameraRefBridge cameraRefOut={cameraRef} />
+
                 {/* 座標軸: X=赤(前), Y=緑(左), Z=青(上)、長さ10m */}
                 <Line points={[[0,0,0],[10,0,0]]} color='red'   lineWidth={1} />
                 <Line points={[[0,0,0],[0,10,0]]} color='green' lineWidth={1} />
@@ -140,6 +231,33 @@ export default function AnnotationThreeView({
                     target={[0, 0, 0]}
                 />
             </Canvas>
+
+            {/* 視点切替ボタン（Canvas の外側にオーバーレイ） */}
+            <div style={{
+                position: 'absolute',
+                top:      18,
+                left:     4,
+                zIndex:   10,
+                display:  'flex',
+                gap:      '4px',
+            }}>
+                <button
+                    style={btnStyle(buttonEnabled)}
+                    disabled={!buttonEnabled}
+                    onClick={() => setViewToFace('y')}
+                    title='BBox前面（Y軸垂直面、自車に近い方）を正面から見る'
+                >
+                    Front
+                </button>
+                <button
+                    style={btnStyle(buttonEnabled)}
+                    disabled={!buttonEnabled}
+                    onClick={() => setViewToFace('x')}
+                    title='BBox側面（X軸垂直面、自車に近い方）を正面から見る'
+                >
+                    Side
+                </button>
+            </div>
         </div>
     )
 }

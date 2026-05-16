@@ -122,6 +122,7 @@ export default function AnnotationThreeView({
                 {/* 編集中 BBox（TransformControls 付き） */}
                 {currentAnnotation && egoPose && lidarCalibSensor && (
                     <EditingBBox3D
+                        key={currentAnnotation.token}
                         ann={currentAnnotation}
                         egoPose={egoPose}
                         lidarCalibSensor={lidarCalibSensor}

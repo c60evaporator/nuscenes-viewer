@@ -89,3 +89,17 @@ deploy-frontend:
 		--paths "/*" \
 		--no-cli-pager
 	@echo "Frontend deployed successfully."
+
+maintenance-up:
+	cd terraform/maintenance && AWS_PROFILE=terraform terraform init -upgrade && \
+		AWS_PROFILE=terraform terraform apply -auto-approve \
+		-var="region=$(REGION)" \
+		-var="project_name=$(PROJECT_NAME)"
+	@echo "Maintenance instance is ready."
+	@echo "Connect with: aws ssm start-session --target $$(cd terraform/maintenance && AWS_PROFILE=terraform terraform output -raw instance_id)"
+
+maintenance-down:
+	cd terraform/maintenance && AWS_PROFILE=terraform terraform destroy -auto-approve \
+		-var="region=$(REGION)" \
+		-var="project_name=$(PROJECT_NAME)"
+	@echo "Maintenance instance terminated."

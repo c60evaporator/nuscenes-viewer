@@ -582,6 +582,39 @@ export function axisAngleToQuaternion(axis: number[], angleRad: number): number[
   return [Math.cos(half), axis[0] * s, axis[1] * s, axis[2] * s]
 }
 
+// 表示座標系 (3D View) ↔ センサー座標系 (LIDAR_TOP) の回転 quaternion
+// 表示座標変換: (x_s, y_s, z_s) → (y_s, -x_s, z_s) = Z軸 -90° 回転
+export const Q_SENSOR_TO_VIEW: number[] = [Math.SQRT1_2, 0, 0, -Math.SQRT1_2]
+export const Q_VIEW_TO_SENSOR: number[] = [Math.SQRT1_2, 0, 0, +Math.SQRT1_2]
+
+/** クォータニオンの共役（= 逆回転）: [w,x,y,z] → [w,-x,-y,-z] */
+export function quaternionConjugate(q: number[]): number[] {
+  return [q[0], -q[1], -q[2], -q[3]]
+}
+
+/**
+ * センサー座標系のオフセットベクトルをグローバル座標系に変換する（位置の加算はしない）
+ * global_offset = R_ego * R_calib * sensor_offset
+ */
+export function sensorOffsetToGlobalOffset(
+  sensorOffset: number[],
+  egoPose:      { rotation: number[] },
+  calibSensor:  { rotation: number[] },
+): number[] {
+  const R_c   = quatToRotMat(calibSensor.rotation)
+  const egoOff = [
+    R_c[0][0]*sensorOffset[0] + R_c[0][1]*sensorOffset[1] + R_c[0][2]*sensorOffset[2],
+    R_c[1][0]*sensorOffset[0] + R_c[1][1]*sensorOffset[1] + R_c[1][2]*sensorOffset[2],
+    R_c[2][0]*sensorOffset[0] + R_c[2][1]*sensorOffset[1] + R_c[2][2]*sensorOffset[2],
+  ]
+  const R_e = quatToRotMat(egoPose.rotation)
+  return [
+    R_e[0][0]*egoOff[0] + R_e[0][1]*egoOff[1] + R_e[0][2]*egoOff[2],
+    R_e[1][0]*egoOff[0] + R_e[1][1]*egoOff[1] + R_e[1][2]*egoOff[2],
+    R_e[2][0]*egoOff[0] + R_e[2][1]*egoOff[1] + R_e[2][2]*egoOff[2],
+  ]
+}
+
 /**
  * センサー座標系の点をグローバル座標系に変換する（globalToSensor の逆変換）
  *

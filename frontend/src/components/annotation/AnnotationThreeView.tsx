@@ -1,9 +1,10 @@
-import { useMemo, memo } from 'react'
+import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Line } from '@react-three/drei'
 import { usePointCloud } from '@/api/sensorData'
 import { useEditStore } from '@/store/editStore'
 import { bboxCornersToGlobal, globalToSensor } from '@/lib/coordinateUtils'
+import EditingBBox3D from '@/components/annotation/EditingBBox3D'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -17,6 +18,8 @@ interface Props {
     onBBoxClick?: (annToken: string) => void
 }
 
+const FORM_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
+
 export default function AnnotationThreeView({
     sampleDataToken,
     annotations,
@@ -27,14 +30,36 @@ export default function AnnotationThreeView({
     onBBoxClick,
 }: Props) {
     const { data: pointCloud, isLoading } = usePointCloud(sampleDataToken)
+    const session           = useEditStore((s) => s.session)
     const currentAnnotation = useEditStore((s) => s.getCurrentAnnotation())
 
-    const effectiveAnnotations = useMemo(() => {
+    const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate')
+    const orbitControlsRef = useRef<any>(null)
+    const mouseInsideRef   = useRef(false)
+
+    // 編集中以外の通常 BBox
+    const normalAnnotations = useMemo(() => {
         if (!currentAnnotation) return annotations
-        return annotations.map((a) =>
-            a.token === currentAnnotation.token ? currentAnnotation : a
-        )
+        return annotations.filter((a) => a.token !== currentAnnotation.token)
     }, [annotations, currentAnnotation])
+
+    // W/E キー: TransformControls モード切替（3D ビューにマウスがある時のみ）
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (!mouseInsideRef.current) return
+            if (FORM_TAGS.has((e.target as HTMLElement).tagName)) return
+            if (!session) return
+            if (e.key === 'w' || e.key === 'W') {
+                e.preventDefault()
+                setTransformMode('translate')
+            } else if (e.key === 'e' || e.key === 'E') {
+                e.preventDefault()
+                setTransformMode('rotate')
+            }
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [session])
 
     if (isLoading || !pointCloud) {
         return (
@@ -49,7 +74,11 @@ export default function AnnotationThreeView({
     }
 
     return (
-        <div style={{ width: '100%', height: '100%', background: '#111' }}>
+        <div
+            style={{ width: '100%', height: '100%', background: '#111' }}
+            onMouseEnter={() => { mouseInsideRef.current = true }}
+            onMouseLeave={() => { mouseInsideRef.current = false }}
+        >
             <Canvas
                 camera={{
                     up:       [0, 0, 1],
@@ -73,9 +102,9 @@ export default function AnnotationThreeView({
                 {/* 点群 */}
                 <PointCloudMesh points={pointCloud.points} />
 
-                {/* BBox群 */}
-                {egoPose && lidarCalibSensor && effectiveAnnotations.map((ann) => (
-                    <BBoxMesh
+                {/* 通常 BBox（編集中を除く） */}
+                {egoPose && lidarCalibSensor && normalAnnotations.map((ann) => (
+                    <NormalBBoxMesh
                         key={ann.token}
                         ann={ann}
                         egoPose={egoPose}
@@ -90,7 +119,19 @@ export default function AnnotationThreeView({
                     />
                 ))}
 
+                {/* 編集中 BBox（TransformControls 付き） */}
+                {currentAnnotation && egoPose && lidarCalibSensor && (
+                    <EditingBBox3D
+                        ann={currentAnnotation}
+                        egoPose={egoPose}
+                        lidarCalibSensor={lidarCalibSensor}
+                        transformMode={transformMode}
+                        orbitControlsRef={orbitControlsRef}
+                    />
+                )}
+
                 <OrbitControls
+                    ref={orbitControlsRef}
                     enableDamping={false}
                     enablePan={true}
                     enableZoom={true}
@@ -140,7 +181,7 @@ function PointCloudMesh({ points }: { points: number[][] }) {
     )
 }
 
-const BBoxMesh = memo(function BBoxMesh({
+const NormalBBoxMesh = memo(function NormalBBoxMesh({
     ann, egoPose, lidarCalibSensor, color, lineWidth, onClick,
 }: {
     ann:              Annotation

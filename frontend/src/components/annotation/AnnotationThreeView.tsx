@@ -92,6 +92,17 @@ export default function AnnotationThreeView({
         return annotations.filter((a) => a.token !== currentAnnotation.token)
     }, [annotations, currentAnnotation])
 
+    // デフォルト視点にリセット
+    const resetCamera = () => {
+        const cam = cameraRef.current
+        const oc  = orbitControlsRef.current
+        if (!cam || !oc) return
+        cam.position.set(-20, -20, 30)
+        cam.up.set(0, 0, 1)
+        oc.target.set(0, 0, 0)
+        oc.update()
+    }
+
     // W/E キー: TransformControls モード切替（3D ビューにマウスがある時のみ）
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -241,6 +252,13 @@ export default function AnnotationThreeView({
                 display:  'flex',
                 gap:      '4px',
             }}>
+                <button
+                    style={btnStyle(true)}
+                    onClick={resetCamera}
+                    title='デフォルト視点にリセット'
+                >
+                    Default
+                </button>
                 <button
                     style={btnStyle(buttonEnabled)}
                     disabled={!buttonEnabled}

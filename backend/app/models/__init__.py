@@ -27,3 +27,4 @@ from app.models.map import (
     LaneDivider,
     TrafficLight,
 )
+from app.models.annotation_edit import AnnotationEdit

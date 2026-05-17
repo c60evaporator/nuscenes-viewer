@@ -103,20 +103,20 @@ async def scene_data(db_session: AsyncSession):
 
 async def test_list_scenes_returns_200(client: AsyncClient, scene_data):
     """シーン一覧が 200 を返すこと。"""
-    resp = await client.get("/api/v1/scenes/")
+    resp = await client.get("/api/v1/scenes")
     assert resp.status_code == 200
 
 
 async def test_list_scenes_response_has_pagination_shape(client: AsyncClient, scene_data):
     """レスポンスに total / limit / offset / items キーが含まれること。"""
-    resp = await client.get("/api/v1/scenes/")
+    resp = await client.get("/api/v1/scenes")
     body = resp.json()
     assert set(body.keys()) >= {"total", "limit", "offset", "items"}
 
 
 async def test_list_scenes_items_have_scene_fields(client: AsyncClient, scene_data):
     """items の各要素が SceneResponse のフィールドを持つこと。"""
-    resp = await client.get("/api/v1/scenes/?limit=1")
+    resp = await client.get("/api/v1/scenes?limit=1")
     item = resp.json()["items"][0]
     expected_keys = {"token", "log_token", "name", "nbr_samples",
                      "first_sample_token", "last_sample_token"}
@@ -126,7 +126,7 @@ async def test_list_scenes_items_have_scene_fields(client: AsyncClient, scene_da
 async def test_list_scenes_contains_test_scenes(client: AsyncClient, scene_data):
     """投入したテストシーンが一覧に含まれること。"""
     # 全件取得（既存データ + テストデータ、上限 500）
-    resp = await client.get("/api/v1/scenes/?limit=500")
+    resp = await client.get("/api/v1/scenes?limit=500")
     tokens = {item["token"] for item in resp.json()["items"]}
     assert _SCENE1_TOKEN in tokens
     assert _SCENE2_TOKEN in tokens
@@ -134,13 +134,13 @@ async def test_list_scenes_contains_test_scenes(client: AsyncClient, scene_data)
 
 async def test_list_scenes_total_includes_test_data(client: AsyncClient, scene_data):
     """total がテストシーン 2件分以上であること（既存データとの共存）。"""
-    resp = await client.get("/api/v1/scenes/")
+    resp = await client.get("/api/v1/scenes")
     assert resp.json()["total"] >= 2
 
 
 async def test_list_scenes_limit_restricts_item_count(client: AsyncClient, scene_data):
     """limit=1 のとき items は 1件のみ返ること。"""
-    resp = await client.get("/api/v1/scenes/?limit=1")
+    resp = await client.get("/api/v1/scenes?limit=1")
     body = resp.json()
     assert len(body["items"]) == 1
     assert body["limit"] == 1
@@ -148,8 +148,8 @@ async def test_list_scenes_limit_restricts_item_count(client: AsyncClient, scene
 
 async def test_list_scenes_offset_shifts_results(client: AsyncClient, scene_data):
     """offset を変えると返るシーンが変わること。"""
-    resp_0 = await client.get("/api/v1/scenes/?limit=1&offset=0")
-    resp_1 = await client.get("/api/v1/scenes/?limit=1&offset=1")
+    resp_0 = await client.get("/api/v1/scenes?limit=1&offset=0")
+    resp_1 = await client.get("/api/v1/scenes?limit=1&offset=1")
     token_0 = resp_0.json()["items"][0]["token"]
     token_1 = resp_1.json()["items"][0]["token"]
     assert token_0 != token_1
@@ -157,7 +157,7 @@ async def test_list_scenes_offset_shifts_results(client: AsyncClient, scene_data
 
 async def test_list_scenes_description_can_be_none(client: AsyncClient, scene_data):
     """description=None のシーンが含まれていても正常にシリアライズされること。"""
-    resp = await client.get("/api/v1/scenes/?limit=500")
+    resp = await client.get("/api/v1/scenes?limit=500")
     items = resp.json()["items"]
     beta = next((i for i in items if i["token"] == _SCENE2_TOKEN), None)
     assert beta is not None

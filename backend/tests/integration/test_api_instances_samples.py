@@ -55,11 +55,11 @@ class TestGetSample:
 
 class TestListInstances:
     async def test_list_instances_returns_200(self, client: AsyncClient):
-        resp = await client.get("/api/v1/instances/")
+        resp = await client.get("/api/v1/instances")
         assert resp.status_code == 200
 
     async def test_list_instances_pagination_shape(self, client: AsyncClient):
-        resp = await client.get("/api/v1/instances/")
+        resp = await client.get("/api/v1/instances")
         body = resp.json()
         for field in ("total", "limit", "offset", "items"):
             assert field in body, f"Missing field: {field}"
@@ -68,7 +68,7 @@ class TestListInstances:
     async def test_list_instances_items_have_required_fields(
         self, client: AsyncClient
     ):
-        resp = await client.get("/api/v1/instances/?limit=1")
+        resp = await client.get("/api/v1/instances?limit=1")
         body = resp.json()
         if not body["items"]:
             pytest.skip("No instances in DB")
@@ -79,7 +79,7 @@ class TestListInstances:
     async def test_list_instances_category_name_not_empty(
         self, client: AsyncClient
     ):
-        resp = await client.get("/api/v1/instances/?limit=1")
+        resp = await client.get("/api/v1/instances?limit=1")
         body = resp.json()
         if not body["items"]:
             pytest.skip("No instances in DB")
@@ -88,7 +88,7 @@ class TestListInstances:
     async def test_list_instances_limit_is_respected(
         self, client: AsyncClient
     ):
-        resp = await client.get("/api/v1/instances/?limit=1")
+        resp = await client.get("/api/v1/instances?limit=1")
         body = resp.json()
         assert len(body["items"]) <= 1
 
@@ -96,7 +96,7 @@ class TestListInstances:
         self, client: AsyncClient, real_instance_data: tuple[str, str]
     ):
         _, scene_token = real_instance_data
-        resp = await client.get(f"/api/v1/instances/?scene_token={scene_token}")
+        resp = await client.get(f"/api/v1/instances?scene_token={scene_token}")
         body = resp.json()
         assert resp.status_code == 200
         assert body["total"] >= 1
@@ -104,7 +104,7 @@ class TestListInstances:
     async def test_list_instances_category_name_filter(
         self, client: AsyncClient
     ):
-        resp = await client.get("/api/v1/instances/?category_name=car")
+        resp = await client.get("/api/v1/instances?category_name=car")
         body = resp.json()
         assert resp.status_code == 200
         # すべてのアイテムが "car" を含む category_name を持つ
@@ -114,7 +114,7 @@ class TestListInstances:
     async def test_list_instances_sorted_by_category_name(
         self, client: AsyncClient
     ):
-        resp = await client.get("/api/v1/instances/?limit=50")
+        resp = await client.get("/api/v1/instances?limit=50")
         body = resp.json()
         if len(body["items"]) < 2:
             pytest.skip("Need at least 2 instances to check sort order")
@@ -124,7 +124,7 @@ class TestListInstances:
     async def test_list_instances_limit_negative_returns_422(
         self, client: AsyncClient
     ):
-        resp = await client.get("/api/v1/instances/?limit=-1")
+        resp = await client.get("/api/v1/instances?limit=-1")
         assert resp.status_code == 422
 
 

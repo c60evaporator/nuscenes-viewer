@@ -16,20 +16,20 @@ _ANN_TOKEN = "ann-anntest-001"
 
 async def test_list_annotations_returns_200(client: AsyncClient, sample_annotation: SampleAnnotation):
     """アノテーション一覧が 200 を返すこと。"""
-    resp = await client.get("/api/v1/annotations/")
+    resp = await client.get("/api/v1/annotations")
     assert resp.status_code == 200
 
 
 async def test_list_annotations_has_pagination_shape(client: AsyncClient, sample_annotation: SampleAnnotation):
     """レスポンスに total / limit / offset / items キーが含まれること。"""
-    resp = await client.get("/api/v1/annotations/")
+    resp = await client.get("/api/v1/annotations")
     body = resp.json()
     assert set(body.keys()) >= {"total", "limit", "offset", "items"}
 
 
 async def test_list_annotations_limit_restricts_count(client: AsyncClient, sample_annotation: SampleAnnotation):
     """limit=1 のとき items は 1件のみ返ること。"""
-    resp = await client.get("/api/v1/annotations/?limit=1")
+    resp = await client.get("/api/v1/annotations?limit=1")
     body = resp.json()
     assert len(body["items"]) == 1
     assert body["limit"] == 1
@@ -37,8 +37,8 @@ async def test_list_annotations_limit_restricts_count(client: AsyncClient, sampl
 
 async def test_list_annotations_offset_shifts_results(client: AsyncClient, sample_annotation: SampleAnnotation):
     """offset を変えると返るアノテーションが変わること。"""
-    resp_0 = await client.get("/api/v1/annotations/?limit=1&offset=0")
-    resp_1 = await client.get("/api/v1/annotations/?limit=1&offset=1")
+    resp_0 = await client.get("/api/v1/annotations?limit=1&offset=0")
+    resp_1 = await client.get("/api/v1/annotations?limit=1&offset=1")
     token_0 = resp_0.json()["items"][0]["token"]
     token_1 = resp_1.json()["items"][0]["token"]
     assert token_0 != token_1
@@ -46,13 +46,13 @@ async def test_list_annotations_offset_shifts_results(client: AsyncClient, sampl
 
 async def test_list_annotations_limit_negative_returns_422(client: AsyncClient, sample_annotation: SampleAnnotation):
     """limit=-1（範囲外）のとき 422 が返ること。"""
-    resp = await client.get("/api/v1/annotations/?limit=-1")
+    resp = await client.get("/api/v1/annotations?limit=-1")
     assert resp.status_code == 422
 
 
 async def test_list_annotations_offset_negative_returns_422(client: AsyncClient, sample_annotation: SampleAnnotation):
     """offset=-1（範囲外）のとき 422 が返ること。"""
-    resp = await client.get("/api/v1/annotations/?offset=-1")
+    resp = await client.get("/api/v1/annotations?offset=-1")
     assert resp.status_code == 422
 
 

@@ -63,6 +63,7 @@ class InstanceResponse(BaseModel):
     first_annotation_token: str | None
     last_annotation_token:  str | None
 
+# ------ Update ------
 
 class AnnotationUpdate(BaseModel):
     """PATCH 用: 送ったフィールドだけ更新する"""
@@ -71,3 +72,28 @@ class AnnotationUpdate(BaseModel):
     size: list[float] | None = None
     visibility_token: str | None = None
     attribute_tokens: list[str] | None = None
+
+# ------ Create ------
+
+class InstanceCreate(BaseModel):
+    """新規 Instance 作成用ペイロード."""
+    category_token: str
+
+
+class AnnotationCreate(BaseModel):
+    """POST /annotations 用: 新規 BBox 追加.
+
+    instance_token と new_instance は排他的:
+      - instance_token が指定されれば既存 Instance に追加
+      - new_instance が指定されれば新規 InstanceEdit を作成して追加
+    """
+    sample_token:     str
+    instance_token:   str | None = None
+    new_instance:     InstanceCreate | None = None
+    translation:      list[float]
+    rotation:         list[float]
+    size:             list[float]
+    prev:             str | None = None
+    next:             str | None = None
+    visibility_token: str | None = None
+    attribute_tokens: list[str] = []

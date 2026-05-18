@@ -220,13 +220,11 @@ async def compute_instance_stats(
 ) -> tuple[int, str | None, str | None]:
     """instance_token に紐づく annotations (マージ済み) から
     (nbr_annotations, first_annotation_token, last_annotation_token) を計算する.
-
-    sample.timestamp 昇順で並べて, 先頭/末尾の token を取得.
-    削除済み (delete edit がある base_token) は除外.
     """
-    # base annotations (既存 SampleAnnotation)
+    # base annotations (Sample を eager-load)
     base_result = await db.execute(
         select(SampleAnnotation)
+        .options(selectinload(SampleAnnotation.sample))
         .join(Sample, Sample.token == SampleAnnotation.sample_token)
         .where(SampleAnnotation.instance_token == instance_token)
         .order_by(Sample.timestamp)
@@ -245,18 +243,23 @@ async def compute_instance_stats(
     # delete を除外した base_anns
     visible_base = [a for a in base_anns if a.token not in delete_set]
 
-    # add edits を sample.timestamp 順に挿入するため, sample を取得
-    add_anns_with_ts: list[tuple[int, str]] = []  # (timestamp, token)
+    # add edits の sample をバッチで取得 (1クエリ)
+    add_sample_tokens = [a.sample_token for a in adds if a.sample_token is not None]
+    sample_ts_map: dict[str, int] = {}
+    if add_sample_tokens:
+        sample_result = await db.execute(
+            select(Sample).where(Sample.token.in_(add_sample_tokens))
+        )
+        sample_ts_map = {s.token: s.timestamp for s in sample_result.scalars().all()}
+
+    add_anns_with_ts: list[tuple[int, str]] = []
     for add in adds:
         if add.sample_token is None:
             continue
-        sample_result = await db.execute(
-            select(Sample).where(Sample.token == add.sample_token)
-        )
-        sample = sample_result.scalar_one_or_none()
-        if sample is None:
+        ts = sample_ts_map.get(add.sample_token)
+        if ts is None:
             continue
-        add_anns_with_ts.append((sample.timestamp, add.token))
+        add_anns_with_ts.append((ts, add.token))
 
     # マージして時系列に並べる
     all_with_ts: list[tuple[int, str]] = [

@@ -196,7 +196,7 @@ class AnnotationRepository:
         scene_token: str | None = None,
         category_name: str | None = None,
     ) -> tuple[int, list[Instance]]:
-        """Instance + InstanceEdit を統合し, 動的計算した stats を含めて返す."""
+        """Instance + InstanceEdit を統合し, ページング後の Instance のみ動的計算した stats を含めて返す."""
         # 既存 Instance クエリ
         q = (
             select(Instance)
@@ -212,15 +212,7 @@ class AnnotationRepository:
                 .where(Sample.scene_token == scene_token)
                 .distinct()
             )
-            # InstanceEdit からも同じシーンの instance を抽出
-            scene_inst_edit_subq = (
-                select(AnnotationEdit.instance_token)
-                .join(Sample, Sample.token == AnnotationEdit.sample_token)
-                .where(Sample.scene_token == scene_token)
-                .distinct()
-            )
             q = q.where(Instance.token.in_(scene_inst_subq))
-            # InstanceEdit のシーンフィルタは後段で処理
 
         if category_name is not None:
             q = q.where(Category.name.ilike(f"%{category_name}%"))
@@ -230,14 +222,13 @@ class AnnotationRepository:
         existing_instances = list(existing_result.scalars().all())
 
         # InstanceEdit を取得 (フィルタ適用)
-        ie_q = select(InstanceEdit).options()
+        ie_q = select(InstanceEdit)
         ie_result = await self.db.execute(ie_q)
         ie_list = list(ie_result.scalars().all())
 
         # InstanceEdit → 仮想 Instance に変換
         virtual_instances: list[Instance] = []
         for ie in ie_list:
-            # category 名フィルタ
             cat_result = await self.db.execute(
                 select(Category).where(Category.token == ie.category_token)
             )
@@ -246,7 +237,6 @@ class AnnotationRepository:
                 continue
             if category_name is not None and category_name.lower() not in category.name.lower():
                 continue
-            # scene フィルタ: InstanceEdit に紐づく add edits の sample がそのシーンに属するか
             if scene_token is not None:
                 has_in_scene = await self.db.execute(
                     select(func.count())
@@ -259,32 +249,29 @@ class AnnotationRepository:
                 )
                 if has_in_scene.scalar_one() == 0:
                     continue
-
             virtual = Instance(
                 token=ie.token,
                 category_token=ie.category_token,
-                nbr_annotations=0,  # 動的計算で上書き
+                nbr_annotations=0,
                 first_annotation_token=None,
                 last_annotation_token=None,
             )
             virtual.category = category
             virtual_instances.append(virtual)
 
-        # マージ + 動的計算
+        # マージ + ソート
         all_instances = existing_instances + virtual_instances
+        all_instances.sort(key=lambda i: (i.category.name if i.category else "", i.token))
 
-        for inst in all_instances:
+        total = len(all_instances)
+        # ★ ページング後の Instance だけに対して動的計算を実行
+        paged = all_instances[offset:offset + limit]
+        for inst in paged:
             nbr, first, last = await compute_instance_stats(self.db, inst.token)
             inst.nbr_annotations = nbr
             inst.first_annotation_token = first
             inst.last_annotation_token = last
 
-        # 並び替え (category.name, token)
-        all_instances.sort(key=lambda i: (i.category.name if i.category else "", i.token))
-
-        total = len(all_instances)
-        # ページング
-        paged = all_instances[offset:offset + limit]
         return total, paged
 
     async def get_instance_by_token(self, token: str) -> Instance | None:

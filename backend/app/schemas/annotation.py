@@ -84,8 +84,9 @@ class AnnotationCreate(BaseModel):
     """POST /annotations 用: 新規 BBox 追加.
 
     instance_token と new_instance は排他的:
-      - instance_token が指定されれば既存 Instance に追加
+      - instance_token が指定されれば既存 Instance または InstanceEdit に追加
       - new_instance が指定されれば新規 InstanceEdit を作成して追加
+    prev / next には, 同 instance 内の隣接アノテーションの token を指定する.
     """
     sample_token:     str
     instance_token:   str | None = None

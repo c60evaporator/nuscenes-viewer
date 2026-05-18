@@ -3,8 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.annotation import Attribute, Category, Instance, SampleAnnotation, Visibility
+from app.models.annotation_edit import AnnotationEdit, InstanceEdit
 from app.models.scene import Sample
 from app.schemas.annotation import AnnotationUpdate
+from app.services.annotation_merger import (
+    apply_modify, apply_attribute_tokens, apply_visibility,
+    synthesize_from_add, merge_annotations, compute_instance_stats,
+)
 
 
 def _base_query():
@@ -13,6 +18,7 @@ def _base_query():
         selectinload(SampleAnnotation.instance).selectinload(Instance.category),
         selectinload(SampleAnnotation.visibility),
         selectinload(SampleAnnotation.attributes),
+        selectinload(SampleAnnotation.sample),
     )
 
 
@@ -23,60 +29,165 @@ class AnnotationRepository:
     async def get_all(
         self, limit: int, offset: int
     ) -> tuple[int, list[SampleAnnotation]]:
-        total_result = await self.db.execute(
-            select(func.count()).select_from(SampleAnnotation)
-        )
-        total = total_result.scalar_one()
+        """SampleAnnotation 全件をマージ済みで返す.
 
+        単純化のため: 削除済みは結果から除外, add edits は末尾に追加.
+        total は (元 - 削除) + add の数.
+        ページングは大まかな実装. 厳密な順序整合性は限定的.
+        """
+        # 全 edits を取得
+        edits_result = await self.db.execute(select(AnnotationEdit))
+        edits = list(edits_result.scalars().all())
+
+        delete_set = {e.base_token for e in edits if e.edit_type == 'delete' and e.base_token}
+        adds_count = sum(1 for e in edits if e.edit_type == 'add')
+
+        # total: 元 - 削除 + 追加
+        original_total = (await self.db.execute(
+            select(func.count()).select_from(SampleAnnotation)
+        )).scalar_one()
+        total = original_total - len(delete_set) + adds_count
+
+        # ページングしてベースを取得 (削除は SQL では除外しないでマージ時に対応)
         result = await self.db.execute(
             _base_query()
             .order_by(SampleAnnotation.token)
             .limit(limit)
             .offset(offset)
         )
-        return total, list(result.scalars().all())
+        base_anns = list(result.scalars().all())
+
+        # マージ
+        merged = await merge_annotations(self.db, base_anns, edits)
+        return total, merged
 
     async def get_by_token(self, token: str) -> SampleAnnotation | None:
+        """token に対応する SampleAnnotation をマージ済みで返す.
+
+        token が:
+          - 既存 SampleAnnotation の場合: base + 関連する modify edit を適用. delete edit があれば None.
+          - add edit の token の場合: 合成した SampleAnnotation を返す.
+        """
+        # まず既存 SampleAnnotation を探す
         result = await self.db.execute(
             _base_query().where(SampleAnnotation.token == token)
+        )
+        base_ann = result.scalar_one_or_none()
+        if base_ann is not None:
+            # 関連する edits を取得
+            edits_result = await self.db.execute(
+                select(AnnotationEdit).where(AnnotationEdit.base_token == token)
+            )
+            edits = list(edits_result.scalars().all())
+
+            # delete edit があれば None
+            if any(e.edit_type == 'delete' for e in edits):
+                return None
+
+            # modify edit があれば適用
+            modify_edit = next((e for e in edits if e.edit_type == 'modify'), None)
+            if modify_edit is not None:
+                apply_modify(base_ann, modify_edit)
+                await apply_attribute_tokens(self.db, base_ann, modify_edit.attribute_tokens)
+                await apply_visibility(self.db, base_ann, modify_edit.visibility_token)
+            return base_ann
+
+        # 既存でなければ add edit を探す
+        add_result = await self.db.execute(
+            select(AnnotationEdit).where(
+                AnnotationEdit.token == token,
+                AnnotationEdit.edit_type == 'add',
+            )
+        )
+        add_edit = add_result.scalar_one_or_none()
+        if add_edit is None:
+            return None
+        return await synthesize_from_add(self.db, add_edit)
+    
+    async def get_raw_by_token(self, token: str) -> SampleAnnotation | None:
+        """マージ処理を含めずに, sample_annotations テーブルから直接 token で取得.
+
+        編集機能側 (DELETE / POST) で base となる元データの存在確認に使う.
+        get_by_token はマージ済みデータを返すので, この用途には使えない (delete edit があると None になるため).
+        """
+        result = await self.db.execute(
+            select(SampleAnnotation).where(SampleAnnotation.token == token)
         )
         return result.scalar_one_or_none()
 
     async def get_by_sample(self, sample_token: str) -> list[SampleAnnotation]:
-        """samples.py エンドポイントでも使用する。"""
+        """sample に紐づく全 annotations をマージ済みで返す."""
         result = await self.db.execute(
             _base_query().where(SampleAnnotation.sample_token == sample_token)
         )
-        return list(result.scalars().all())
+        base_anns = list(result.scalars().all())
+
+        edits_result = await self.db.execute(
+            select(AnnotationEdit).where(AnnotationEdit.sample_token == sample_token)
+        )
+        edits = list(edits_result.scalars().all())
+
+        return await merge_annotations(self.db, base_anns, edits)
 
     async def get_by_instance(self, instance_token: str) -> list[SampleAnnotation]:
-        """Instance の全 Annotation を Sample.timestamp 昇順で返す。"""
+        """instance に紐づく全 annotations をマージ済みで返す (Sample.timestamp 昇順)."""
         result = await self.db.execute(
-            select(SampleAnnotation)
-            .options(
-                selectinload(SampleAnnotation.instance).selectinload(Instance.category),
-                selectinload(SampleAnnotation.visibility),
-                selectinload(SampleAnnotation.attributes),
-                selectinload(SampleAnnotation.sample),
-            )
+            _base_query()
             .join(Sample, SampleAnnotation.sample_token == Sample.token)
             .where(SampleAnnotation.instance_token == instance_token)
             .order_by(Sample.timestamp)
         )
-        return list(result.scalars().all())
+        base_anns = list(result.scalars().all())
+
+        edits_result = await self.db.execute(
+            select(AnnotationEdit).where(AnnotationEdit.instance_token == instance_token)
+        )
+        edits = list(edits_result.scalars().all())
+
+        merged = await merge_annotations(self.db, base_anns, edits)
+        # マージ後も sample.timestamp 順を維持
+        merged.sort(key=lambda a: a.sample.timestamp if a.sample else 0)
+        return merged
 
     async def get_by_instance_and_sample(
         self, instance_token: str, sample_token: str
     ) -> SampleAnnotation | None:
-        """特定 Sample での Instance の Annotation を 1 件取得。"""
+        """特定 Sample での Instance の Annotation を 1 件取得 (マージ済み)."""
+        # base
         result = await self.db.execute(
-            _base_query()
-            .where(
+            _base_query().where(
                 SampleAnnotation.instance_token == instance_token,
                 SampleAnnotation.sample_token == sample_token,
             )
         )
-        return result.scalar_one_or_none()
+        base_ann = result.scalar_one_or_none()
+
+        # edits
+        edits_result = await self.db.execute(
+            select(AnnotationEdit).where(
+                AnnotationEdit.instance_token == instance_token,
+                AnnotationEdit.sample_token == sample_token,
+            )
+        )
+        edits = list(edits_result.scalars().all())
+
+        if base_ann is not None:
+            if any(e.edit_type == 'delete' for e in edits):
+                return None
+            modify_edit = next((e for e in edits if e.edit_type == 'modify'), None)
+            if modify_edit is not None:
+                apply_modify(base_ann, modify_edit)
+                await apply_attribute_tokens(self.db, base_ann, modify_edit.attribute_tokens)
+                await apply_visibility(self.db, base_ann, modify_edit.visibility_token)
+            return base_ann
+
+        # base が無ければ add edit を探す
+        add_edit = next((e for e in edits if e.edit_type == 'add'), None)
+        if add_edit is None:
+            return None
+        return await synthesize_from_add(self.db, add_edit)
+
+    # ── Instance 系 (動的計算対応) ─────────────────────────────────────────────
 
     async def get_all_instances(
         self,
@@ -85,13 +196,8 @@ class AnnotationRepository:
         scene_token: str | None = None,
         category_name: str | None = None,
     ) -> tuple[int, list[Instance]]:
-        """Instance 一覧を category_name 昇順・token 昇順で返す。
-
-        scene_token フィルタ:
-          SampleAnnotation → Sample → Scene の JOIN で絞り込む。
-          DISTINCT との ORDER BY 競合を避けるため IN subquery を使用。
-        category_name フィルタ: ILIKE 部分一致。
-        """
+        """Instance + InstanceEdit を統合し, 動的計算した stats を含めて返す."""
+        # 既存 Instance クエリ
         q = (
             select(Instance)
             .join(Category, Category.token == Instance.category_token)
@@ -100,33 +206,126 @@ class AnnotationRepository:
         )
 
         if scene_token is not None:
-            # そのシーンに属するアノテーションが存在する instance_token の集合
             scene_inst_subq = (
                 select(SampleAnnotation.instance_token)
                 .join(Sample, Sample.token == SampleAnnotation.sample_token)
                 .where(Sample.scene_token == scene_token)
                 .distinct()
             )
+            # InstanceEdit からも同じシーンの instance を抽出
+            scene_inst_edit_subq = (
+                select(AnnotationEdit.instance_token)
+                .join(Sample, Sample.token == AnnotationEdit.sample_token)
+                .where(Sample.scene_token == scene_token)
+                .distinct()
+            )
             q = q.where(Instance.token.in_(scene_inst_subq))
+            # InstanceEdit のシーンフィルタは後段で処理
 
         if category_name is not None:
             q = q.where(Category.name.ilike(f"%{category_name}%"))
 
-        total = (
-            await self.db.execute(select(func.count()).select_from(q.subquery()))
-        ).scalar_one()
-        result = await self.db.execute(q.offset(offset).limit(limit))
-        return total, list(result.scalars().all())
+        # 既存 Instance を取得
+        existing_result = await self.db.execute(q)
+        existing_instances = list(existing_result.scalars().all())
+
+        # InstanceEdit を取得 (フィルタ適用)
+        ie_q = select(InstanceEdit).options()
+        ie_result = await self.db.execute(ie_q)
+        ie_list = list(ie_result.scalars().all())
+
+        # InstanceEdit → 仮想 Instance に変換
+        virtual_instances: list[Instance] = []
+        for ie in ie_list:
+            # category 名フィルタ
+            cat_result = await self.db.execute(
+                select(Category).where(Category.token == ie.category_token)
+            )
+            category = cat_result.scalar_one_or_none()
+            if category is None:
+                continue
+            if category_name is not None and category_name.lower() not in category.name.lower():
+                continue
+            # scene フィルタ: InstanceEdit に紐づく add edits の sample がそのシーンに属するか
+            if scene_token is not None:
+                has_in_scene = await self.db.execute(
+                    select(func.count())
+                    .select_from(AnnotationEdit)
+                    .join(Sample, Sample.token == AnnotationEdit.sample_token)
+                    .where(
+                        AnnotationEdit.instance_token == ie.token,
+                        Sample.scene_token == scene_token,
+                    )
+                )
+                if has_in_scene.scalar_one() == 0:
+                    continue
+
+            virtual = Instance(
+                token=ie.token,
+                category_token=ie.category_token,
+                nbr_annotations=0,  # 動的計算で上書き
+                first_annotation_token=None,
+                last_annotation_token=None,
+            )
+            virtual.category = category
+            virtual_instances.append(virtual)
+
+        # マージ + 動的計算
+        all_instances = existing_instances + virtual_instances
+
+        for inst in all_instances:
+            nbr, first, last = await compute_instance_stats(self.db, inst.token)
+            inst.nbr_annotations = nbr
+            inst.first_annotation_token = first
+            inst.last_annotation_token = last
+
+        # 並び替え (category.name, token)
+        all_instances.sort(key=lambda i: (i.category.name if i.category else "", i.token))
+
+        total = len(all_instances)
+        # ページング
+        paged = all_instances[offset:offset + limit]
+        return total, paged
 
     async def get_instance_by_token(self, token: str) -> Instance | None:
-        """1件の Instance を category リレーションシップ付きで返す。"""
+        """1件の Instance または InstanceEdit を動的計算した stats 込みで返す."""
+        # 既存 Instance
         result = await self.db.execute(
             select(Instance)
-            .join(Category, Category.token == Instance.category_token)
             .options(selectinload(Instance.category))
             .where(Instance.token == token)
         )
-        return result.scalar_one_or_none()
+        inst = result.scalar_one_or_none()
+
+        if inst is None:
+            # InstanceEdit を探す
+            ie_result = await self.db.execute(
+                select(InstanceEdit).where(InstanceEdit.token == token)
+            )
+            ie = ie_result.scalar_one_or_none()
+            if ie is None:
+                return None
+            cat_result = await self.db.execute(
+                select(Category).where(Category.token == ie.category_token)
+            )
+            category = cat_result.scalar_one_or_none()
+            if category is None:
+                return None
+            inst = Instance(
+                token=ie.token,
+                category_token=ie.category_token,
+                nbr_annotations=0,
+                first_annotation_token=None,
+                last_annotation_token=None,
+            )
+            inst.category = category
+
+        # 動的計算
+        nbr, first, last = await compute_instance_stats(self.db, inst.token)
+        inst.nbr_annotations = nbr
+        inst.first_annotation_token = first
+        inst.last_annotation_token = last
+        return inst
 
     async def get_all_categories(self) -> list[Category]:
         result = await self.db.execute(select(Category).order_by(Category.name))
@@ -146,13 +345,15 @@ class AnnotationRepository:
         """SampleAnnotation を直接更新せず, annotation_edits に modify レコードを作成/更新する.
 
         既存の modify edit がある場合は部分上書き. ない場合は新規作成.
-        Returns: マージ済み (base + edit) の SampleAnnotation インスタンス
-                 (DB の sample_annotations 自体は変更しない).
+        Returns: マージ済みの SampleAnnotation. DB の sample_annotations 自体は変更しない.
         """
         from app.repositories.annotation_edit import AnnotationEditRepository
 
-        # base SampleAnnotation の存在確認
-        base_ann = await self.get_by_token(token)
+        # base SampleAnnotation の存在確認 (元データを直接取得, マージなし)
+        base_result = await self.db.execute(
+            _base_query().where(SampleAnnotation.token == token)
+        )
+        base_ann = base_result.scalar_one_or_none()
         if base_ann is None:
             return None
 
@@ -160,7 +361,6 @@ class AnnotationRepository:
         edit = await edit_repo.get_modify_by_base(token)
 
         if edit is None:
-            # 新規 modify edit を作成
             edit = await edit_repo.create_modify(
                 base_token=token,
                 sample_token=base_ann.sample_token,
@@ -172,7 +372,6 @@ class AnnotationRepository:
                 attribute_tokens=data.attribute_tokens,
             )
         else:
-            # 既存 modify edit を部分上書き
             if data.translation is not None:
                 edit.translation = data.translation
             if data.rotation is not None:
@@ -186,34 +385,8 @@ class AnnotationRepository:
             edit.version += 1
             await self.db.flush()
 
-        # マージ済みのデータを返す (base + edit)
-        return _merge_modify(base_ann, edit)
-
-def _merge_modify(base: SampleAnnotation, edit) -> SampleAnnotation:
-    """base SampleAnnotation を edit の非 NULL 値で上書きしたコピーを返す.
-
-    DB へは flush しない. 元の base オブジェクトのインメモリ属性も書き換えない.
-    converter.to_response() が属性アクセスで扱えるよう SampleAnnotation 型を返す.
-
-    制限: prev/next の上書きには現状未対応 (Step 14 のマージで完全実装).
-    """
-    # SQLAlchemy ORM オブジェクトを detach せずにコピー
-    # 既存 base のフィールドを edit の値で上書きしたインスタンスを作る
-    # ただし他テストへの影響を避けるため, ここでは base のフィールドを直接書き換える
-    # (db.flush() しないので DB には反映されない. session を expire しないこと)
-
-    if edit.translation is not None:
-        base.translation = edit.translation
-    if edit.rotation is not None:
-        base.rotation = edit.rotation
-    if edit.size is not None:
-        base.size = edit.size
-    if edit.visibility_token is not None:
-        base.visibility_token = edit.visibility_token
-    if edit.attribute_tokens is not None:
-        # attributes は多対多リレーション. attribute_tokens から Attribute を読み込んで設定
-        # ただしこれを async で行うには Repository コンテキストが必要
-        # ここでは一旦、token のリストだけ反映 (= attributes は未更新)
-        # Step 14 の本格マージで完全対応する
-        pass
-    return base
+        # マージ結果を返す
+        apply_modify(base_ann, edit)
+        await apply_attribute_tokens(self.db, base_ann, edit.attribute_tokens)
+        await apply_visibility(self.db, base_ann, edit.visibility_token)
+        return base_ann

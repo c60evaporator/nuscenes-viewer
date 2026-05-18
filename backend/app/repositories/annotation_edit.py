@@ -34,6 +34,16 @@ class AnnotationEditRepository:
             )
         )
         return result.scalar_one_or_none()
+    
+    async def get_add_by_token(self, token: str) -> AnnotationEdit | None:
+        """add edit を自身の token で取得."""
+        result = await self.db.execute(
+            select(AnnotationEdit).where(
+                AnnotationEdit.token == token,
+                AnnotationEdit.edit_type == 'add',
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def get_by_sample(self, sample_token: str) -> list[AnnotationEdit]:
         """sample_token の全 edits を取得 (modify/add/delete すべて)."""
@@ -143,6 +153,27 @@ class AnnotationEditRepository:
         self.db.add(edit)
         await self.db.flush()
         return edit
+    
+    async def delete_edit(self, edit: AnnotationEdit) -> None:
+        """edit レコードを物理削除 (= add edit 自体を消す場合に使用)."""
+        await self.db.delete(edit)
+        await self.db.flush()
+
+    async def update_chain(
+        self,
+        edit: AnnotationEdit,
+        field: str,
+        new_value: str,
+    ) -> None:
+        """既存 edit の prev / next を直接書き換え, version をインクリメント.
+
+        field は 'prev' または 'next'. それ以外は ValueError.
+        """
+        if field not in ('prev', 'next'):
+            raise ValueError(f"field must be 'prev' or 'next', got '{field}'")
+        setattr(edit, field, new_value)
+        edit.version += 1
+        await self.db.flush()
 
 
 class InstanceEditRepository:

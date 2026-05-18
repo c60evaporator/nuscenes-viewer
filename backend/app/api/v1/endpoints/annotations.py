@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.annotation import AnnotationConverter
 from app.dependencies import get_db
 from app.repositories.annotation import AnnotationRepository
-from app.schemas.annotation import AnnotationResponse, AnnotationUpdate
+from app.repositories.annotation_edit import AnnotationEditRepository, InstanceEditRepository
+from app.schemas.annotation import AnnotationResponse, AnnotationUpdate, AnnotationCreate
 from app.schemas.common import PaginatedResponse
+from app.services.annotation_edit_service import create_chain_modify
 
 router = APIRouter(prefix="/annotations", tags=["annotations"])
 
@@ -45,3 +47,87 @@ async def update_annotation(
         raise HTTPException(status_code=404, detail="Annotation not found")
     await db.commit()
     return AnnotationConverter.to_response(ann)
+
+@router.post("", response_model=AnnotationResponse, status_code=status.HTTP_201_CREATED)
+async def create_annotation(
+    data: AnnotationCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """新規 BBox を追加. (...省略...)"""
+    if (data.instance_token is None) == (data.new_instance is None):
+        raise HTTPException(
+            status_code=400,
+            detail="Exactly one of 'instance_token' or 'new_instance' must be provided",
+        )
+
+    edit_repo          = AnnotationEditRepository(db)
+    instance_edit_repo = InstanceEditRepository(db)
+
+    # 1. instance を準備
+    if data.new_instance is not None:
+        new_instance_edit = await instance_edit_repo.create(
+            category_token=data.new_instance.category_token,
+        )
+        instance_token = new_instance_edit.token
+    else:
+        instance_token = data.instance_token
+
+    # 2. add edit を作成
+    add_edit = await edit_repo.create_add(
+        sample_token=data.sample_token,
+        instance_token=instance_token,
+        translation=data.translation,
+        rotation=data.rotation,
+        size=data.size,
+        prev=data.prev,
+        next_=data.next,
+        visibility_token=data.visibility_token,
+        attribute_tokens=data.attribute_tokens,
+    )
+
+    # 3. 隣接 chain の書き換え
+    if data.prev is not None:
+        await create_chain_modify(db, target_token=data.prev, field='next', new_value=add_edit.token)
+    if data.next is not None:
+        await create_chain_modify(db, target_token=data.next, field='prev', new_value=add_edit.token)
+
+    await db.commit()
+
+    # マージ済み結果を返す
+    repo = AnnotationRepository(db)
+    merged = await repo.get_by_token(add_edit.token)
+    if merged is None:
+        raise HTTPException(status_code=500, detail="Failed to synthesize new annotation")
+    return AnnotationConverter.to_response(merged)
+
+
+@router.delete("/{token}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_annotation(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """BBox を論理削除 (or add edit の物理削除)."""
+    ann_repo  = AnnotationRepository(db)
+    edit_repo = AnnotationEditRepository(db)
+
+    # 既存 SampleAnnotation の場合: delete edit を作成
+    base = await ann_repo.get_raw_by_token(token)
+    if base is not None:
+        existing_delete = await edit_repo.get_delete_by_base(token)
+        if existing_delete is None:
+            await edit_repo.create_delete(
+                base_token=token,
+                sample_token=base.sample_token,
+                instance_token=base.instance_token,
+            )
+        await db.commit()
+        return
+
+    # add edit の場合: そのレコード自体を物理削除
+    add_edit = await edit_repo.get_add_by_token(token)
+    if add_edit is not None:
+        await edit_repo.delete_edit(add_edit)
+        await db.commit()
+        return
+
+    raise HTTPException(status_code=404, detail="Annotation not found")

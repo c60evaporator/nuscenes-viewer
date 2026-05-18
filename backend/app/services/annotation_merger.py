@@ -11,6 +11,7 @@ from typing import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.annotation import Attribute, Instance, SampleAnnotation, Visibility
 from app.models.annotation_edit import AnnotationEdit, InstanceEdit
@@ -85,7 +86,9 @@ async def synthesize_from_add(
     """add edit から SampleAnnotation インスタンスを合成する.
 
     DB の sample_annotations には INSERT しない (transient なオブジェクト).
-    関連リレーション (instance, visibility, attributes) は edit のフィールドから組み立てる.
+    関連リレーション (instance, visibility, attributes, sample) は edit のフィールドから組み立てる.
+    
+    リレーション属性は set_committed_value で設定することで, back-population の警告を回避する.
 
     Returns: None if 必須フィールドが欠けている場合 (= 不正な add edit)
     """
@@ -111,7 +114,6 @@ async def synthesize_from_add(
     )
 
     # ── instance リレーションを設定 ──
-    # 既存 Instance または InstanceEdit のいずれかから category を取得
     instance_result = await db.execute(
         select(Instance)
         .options(selectinload(Instance.category))
@@ -119,14 +121,13 @@ async def synthesize_from_add(
     )
     instance = instance_result.scalar_one_or_none()
     if instance is None:
-        # InstanceEdit から取得
+        # InstanceEdit から仮想 Instance を作る
         ie_result = await db.execute(
             select(InstanceEdit).where(InstanceEdit.token == edit.instance_token)
         )
         ie = ie_result.scalar_one_or_none()
         if ie is None:
-            return None  # 不正な instance_token
-        # InstanceEdit から仮想 Instance を作る (category リレーションも引っ張る)
+            return None
         from app.models.annotation import Category
         cat_result = await db.execute(
             select(Category).where(Category.token == ie.category_token)
@@ -141,17 +142,17 @@ async def synthesize_from_add(
             first_annotation_token=None,
             last_annotation_token=None,
         )
-        instance.category = category
-    ann.instance = instance
+        set_committed_value(instance, "category", category)
+    set_committed_value(ann, "instance", instance)
 
     # ── visibility リレーション ──
+    visibility = None
     if edit.visibility_token is not None:
         vis_result = await db.execute(
             select(Visibility).where(Visibility.token == edit.visibility_token)
         )
-        ann.visibility = vis_result.scalar_one_or_none()
-    else:
-        ann.visibility = None
+        visibility = vis_result.scalar_one_or_none()
+    set_committed_value(ann, "visibility", visibility)
 
     # ── attributes リレーション ──
     attrs: list[Attribute] = []
@@ -160,14 +161,14 @@ async def synthesize_from_add(
             select(Attribute).where(Attribute.token.in_(edit.attribute_tokens))
         )
         attrs = list(attr_result.scalars().all())
-    ann.attributes = attrs
+    set_committed_value(ann, "attributes", attrs)
 
     # ── sample リレーション ──
-    # Sample は instance クエリでは取れていないので別途取得
     sample_result = await db.execute(
         select(Sample).where(Sample.token == edit.sample_token)
     )
-    ann.sample = sample_result.scalar_one_or_none()
+    sample = sample_result.scalar_one_or_none()
+    set_committed_value(ann, "sample", sample)
 
     return ann
 

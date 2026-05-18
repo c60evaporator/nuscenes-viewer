@@ -125,8 +125,7 @@ async def test_list_scenes_items_have_scene_fields(client: AsyncClient, scene_da
 
 async def test_list_scenes_contains_test_scenes(client: AsyncClient, scene_data):
     """投入したテストシーンが一覧に含まれること。"""
-    # 全件取得（既存データ + テストデータ、上限 500）
-    resp = await client.get("/api/v1/scenes?limit=500")
+    resp = await client.get(f"/api/v1/scenes?log_token={_LOG_TOKEN}&limit=500")
     tokens = {item["token"] for item in resp.json()["items"]}
     assert _SCENE1_TOKEN in tokens
     assert _SCENE2_TOKEN in tokens
@@ -157,7 +156,7 @@ async def test_list_scenes_offset_shifts_results(client: AsyncClient, scene_data
 
 async def test_list_scenes_description_can_be_none(client: AsyncClient, scene_data):
     """description=None のシーンが含まれていても正常にシリアライズされること。"""
-    resp = await client.get("/api/v1/scenes?limit=500")
+    resp = await client.get(f"/api/v1/scenes?log_token={_LOG_TOKEN}&limit=500")
     items = resp.json()["items"]
     beta = next((i for i in items if i["token"] == _SCENE2_TOKEN), None)
     assert beta is not None

@@ -10,18 +10,17 @@ class SceneRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def get_all(self, limit: int, offset: int) -> tuple[int, list[Scene]]:
-        total_result = await self.db.execute(select(func.count()).select_from(Scene))
-        total = total_result.scalar_one()
+    async def get_all(
+        self, limit: int, offset: int, log_token: str | None = None
+    ) -> tuple[int, list[Scene]]:
+        q = select(Scene).options(selectinload(Scene.log)).order_by(Scene.name)
+        count_q = select(func.count()).select_from(Scene)
+        if log_token is not None:
+            q = q.where(Scene.log_token == log_token)
+            count_q = count_q.where(Scene.log_token == log_token)
 
-        result = await self.db.execute(
-            select(Scene)
-            .options(selectinload(Scene.log))
-            .order_by(Scene.name)
-            .limit(limit)
-            .offset(offset)
-        )
-        scenes = list(result.scalars().all())
+        total = (await self.db.execute(count_q)).scalar_one()
+        scenes = list((await self.db.execute(q.limit(limit).offset(offset))).scalars().all())
         return total, scenes
 
     async def get_by_token(self, token: str) -> Scene | None:

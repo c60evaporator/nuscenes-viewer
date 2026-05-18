@@ -13,12 +13,13 @@ router = APIRouter(prefix="/scenes", tags=["scenes"])
 
 @router.get("", response_model=PaginatedResponse[SceneResponse])
 async def list_scenes(
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    log_token: str | None = Query(None, description="Log で絞り込む"),
+    limit:     int        = Query(50, ge=1, le=500),
+    offset:    int        = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     repo = SceneRepository(db)
-    total, scenes = await repo.get_all(limit, offset)
+    total, scenes = await repo.get_all(limit, offset, log_token)
     return PaginatedResponse(
         total=total,
         limit=limit,

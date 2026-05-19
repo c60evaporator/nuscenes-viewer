@@ -10,7 +10,8 @@ from app.services.annotation_merger import (
     apply_modify, apply_attribute_tokens, apply_visibility,
     synthesize_from_add, merge_annotations, compute_instance_stats,
 )
-
+from app.repositories.annotation_edit import AnnotationEditRepository
+from app.repositories.exceptions import OptimisticLockError
 
 def _base_query():
     """SampleAnnotation の標準 eager-load オプション付きクエリを返す。"""
@@ -331,11 +332,11 @@ class AnnotationRepository:
     ) -> SampleAnnotation | None:
         """SampleAnnotation を直接更新せず, annotation_edits に modify レコードを作成/更新する.
 
-        既存の modify edit がある場合は部分上書き. ない場合は新規作成.
-        Returns: マージ済みの SampleAnnotation. DB の sample_annotations 自体は変更しない.
+        楽観的ロック:
+            - 既存 modify edit がある場合, data.version との一致を確認
+            - 不一致なら OptimisticLockError を投げる
+            - 既存 modify edit がない場合 (初回編集), version チェックなし
         """
-        from app.repositories.annotation_edit import AnnotationEditRepository
-
         # base SampleAnnotation の存在確認 (元データを直接取得, マージなし)
         base_result = await self.db.execute(
             _base_query().where(SampleAnnotation.token == token)
@@ -348,6 +349,7 @@ class AnnotationRepository:
         edit = await edit_repo.get_modify_by_base(token)
 
         if edit is None:
+            # 初回編集: version チェック免除
             edit = await edit_repo.create_modify(
                 base_token=token,
                 sample_token=base_ann.sample_token,
@@ -359,6 +361,13 @@ class AnnotationRepository:
                 attribute_tokens=data.attribute_tokens,
             )
         else:
+            # 既存編集あり: version チェック
+            if data.version is None or data.version != edit.version:
+                raise OptimisticLockError(
+                    current_version=edit.version,
+                    expected_version=data.version,
+                )
+            # 部分上書き + version increment
             if data.translation is not None:
                 edit.translation = data.translation
             if data.rotation is not None:
@@ -376,4 +385,6 @@ class AnnotationRepository:
         apply_modify(base_ann, edit)
         await apply_attribute_tokens(self.db, base_ann, edit.attribute_tokens)
         await apply_visibility(self.db, base_ann, edit.visibility_token)
+        # base_ann に edit_version を一時的にセットして返す
+        base_ann.edit_version = edit.version  # type: ignore[attr-defined]
         return base_ann

@@ -41,6 +41,8 @@ class AnnotationResponse(BaseModel):
     category_token: str
     attributes: list[AttributeResponse]
     visibility: VisibilityResponse | None
+    # 楽観的ロック用 version (annotation_edits.version, 未編集なら None)
+    edit_version: int | None = None
 
 
 class SampleInstanceResponse(BaseModel):
@@ -72,6 +74,8 @@ class AnnotationUpdate(BaseModel):
     size: list[float] | None = None
     visibility_token: str | None = None
     attribute_tokens: list[str] | None = None
+    # 楽観的ロック用 version (None なら初回編集とみなす)
+    version: int | None = None
 
 # ------ Create ------
 

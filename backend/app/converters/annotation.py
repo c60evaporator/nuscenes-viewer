@@ -36,12 +36,9 @@ class AnnotationConverter:
             num_lidar_pts=ann.num_lidar_pts,
             num_radar_pts=ann.num_radar_pts,
             visibility_token=ann.visibility_token,
-            # instance 経由で category_token を展開
             category_token=ann.instance.category_token,
             attributes=[AttributeResponse.model_validate(a) for a in ann.attributes],
-            visibility=(
-                VisibilityResponse.model_validate(ann.visibility)
-                if ann.visibility
-                else None
-            ),
+            visibility=VisibilityResponse.model_validate(ann.visibility) if ann.visibility else None,
+            # edit_version は ann に動的属性として付けられている場合のみセット
+            edit_version=getattr(ann, 'edit_version', None),
         )

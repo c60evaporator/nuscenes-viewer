@@ -5,6 +5,7 @@ from app.converters.annotation import AnnotationConverter
 from app.dependencies import get_db
 from app.repositories.annotation import AnnotationRepository
 from app.repositories.annotation_edit import AnnotationEditRepository, InstanceEditRepository
+from app.repositories.exceptions import OptimisticLockError
 from app.schemas.annotation import AnnotationResponse, AnnotationUpdate, AnnotationCreate
 from app.schemas.common import PaginatedResponse
 from app.services.annotation_edit_service import create_chain_modify
@@ -42,7 +43,17 @@ async def update_annotation(
     data: AnnotationUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    ann = await AnnotationRepository(db).update(token, data)
+    try:
+        ann = await AnnotationRepository(db).update(token, data)
+    except OptimisticLockError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message":          "Optimistic lock conflict",
+                "current_version":  e.current_version,
+                "expected_version": e.expected_version,
+            },
+        )
     if not ann:
         raise HTTPException(status_code=404, detail="Annotation not found")
     await db.commit()

@@ -21,14 +21,7 @@ from app.models.scene import Sample
 # ── 単体マージ ─────────────────────────────────────────────────────────────────
 
 def apply_modify(base: SampleAnnotation, edit: AnnotationEdit) -> SampleAnnotation:
-    """base SampleAnnotation に modify edit の非 NULL 値を適用したオブジェクトを返す.
-
-    base の属性を直接書き換える (DB へは flush しない前提).
-    base を返すことで, 元の eager-load された関連オブジェクト (instance, visibility, attributes) を維持する.
-
-    edit のカラムが NULL の場合は base の値を維持する (上書きしない).
-    attribute_tokens の上書きは, 呼び出し側で attributes リレーションへの反映が必要.
-    """
+    """base SampleAnnotation に modify edit を適用したオブジェクトを返す."""
     if edit.translation is not None:
         base.translation = edit.translation
     if edit.rotation is not None:
@@ -41,7 +34,8 @@ def apply_modify(base: SampleAnnotation, edit: AnnotationEdit) -> SampleAnnotati
         base.next = edit.next
     if edit.visibility_token is not None:
         base.visibility_token = edit.visibility_token
-    # attributes と visibility リレーションは別途反映する (apply_attribute_tokens / apply_visibility)
+    # edit_version を動的属性として付与
+    base.edit_version = edit.version  # type: ignore[attr-defined]
     return base
 
 
@@ -170,6 +164,7 @@ async def synthesize_from_add(
     sample = sample_result.scalar_one_or_none()
     set_committed_value(ann, "sample", sample)
 
+    ann.edit_version = edit.version  # type: ignore[attr-defined]
     return ann
 
 

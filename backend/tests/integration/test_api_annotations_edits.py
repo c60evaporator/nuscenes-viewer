@@ -218,3 +218,121 @@ async def test_post_then_get_includes_new_annotation(
     list_resp = await client.get("/api/v1/annotations")
     tokens = [item["token"] for item in list_resp.json()["items"]]
     assert new_token in tokens
+
+# ── 楽観的ロック ───────────────────────────────────────────────────────────
+
+async def test_patch_first_time_no_version_succeeds(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """初回 PATCH は version 指定なしでも成功すること."""
+    resp = await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [10.0, 20.0, 30.0]},
+    )
+    assert resp.status_code == 200
+
+
+async def test_patch_returns_edit_version(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """PATCH レスポンスに edit_version が含まれること."""
+    resp = await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [10.0, 20.0, 30.0]},
+    )
+    body = resp.json()
+    assert "edit_version" in body
+    assert body["edit_version"] == 1
+
+
+async def test_patch_second_time_with_correct_version_succeeds(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """既存 modify edit がある状態で正しい version を送ると成功し, version がインクリメントされること."""
+    # 1回目
+    resp1 = await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [10.0, 20.0, 30.0]},
+    )
+    v1 = resp1.json()["edit_version"]
+    # 2回目: 正しい version を指定
+    resp2 = await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [11.0, 22.0, 33.0], "version": v1},
+    )
+    assert resp2.status_code == 200
+    assert resp2.json()["edit_version"] == v1 + 1
+
+
+async def test_patch_with_wrong_version_returns_409(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """既存 modify edit がある状態で間違った version を送ると 409."""
+    # 1回目で modify edit を作る
+    await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [10.0, 20.0, 30.0]},
+    )
+    # 2回目: 間違った version
+    resp = await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [99.0, 99.0, 99.0], "version": 999},
+    )
+    assert resp.status_code == 409
+
+
+async def test_patch_409_response_contains_current_version(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """409 レスポンスに current_version が含まれること."""
+    await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [10.0, 20.0, 30.0]},
+    )
+    resp = await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [99.0, 99.0, 99.0], "version": 999},
+    )
+    detail = resp.json()["detail"]
+    assert "current_version" in detail
+    assert detail["current_version"] == 1
+
+
+async def test_patch_second_time_without_version_returns_409(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """既存 modify edit がある状態で version 指定なしで PATCH すると 409.
+
+    これは, フロントエンドが古い annotation を使って編集を試みている可能性があるため.
+    """
+    # 1回目で modify edit を作る
+    await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [10.0, 20.0, 30.0]},
+    )
+    # 2回目: version 指定なし
+    resp = await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [11.0, 22.0, 33.0]},
+    )
+    assert resp.status_code == 409
+
+
+async def test_get_returns_edit_version(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """編集後の GET レスポンスに edit_version が含まれること."""
+    await client.patch(
+        f"/api/v1/annotations/{_ANN_TOKEN}",
+        json={"translation": [10.0, 20.0, 30.0]},
+    )
+    resp = await client.get(f"/api/v1/annotations/{_ANN_TOKEN}")
+    assert resp.json()["edit_version"] == 1
+
+
+async def test_get_unedited_returns_null_edit_version(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """編集されていない annotation の GET レスポンスでは edit_version が null になること."""
+    resp = await client.get(f"/api/v1/annotations/{_ANN_TOKEN}")
+    assert resp.json()["edit_version"] is None

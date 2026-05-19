@@ -434,9 +434,11 @@ export default function CameraImageCanvas({
       }
     }
 
-    // Map フィーチャークリック判定
+    // Map フィーチャークリック判定（上位レイヤーを優先するため逆順走査）
     if (onFeatureClick) {
-      for (const { feature, layer, regions } of projectedFeaturesRef.current) {
+      const features = projectedFeaturesRef.current
+      for (let i = features.length - 1; i >= 0; i--) {
+        const { feature, layer, regions } = features[i]
         for (const region of regions) {
           if (hitTestRegion(x, y, region)) {
             onFeatureClick(feature, layer)

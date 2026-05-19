@@ -2,3 +2,17 @@
 
 map_projection:
   max_distance_m: 75  # カメラ画像上に表示するフィーチャーの最大距離（自車からの地面2D距離、メートル）
+
+layer_display_order:  # 下から上への描画順。後に記載したレイヤーが前面に描画される
+  - drivable_area     # 最も広い領域（最下層）
+  - road_segment      # 連続する道路セグメント
+  - road_block        # road_segment を含む広域ブロック
+  - carpark_area      # 駐車場
+  - walkway           # 歩道
+  - ped_crossing      # 歩行者横断歩道
+  - stop_line         # 停止線
+  - lane_connector    # 交差点内の接続レーン
+  - lane              # 個別走行レーン（road_segment より上層）
+  - road_divider      # 道路分離帯（ライン系）
+  - lane_divider      # 車線分離帯（ライン系）
+  - traffic_light     # 信号機（ポイント系・最上層）

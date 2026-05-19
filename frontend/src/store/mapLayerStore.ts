@@ -1,20 +1,9 @@
 import { create } from 'zustand'
 import type { MapLayer } from '@/types/map'
+import { LAYER_DISPLAY_ORDER } from '@/config/settings'
 
-export const ALL_MAP_LAYERS: MapLayer[] = [
-  'drivable_area',
-  'road_segment',
-  'road_block',
-  'lane',
-  'lane_connector',
-  'carpark_area',
-  'stop_line',
-  'ped_crossing',
-  'walkway',
-  'road_divider',
-  'lane_divider',
-  'traffic_light',
-]
+// settings.yml の layer_display_order を使用（順序変更は settings.yml を編集する）
+export const ALL_MAP_LAYERS: MapLayer[] = [...LAYER_DISPLAY_ORDER] as MapLayer[]
 
 const DEFAULT_LAYERS = new Set<MapLayer>([
   'road_segment',

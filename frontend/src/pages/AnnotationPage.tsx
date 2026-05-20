@@ -396,14 +396,17 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   }}
                   onClick={() => {
                     const egoPose = egoPoses?.find((p) => p.sample_token === effectiveSampleToken)
-                    const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
+                    const size = [1.8, 4.6, 1.5]
+                    const translation = egoPose
+                      ? [egoPose.translation[0], egoPose.translation[1], egoPose.translation[2] + size[2] / 2]
+                      : [0, 0, size[2] / 2]
                     const template: Annotation = {
                       token:            '',
                       instance_token:   '',
                       sample_token:     effectiveSampleToken ?? '',
                       translation,
                       rotation:         [1, 0, 0, 0],
-                      size:             [1.8, 4.6, 1.5],
+                      size,
                       prev:             null,
                       next:             null,
                       num_lidar_pts:    0,
@@ -435,14 +438,17 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   onClick={() => {
                     const targetToken = prevSampleToken!
                     const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
-                    const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
+                    const size = [1.8, 4.6, 1.5]
+                    const translation = egoPose
+                      ? [egoPose.translation[0], egoPose.translation[1], egoPose.translation[2] + size[2] / 2]
+                      : [0, 0, size[2] / 2]
                     const template: Annotation = {
                       token:            '',
                       instance_token:   effectiveInstanceToken ?? '',
                       sample_token:     targetToken,
                       translation,
                       rotation:         [1, 0, 0, 0],
-                      size:             [1.8, 4.6, 1.5],
+                      size,
                       prev:             null,
                       next:             null,
                       num_lidar_pts:    0,
@@ -472,14 +478,17 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   onClick={() => {
                     const targetToken = nextSampleToken!
                     const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
-                    const translation = egoPose ? [...egoPose.translation] : [0, 0, 0]
+                    const size = [1.8, 4.6, 1.5]
+                    const translation = egoPose
+                      ? [egoPose.translation[0], egoPose.translation[1], egoPose.translation[2] + size[2] / 2]
+                      : [0, 0, size[2] / 2]
                     const template: Annotation = {
                       token:            '',
                       instance_token:   effectiveInstanceToken ?? '',
                       sample_token:     targetToken,
                       translation,
                       rotation:         [1, 0, 0, 0],
-                      size:             [1.8, 4.6, 1.5],
+                      size,
                       prev:             null,
                       next:             null,
                       num_lidar_pts:    0,

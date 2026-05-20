@@ -189,20 +189,21 @@ async def merge_annotations(
     adds           = [e for e in edits if e.edit_type == 'add']
 
     result: list[SampleAnnotation] = []
-    for base in base_annotations:
-        if base.token in delete_set:
-            continue
-        edit = modify_by_base.get(base.token)
-        if edit is not None:
-            apply_modify(base, edit)
-            await apply_attribute_tokens(db, base, edit.attribute_tokens)
-            await apply_visibility(db, base, edit.visibility_token)
-        result.append(base)
+    with db.no_autoflush:
+        for base in base_annotations:
+            if base.token in delete_set:
+                continue
+            edit = modify_by_base.get(base.token)
+            if edit is not None:
+                apply_modify(base, edit)
+                await apply_attribute_tokens(db, base, edit.attribute_tokens)
+                await apply_visibility(db, base, edit.visibility_token)
+            result.append(base)
 
-    for add_edit in adds:
-        synthesized = await synthesize_from_add(db, add_edit)
-        if synthesized is not None:
-            result.append(synthesized)
+        for add_edit in adds:
+            synthesized = await synthesize_from_add(db, add_edit)
+            if synthesized is not None:
+                result.append(synthesized)
 
     return result
 

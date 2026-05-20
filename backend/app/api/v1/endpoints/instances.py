@@ -1,11 +1,9 @@
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.annotation import AnnotationConverter
 from app.dependencies import get_db
-from app.models.annotation import Instance
 from app.models.sensor import SampleData
 from app.repositories.annotation import AnnotationRepository
 from app.repositories.sensor import SensorRepository
@@ -80,8 +78,8 @@ def _camera_score(ann_global: list[float], sd: SampleData) -> float:
 
 @router.get("/{token}/annotations", response_model=list[InstanceAnnotationResponse])
 async def get_instance_annotations(token: str, db: AsyncSession = Depends(get_db)):
-    inst = (await db.execute(select(Instance).where(Instance.token == token))).scalar_one_or_none()
-    if not inst:
+    inst = await AnnotationRepository(db).get_instance_by_token(token)
+    if inst is None:
         raise HTTPException(status_code=404, detail="Instance not found")
     annotations = await AnnotationRepository(db).get_by_instance(token)
     return [

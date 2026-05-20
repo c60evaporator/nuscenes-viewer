@@ -9,6 +9,7 @@ from app.models.scene import Sample
 from app.repositories.annotation import AnnotationRepository
 from app.repositories.scene import SceneRepository
 from app.repositories.sensor import SensorRepository
+from app.services.annotation_merger import compute_instance_stats
 from app.schemas.annotation import AnnotationResponse, SampleInstanceResponse
 from app.schemas.scene import SampleResponse
 from app.schemas.sensor import SensorDataBriefResponse
@@ -60,9 +61,10 @@ async def get_sample_instances(token: str, db: AsyncSession = Depends(get_db)):
     for ann in annotations:
         if ann.instance_token not in seen:
             seen.add(ann.instance_token)
+            nbr, _, _ = await compute_instance_stats(db, ann.instance_token)
             instances.append(SampleInstanceResponse(
                 instance_token=ann.instance_token,
                 category_name=ann.instance.category.name,
-                nbr_annotations=ann.instance.nbr_annotations,
+                nbr_annotations=nbr,
             ))
     return instances

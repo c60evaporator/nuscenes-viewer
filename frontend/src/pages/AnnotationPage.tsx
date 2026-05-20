@@ -289,6 +289,27 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // キーボードショートカット
   useEditKeyboardShortcuts({ egoPose: editingEgoPose })
 
+  // add モード時の prev/next 候補
+  const { addModePrev, addModeNext } = useMemo(() => {
+    if (editMode !== 'add' || !editSession) return { addModePrev: null, addModeNext: null }
+
+    // Instance フィルタ時 (Add BBox to prev/next)
+    if (hasInstanceFilter && editSession.fixedSampleToken) {
+      if (editSession.fixedSampleToken === prevSampleToken) {
+        const firstAnn = (instanceAnnotationsRaw ?? [])[0]
+        return { addModePrev: null, addModeNext: firstAnn?.token ?? null }
+      }
+      if (editSession.fixedSampleToken === nextSampleToken) {
+        const annList = instanceAnnotationsRaw ?? []
+        const lastAnn = annList[annList.length - 1]
+        return { addModePrev: lastAnn?.token ?? null, addModeNext: null }
+      }
+    }
+
+    // Sample フィルタ時は Step 16 では null
+    return { addModePrev: null, addModeNext: null }
+  }, [editMode, editSession, hasInstanceFilter, prevSampleToken, nextSampleToken, instanceAnnotationsRaw])
+
   // Case 3 用: InstanceSummary → Instance 型マッピング
   const instanceListItems = useMemo<Instance[]>(
     () => (instanceSummaries ?? []).map((is) => ({
@@ -524,6 +545,8 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
             sceneToken={selectedSceneToken}
             allowedInstanceTokens={allowedInstanceTokens}
             egoPose={editingEgoPose}
+            addModePrev={addModePrev}
+            addModeNext={addModeNext}
           />
         </RightPane>
       }

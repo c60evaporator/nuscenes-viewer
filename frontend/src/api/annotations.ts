@@ -38,10 +38,19 @@ export function useAttributes() {
 }
 
 // PATCH /annotations/{token} — アノテーション部分更新
+export interface UpdateAnnotationBody {
+  translation?:      number[]
+  rotation?:         number[]
+  size?:             number[]
+  visibility_token?: string | null
+  attribute_tokens?: string[]
+  version?:          number | null   // 楽観的ロック用
+}
+
 export function useUpdateAnnotation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ token, body }: { token: string; body: Partial<Pick<Annotation, 'translation' | 'rotation' | 'size' | 'visibility_token'>> }) =>
+    mutationFn: ({ token, body }: { token: string; body: UpdateAnnotationBody }) =>
       apiFetch<Annotation>(`/annotations/${token}`, {
         method: 'PATCH',
         body:   JSON.stringify(body),
@@ -49,6 +58,41 @@ export function useUpdateAnnotation() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['annotation', data.token] })
       queryClient.invalidateQueries({ queryKey: ['annotations'] })
+      queryClient.invalidateQueries({ queryKey: ['sample-annotations', data.sample_token] })
+      queryClient.invalidateQueries({ queryKey: ['instance-annotations', data.instance_token] })
+      queryClient.invalidateQueries({ queryKey: ['sample-instances', data.sample_token] })
+    },
+  })
+}
+
+// POST /annotations — 新規 BBox 追加
+export interface CreateAnnotationBody {
+  sample_token:      string
+  instance_token?:   string | null
+  new_instance?:     { category_token: string } | null
+  translation:       number[]
+  rotation:          number[]
+  size:              number[]
+  prev?:             string | null
+  next?:             string | null
+  visibility_token?: string | null
+  attribute_tokens?: string[]
+}
+
+export function useCreateAnnotation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateAnnotationBody) =>
+      apiFetch<Annotation>('/annotations', {
+        method: 'POST',
+        body:   JSON.stringify(body),
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['annotations'] })
+      queryClient.invalidateQueries({ queryKey: ['sample-annotations', data.sample_token] })
+      queryClient.invalidateQueries({ queryKey: ['instance-annotations', data.instance_token] })
+      queryClient.invalidateQueries({ queryKey: ['sample-instances', data.sample_token] })
+      queryClient.invalidateQueries({ queryKey: ['instances'] })
     },
   })
 }

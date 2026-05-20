@@ -1,12 +1,3 @@
-import type { Point3D, Quaternion, Dimensions3D } from './common'
-
-export interface AnnotationUpdateRequest {
-  center?:     Point3D
-  dimensions?: Dimensions3D
-  rotation?:   Quaternion
-  attributes?: string[]
-}
-
 // GET /api/v1/categories レスポンスの各エントリ（CategoryResponse に対応）
 export interface Category {
   token:       string
@@ -42,6 +33,7 @@ export interface Annotation {
   category_token:   string
   attributes:       Attribute[]
   visibility:       Visibility | null
+  edit_version?:    number | null   // 楽観的ロック用。annotation_edits.version。未編集なら null
 }
 
 // GET /api/v1/instances/{token}/annotations レスポンス（InstanceAnnotationResponse に対応）

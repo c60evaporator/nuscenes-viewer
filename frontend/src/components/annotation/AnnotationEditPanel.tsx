@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { useVisibilities, useAttributes } from '@/api/annotations'
+import { useVisibilities, useAttributes, useUpdateAnnotation, useCreateAnnotation } from '@/api/annotations'
+import { ApiError } from '@/api/client'
 import { useCategories } from '@/api/categories'
 import { useInstances } from '@/api/instances'
 import { useSceneSamples } from '@/api/scenes'
@@ -20,6 +21,8 @@ interface Props {
   sceneToken:             string | null
   allowedInstanceTokens?: Set<string> | null
   egoPose?:               EgoPosePoint | null
+  addModePrev?:           string | null
+  addModeNext?:           string | null
 }
 
 // ── スタイル定数 ────────────────────────────────────────────────────────────
@@ -238,7 +241,7 @@ function ReadOnlyRow({ label, value }: { label: string; value?: string | null })
 // ── メインコンポーネント ────────────────────────────────────────────────────
 
 export default function AnnotationEditPanel({
-  annotation, sceneToken, allowedInstanceTokens, egoPose,
+  annotation, sceneToken, allowedInstanceTokens, egoPose, addModePrev, addModeNext,
 }: Props) {
   const { data: visibilities = [] } = useVisibilities()
   const { data: attributes   = [] } = useAttributes()
@@ -255,6 +258,10 @@ export default function AnnotationEditPanel({
   const endSession          = useEditStore((s) => s.endSession)
   const updateSessionLive   = useEditStore((s) => s.updateSessionLive)
   const commitChange        = useEditStore((s) => s.commitChange)
+
+  const updateAnnotation = useUpdateAnnotation()
+  const createAnnotation = useCreateAnnotation()
+  const isSaving = updateAnnotation.isPending || createAnnotation.isPending
 
   // session中はストア優先、それ以外はprops.annotation
   const displayAnnotation = currentAnnotation ?? annotation
@@ -306,6 +313,52 @@ export default function AnnotationEditPanel({
     if (!s) return token.substring(0, 12) + '...'
     const d = new Date(s.timestamp / 1000)
     return d.toISOString().substring(11, 23)
+  }
+
+  const handleSaveBBox = async () => {
+    if (!currentAnnotation || !editSession) return
+    try {
+      if (editSession.mode === 'edit') {
+        await updateAnnotation.mutateAsync({
+          token: editSession.targetToken,
+          body: {
+            translation:      currentAnnotation.translation,
+            rotation:         currentAnnotation.rotation,
+            size:             currentAnnotation.size,
+            visibility_token: currentAnnotation.visibility_token,
+            attribute_tokens: currentAnnotation.attributes.map((a) => a.token),
+            version:          currentAnnotation.edit_version ?? null,
+          },
+        })
+      } else {
+        const isNewInstance =
+          !currentAnnotation.instance_token || currentAnnotation.instance_token === '__new__'
+        await createAnnotation.mutateAsync({
+          sample_token:     currentAnnotation.sample_token,
+          instance_token:   isNewInstance ? null : currentAnnotation.instance_token,
+          new_instance:     isNewInstance
+            ? { category_token: currentAnnotation.category_token }
+            : null,
+          translation:      currentAnnotation.translation,
+          rotation:         currentAnnotation.rotation,
+          size:             currentAnnotation.size,
+          prev:             addModePrev ?? null,
+          next:             addModeNext ?? null,
+          visibility_token: currentAnnotation.visibility_token,
+          attribute_tokens: currentAnnotation.attributes.map((a) => a.token),
+        })
+      }
+      endSession()
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if      (e.status === 409) alert('Conflict: another edit was applied. Please cancel and retry.')
+        else if (e.status === 404) alert('Annotation not found. It may have been deleted.')
+        else if (e.status === 400) alert(`Invalid request: ${e.message}`)
+        else                       alert(`Save failed: ${e.message}`)
+      } else {
+        alert(`Unexpected error: ${(e as Error).message}`)
+      }
+    }
   }
 
   return (
@@ -498,7 +551,18 @@ export default function AnnotationEditPanel({
           disabled={!instanceEnabled}
           value={instanceSelectValue}
           style={selectFor(instanceEnabled)}
-          onChange={() => {}}
+          onChange={(e) => {
+            if (!currentAnnotation) return
+            const val = e.target.value
+            const newToken = (val === '__new__' || val === '') ? '' : val
+            let newCategory = currentAnnotation.category_token
+            if (newToken !== '') {
+              const inst = instances.find((i) => i.token === newToken)
+              if (inst) newCategory = inst.category_token
+            }
+            updateSessionLive({ instance_token: newToken, category_token: newCategory })
+            commitChange()
+          }}
         >
           <option value="">—</option>
           <option value="__new__">new instance</option>
@@ -517,7 +581,11 @@ export default function AnnotationEditPanel({
           disabled={!categoryEnabled}
           value={categorySelectValue}
           style={selectFor(categoryEnabled)}
-          onChange={() => {}}
+          onChange={(e) => {
+            if (!currentAnnotation) return
+            updateSessionLive({ category_token: e.target.value })
+            commitChange()
+          }}
         >
           <option value="">—</option>
           {categories.map((c) => (
@@ -537,25 +605,22 @@ export default function AnnotationEditPanel({
 
       {/* ── Save BBox ボタン ──────────────────────────────────────────── */}
       <button
-        disabled={!isDirty}
+        disabled={!isDirty || isSaving}
         style={{
-          width:         '100%',
-          padding:       '8px',
-          marginTop:     '10px',
-          background:    isDirty ? '#4A90D9' : '#374151',
-          color:         isDirty ? '#FFFFFF' : '#6B7280',
-          border:        'none',
-          borderRadius:  '4px',
-          cursor:        isDirty ? 'pointer' : 'not-allowed',
-          fontSize:      '13px',
-          fontWeight:    'bold',
+          width:        '100%',
+          padding:      '8px',
+          marginTop:    '10px',
+          background:   (isDirty && !isSaving) ? '#4A90D9' : '#374151',
+          color:        (isDirty && !isSaving) ? '#FFFFFF' : '#6B7280',
+          border:       'none',
+          borderRadius: '4px',
+          cursor:       (isDirty && !isSaving) ? 'pointer' : 'not-allowed',
+          fontSize:     '13px',
+          fontWeight:   'bold',
         }}
-        onClick={() => {
-          // Step 5以降で実装
-          console.log('[Save BBox] not implemented yet', currentAnnotation)
-        }}
+        onClick={handleSaveBBox}
       >
-        Save BBox
+        {isSaving ? 'Saving...' : 'Save BBox'}
       </button>
 
       {/* ── Cancel Edit ボタン ─────────────────────────────────────────── */}

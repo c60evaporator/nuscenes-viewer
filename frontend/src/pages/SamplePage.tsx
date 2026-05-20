@@ -119,6 +119,12 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
     [samples, currentSampleToken],
   )
 
+  // 選択中 Sample の Ego Pose
+  const currentEgoPose = useMemo(
+    () => (egoPoses ?? []).find((p) => p.sample_token === currentSampleToken) ?? null,
+    [egoPoses, currentSampleToken],
+  )
+
   // Annotations ボタン
   const annotationsButton = (
     <Button
@@ -178,6 +184,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
             onTabChange={onTabChange}
             highlightInstanceToken={highlightInstanceToken}
             onInstanceHighlight={setHighlightInstanceToken}
+            egoPose={currentEgoPose}
           />
         </RightPane>
       }

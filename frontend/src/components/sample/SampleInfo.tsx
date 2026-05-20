@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react'
 import { useNavigationStore } from '@/store/navigationStore'
 import { useViewerStore } from '@/store/viewerStore'
 import type { Sample } from '@/types/scene'
-import type { InstanceSummary } from '@/types/sensor'
+import type { EgoPosePoint, InstanceSummary } from '@/types/sensor'
 import type { TabId } from '@/components/layout/Header'
+import { quaternionToEulerDeg } from '@/lib/coordinateUtils'
 
 interface SampleInfoProps {
   sample:                  Sample | null
@@ -12,6 +13,7 @@ interface SampleInfoProps {
   onTabChange:             (tab: TabId) => void
   highlightInstanceToken?: string | null
   onInstanceHighlight?:    (instanceToken: string | null) => void
+  egoPose?:                EgoPosePoint | null
 }
 
 function InfoRow({ label, value }: { label: string; value: string | number | null }) {
@@ -23,13 +25,28 @@ function InfoRow({ label, value }: { label: string; value: string | number | nul
   )
 }
 
+function TripleReadRow({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div className="flex flex-col gap-0.5 py-1.5 border-b border-gray-100 last:border-0">
+      <span className="text-xs text-gray-400">{label}</span>
+      <div className="grid grid-cols-3 gap-1">
+        {values.map((v, i) => (
+          <span key={i} className="text-xs text-gray-600 font-mono bg-gray-50 rounded px-1 py-0.5 text-center">
+            {v}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function formatTimestamp(ts: number): string {
   return new Date(ts / 1000).toLocaleString('ja-JP')
 }
 
 export default function SampleInfo({
   sample, instances, sceneToken, onTabChange,
-  highlightInstanceToken, onInstanceHighlight,
+  highlightInstanceToken, onInstanceHighlight, egoPose,
 }: SampleInfoProps) {
   const lock        = useNavigationStore((s) => s.lock)
   const setInstance = useViewerStore((s) => s.setInstance)
@@ -58,6 +75,21 @@ export default function SampleInfo({
             <InfoRow label="Scene Token" value={sample.scene_token} />
             <InfoRow label="Prev"        value={sample.prev} />
             <InfoRow label="Next"        value={sample.next} />
+            {egoPose && (() => {
+              const { yaw, pitch, roll } = quaternionToEulerDeg(egoPose.rotation)
+              return (
+                <>
+                  <TripleReadRow
+                    label="ego translation"
+                    values={egoPose.translation.map((v) => v.toFixed(3))}
+                  />
+                  <TripleReadRow
+                    label="ego rotation (deg)"
+                    values={[yaw, pitch, roll].map((v) => v.toFixed(1))}
+                  />
+                </>
+              )
+            })()}
           </>
         ) : (
           <p className="text-gray-400 text-xs">Please select a sample</p>

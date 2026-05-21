@@ -369,19 +369,37 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
               </button>
 
               {/* Delete BBox */}
-              <button
-                disabled={!canDeleteBBox}
-                className="flex-1 py-1.5 text-xs font-medium rounded text-white"
-                style={{
-                  background: canDeleteBBox ? '#DC2626' : '#374151',
-                  cursor:     canDeleteBBox ? 'pointer' : 'not-allowed',
-                  opacity:    canDeleteBBox ? 1 : 0.5,
-                  minWidth:   '80px',
-                }}
-                onClick={() => { /* TODO: 削除ロジック */ }}
-              >
-                Delete BBox
-              </button>
+              <div className="relative flex-1 group" style={{ minWidth: '80px' }}>
+                  <button
+                      disabled={!canDeleteBBox}
+                      className="w-full py-1.5 text-xs font-medium rounded text-white"
+                      style={{
+                          background: canDeleteBBox ? '#DC2626' : '#374151',
+                          cursor:     canDeleteBBox ? 'pointer' : 'not-allowed',
+                          opacity:    canDeleteBBox ? 1 : 0.5,
+                      }}
+                      onClick={() => { /* TODO: 削除ロジック */ }}
+                  >
+                      Delete BBox
+                  </button>
+                  {!canDeleteBBox && (
+                      <div
+                          className="
+                              pointer-events-none absolute z-50
+                              left-1/2 -translate-x-1/2 bottom-full mb-2
+                              px-2 py-1.5 rounded
+                              text-xs leading-snug text-gray-200
+                              bg-gray-800 border border-gray-600
+                              opacity-0 group-hover:opacity-100
+                              transition-opacity duration-100
+                              whitespace-normal text-left
+                          "
+                          style={{ width: '220px' }}
+                      >
+                          To delete BBox, go to the "Instance" view and click "Annotations" button, then select the first or last annotation
+                      </div>
+                  )}
+              </div>
 
               {/* Add BBox（サンプルフィルタ時 or インスタンスフィルタ時で出し分け） */}
               {!hasInstanceFilter && (

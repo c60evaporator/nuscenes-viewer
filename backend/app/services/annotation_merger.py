@@ -21,20 +21,40 @@ from app.models.scene import Sample
 # ── 単体マージ ─────────────────────────────────────────────────────────────────
 
 def apply_modify(base: SampleAnnotation, edit: AnnotationEdit) -> SampleAnnotation:
-    """base SampleAnnotation に modify edit を適用したオブジェクトを返す."""
+    """base SampleAnnotation に modify edit を適用したオブジェクトを返す.
+
+    各フィールドの挙動:
+    - translation/rotation/size/visibility_token: edit が None なら base を維持
+    - prev/next: 3 段階
+        * edit.prev_cleared=True なら base.prev を None に上書き
+        * edit.prev が非 None なら base.prev を edit.prev に上書き
+        * それ以外 (edit.prev=None かつ prev_cleared=False) は base.prev を維持
+        * next も同様
+    """
     if edit.translation is not None:
         base.translation = edit.translation
     if edit.rotation is not None:
         base.rotation = edit.rotation
     if edit.size is not None:
         base.size = edit.size
-    if edit.prev is not None:
+
+    # prev の 3 段階処理
+    if edit.prev_cleared:
+        base.prev = None
+    elif edit.prev is not None:
         base.prev = edit.prev
-    if edit.next is not None:
+    # else: base.prev を維持
+
+    # next の 3 段階処理
+    if edit.next_cleared:
+        base.next = None
+    elif edit.next is not None:
         base.next = edit.next
+    # else: base.next を維持
+
     if edit.visibility_token is not None:
         base.visibility_token = edit.visibility_token
-    # edit_version を動的属性として付与
+
     base.edit_version = edit.version  # type: ignore[attr-defined]
     return base
 

@@ -13,7 +13,7 @@ async def create_chain_modify(
     db: AsyncSession,
     target_token: str,
     field: str,
-    new_value: str,
+    new_value: str | None,
 ) -> None:
     """隣接アノテーション (target_token) の prev / next を new_value に書き換える.
 
@@ -23,7 +23,8 @@ async def create_chain_modify(
       - AnnotationEdit (add) の場合:
           add edit の prev / next を直接書き換え
 
-    field は 'prev' または 'next'.
+    field は 'prev' または 'next'. new_value が None なら, modify edit の
+    _cleared フラグを True にして null 上書きを表現.
     """
     if field not in ('prev', 'next'):
         raise ValueError(f"field must be 'prev' or 'next', got '{field}'")
@@ -36,17 +37,22 @@ async def create_chain_modify(
     if base is not None:
         existing_modify = await edit_repo.get_modify_by_base(target_token)
         if existing_modify is None:
-            # 新規 modify edit
+            # 新規 modify edit を作成
             kwargs = {
                 'base_token':     target_token,
                 'sample_token':   base.sample_token,
                 'instance_token': base.instance_token,
-                'prev': new_value if field == 'prev' else None,
-                'next_': new_value if field == 'next' else None,
             }
+            if field == 'prev':
+                kwargs['prev'] = new_value
+                if new_value is None:
+                    kwargs['prev_cleared'] = True
+            else:
+                kwargs['next_'] = new_value
+                if new_value is None:
+                    kwargs['next_cleared'] = True
             await edit_repo.create_modify(**kwargs)
         else:
-            # 既存 modify edit の prev / next のみ更新
             await edit_repo.update_chain(existing_modify, field, new_value)
         return
 

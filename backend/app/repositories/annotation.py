@@ -88,9 +88,10 @@ class AnnotationRepository:
             # modify edit があれば適用
             modify_edit = next((e for e in edits if e.edit_type == 'modify'), None)
             if modify_edit is not None:
-                apply_modify(base_ann, modify_edit)
-                await apply_attribute_tokens(self.db, base_ann, modify_edit.attribute_tokens)
-                await apply_visibility(self.db, base_ann, modify_edit.visibility_token)
+                with self.db.no_autoflush:  # ← no_autoflush で囲む
+                    apply_modify(base_ann, modify_edit)
+                    await apply_attribute_tokens(self.db, base_ann, modify_edit.attribute_tokens)
+                    await apply_visibility(self.db, base_ann, modify_edit.visibility_token)
             return base_ann
 
         # 既存でなければ add edit を探す
@@ -177,9 +178,10 @@ class AnnotationRepository:
                 return None
             modify_edit = next((e for e in edits if e.edit_type == 'modify'), None)
             if modify_edit is not None:
-                apply_modify(base_ann, modify_edit)
-                await apply_attribute_tokens(self.db, base_ann, modify_edit.attribute_tokens)
-                await apply_visibility(self.db, base_ann, modify_edit.visibility_token)
+                with self.db.no_autoflush:  # ← no_autoflush で囲む
+                    apply_modify(base_ann, modify_edit)
+                    await apply_attribute_tokens(self.db, base_ann, modify_edit.attribute_tokens)
+                    await apply_visibility(self.db, base_ann, modify_edit.visibility_token)
             return base_ann
 
         # base が無ければ add edit を探す
@@ -382,9 +384,10 @@ class AnnotationRepository:
             await self.db.flush()
 
         # マージ結果を返す
-        apply_modify(base_ann, edit)
-        await apply_attribute_tokens(self.db, base_ann, edit.attribute_tokens)
-        await apply_visibility(self.db, base_ann, edit.visibility_token)
+        with self.db.no_autoflush:  # ← no_autoflush で囲む
+            apply_modify(base_ann, edit)
+            await apply_attribute_tokens(self.db, base_ann, edit.attribute_tokens)
+            await apply_visibility(self.db, base_ann, edit.visibility_token)
         # base_ann に edit_version を一時的にセットして返す
         base_ann.edit_version = edit.version  # type: ignore[attr-defined]
         return base_ann

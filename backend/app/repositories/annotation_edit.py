@@ -81,6 +81,8 @@ class AnnotationEditRepository:
         attribute_tokens: list[str] | None = None,
         prev: str | None = None,
         next_: str | None = None,
+        prev_cleared: bool = False,   # ← 追加
+        next_cleared: bool = False,   # ← 追加
     ) -> AnnotationEdit:
         """新規 modify edit を作成."""
         edit = AnnotationEdit(
@@ -94,6 +96,8 @@ class AnnotationEditRepository:
             size=size,
             prev=prev,
             next=next_,
+            prev_cleared=prev_cleared,   # ← 追加
+            next_cleared=next_cleared,   # ← 追加
             visibility_token=visibility_token,
             attribute_tokens=attribute_tokens,
             version=1,
@@ -163,15 +167,32 @@ class AnnotationEditRepository:
         self,
         edit: AnnotationEdit,
         field: str,
-        new_value: str,
+        new_value: str | None,
     ) -> None:
         """既存 edit の prev / next を直接書き換え, version をインクリメント.
 
-        field は 'prev' または 'next'. それ以外は ValueError.
+        new_value が None の場合:
+        - add edit: prev / next カラムを None に設定
+        - modify edit: 該当する prev_cleared / next_cleared フラグを True に設定
+                        + prev / next カラムを None に
+        new_value が文字列の場合:
+        - prev / next カラムに値を設定
+        - modify edit の場合, 該当する _cleared フラグを False に戻す (上書き)
         """
         if field not in ('prev', 'next'):
             raise ValueError(f"field must be 'prev' or 'next', got '{field}'")
-        setattr(edit, field, new_value)
+
+        cleared_field = f'{field}_cleared'
+
+        if new_value is None:
+            setattr(edit, field, None)
+            if edit.edit_type == 'modify':
+                setattr(edit, cleared_field, True)
+        else:
+            setattr(edit, field, new_value)
+            if edit.edit_type == 'modify':
+                setattr(edit, cleared_field, False)
+
         edit.version += 1
         await self.db.flush()
 

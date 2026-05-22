@@ -336,3 +336,124 @@ async def test_get_unedited_returns_null_edit_version(
     """編集されていない annotation の GET レスポンスでは edit_version が null になること."""
     resp = await client.get(f"/api/v1/annotations/{_ANN_TOKEN}")
     assert resp.json()["edit_version"] is None
+
+# ── 削除時の chain 整合性 ────────────────────────────────────────────────
+
+async def test_delete_last_annotation_clears_prev_next_link(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """末尾の annotation を削除すると, 直前の annotation の next が null になること.
+    
+    シナリオ:
+      1. 既存 annotation A (sample_annotation fixture) を末尾とする instance
+      2. A の前に新しい annotation B を追加 (Add BBox to prev)
+         - B.next = A.token になる
+         - A.prev = B.token に書き換えられる
+      3. A を削除
+         - B.next が null に書き換えられているはず
+    """
+    # 1. A の前に B を追加
+    post_resp = await client.post(
+        "/api/v1/annotations",
+        json={
+            "sample_token":   "sample-anntest-001",  # conftest fixture と一致
+            "instance_token": sample_annotation.instance_token,
+            "translation":    [10.0, 20.0, 30.0],
+            "rotation":       [1.0, 0.0, 0.0, 0.0],
+            "size":           [2.0, 4.0, 1.5],
+            "next":           _ANN_TOKEN,  # A の token
+            "attribute_tokens": [],
+        },
+    )
+    assert post_resp.status_code == 201
+    b_token = post_resp.json()["token"]
+
+    # 2. A を削除
+    delete_resp = await client.delete(f"/api/v1/annotations/{_ANN_TOKEN}")
+    assert delete_resp.status_code == 204
+
+    # 3. B の next が null になっていることを確認
+    get_b_resp = await client.get(f"/api/v1/annotations/{b_token}")
+    assert get_b_resp.status_code == 200
+    assert get_b_resp.json()["next"] is None
+
+
+async def test_delete_first_annotation_clears_next_prev_link(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """先頭の annotation を削除すると, 直後の annotation の prev が null になること."""
+    # 1. A の後に B を追加 (Add BBox to next 相当)
+    post_resp = await client.post(
+        "/api/v1/annotations",
+        json={
+            "sample_token":   "sample-anntest-001",
+            "instance_token": sample_annotation.instance_token,
+            "translation":    [10.0, 20.0, 30.0],
+            "rotation":       [1.0, 0.0, 0.0, 0.0],
+            "size":           [2.0, 4.0, 1.5],
+            "prev":           _ANN_TOKEN,
+            "attribute_tokens": [],
+        },
+    )
+    assert post_resp.status_code == 201
+    b_token = post_resp.json()["token"]
+
+    # 2. A を削除
+    delete_resp = await client.delete(f"/api/v1/annotations/{_ANN_TOKEN}")
+    assert delete_resp.status_code == 204
+
+    # 3. B の prev が null になっていることを確認
+    get_b_resp = await client.get(f"/api/v1/annotations/{b_token}")
+    assert get_b_resp.status_code == 200
+    assert get_b_resp.json()["prev"] is None
+
+
+async def test_delete_middle_annotation_links_adjacent(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """中間の annotation を削除すると, 前後の annotation が直接リンクされること.
+
+    シナリオ: A → B → C のチェーンで B を削除
+      期待: A.next = C, C.prev = A
+    """
+    # 注: conftest.py の sample_annotation fixture が複数 sample を作成しているか
+    #     確認が必要. 単一なら追加で sample を作るか, このテストはスキップ.
+
+    # 1. A の後に B, B の後に C を追加
+    post_b = await client.post(
+        "/api/v1/annotations",
+        json={
+            "sample_token":   "sample-anntest-001",
+            "instance_token": sample_annotation.instance_token,
+            "translation":    [10.0, 20.0, 30.0],
+            "rotation":       [1.0, 0.0, 0.0, 0.0],
+            "size":           [2.0, 4.0, 1.5],
+            "prev":           _ANN_TOKEN,
+            "attribute_tokens": [],
+        },
+    )
+    b_token = post_b.json()["token"]
+
+    post_c = await client.post(
+        "/api/v1/annotations",
+        json={
+            "sample_token":   "sample-anntest-001",
+            "instance_token": sample_annotation.instance_token,
+            "translation":    [11.0, 21.0, 31.0],
+            "rotation":       [1.0, 0.0, 0.0, 0.0],
+            "size":           [2.0, 4.0, 1.5],
+            "prev":           b_token,
+            "attribute_tokens": [],
+        },
+    )
+    c_token = post_c.json()["token"]
+
+    # 2. B を削除
+    delete_resp = await client.delete(f"/api/v1/annotations/{b_token}")
+    assert delete_resp.status_code == 204
+
+    # 3. A.next = C, C.prev = A になっていることを確認
+    get_a = await client.get(f"/api/v1/annotations/{_ANN_TOKEN}")
+    get_c = await client.get(f"/api/v1/annotations/{c_token}")
+    assert get_a.json()["next"] == c_token
+    assert get_c.json()["prev"] == _ANN_TOKEN

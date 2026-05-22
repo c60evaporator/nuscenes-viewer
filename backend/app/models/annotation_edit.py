@@ -5,7 +5,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -58,6 +58,13 @@ class AnnotationEdit(Base):
     #   - 整合性はアプリケーションロジック (Repository) で保証
     prev:           Mapped[str | None] = mapped_column(String, nullable=True)
     next:           Mapped[str | None] = mapped_column(String, nullable=True)
+    # chain 書き換え時の補助フラグ (両方とも False が初期値, 書き換え完了後に True にする)
+    prev_cleared: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
+    )
+    next_cleared: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
+    )
     # ── 関連 ──
     visibility_token: Mapped[str | None] = mapped_column(
         ForeignKey("visibilities.token", ondelete="SET NULL"),

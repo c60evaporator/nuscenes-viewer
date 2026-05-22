@@ -117,27 +117,72 @@ async def delete_annotation(
     token: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """BBox を論理削除 (or add edit の物理削除)."""
+    """BBox を論理削除 (or add edit の物理削除).
+
+    削除対象の prev/next を読み取り, それぞれの隣接 annotation の
+    next/prev も更新して chain の整合性を保つ.
+    """
     ann_repo  = AnnotationRepository(db)
     edit_repo = AnnotationEditRepository(db)
 
-    # 既存 SampleAnnotation の場合: delete edit を作成
+    # 既存 SampleAnnotation の場合: delete edit を作成 + 隣接 chain 書き換え
     base = await ann_repo.get_raw_by_token(token)
     if base is not None:
         existing_delete = await edit_repo.get_delete_by_base(token)
-        if existing_delete is None:
-            await edit_repo.create_delete(
-                base_token=token,
-                sample_token=base.sample_token,
-                instance_token=base.instance_token,
+        if existing_delete is not None:
+            # 既に delete edit がある: 冪等で何もしない
+            await db.commit()
+            return
+
+        # マージ済みデータから最新の prev/next を取得
+        merged = await ann_repo.get_by_token(token)
+        if merged is None:
+            # 通常あり得ない (base が存在するのに merged が None)
+            await db.commit()
+            return
+        prev_token = merged.prev
+        next_token = merged.next
+
+        # delete edit を作成
+        await edit_repo.create_delete(
+            base_token=token,
+            sample_token=base.sample_token,
+            instance_token=base.instance_token,
+        )
+
+        # 隣接 chain の書き換え
+        if prev_token is not None:
+            # prev 側の next を, 削除対象の next (削除後の連結先) に書き換え
+            await create_chain_modify(
+                db, target_token=prev_token, field='next', new_value=next_token
             )
+        if next_token is not None:
+            # next 側の prev を, 削除対象の prev (削除後の連結先) に書き換え
+            await create_chain_modify(
+                db, target_token=next_token, field='prev', new_value=prev_token
+            )
+
         await db.commit()
         return
 
-    # add edit の場合: そのレコード自体を物理削除
+    # AnnotationEdit (add) の場合: そのレコード自体を物理削除
     add_edit = await edit_repo.get_add_by_token(token)
     if add_edit is not None:
+        prev_token = add_edit.prev
+        next_token = add_edit.next
+
         await edit_repo.delete_edit(add_edit)
+
+        # 隣接 chain の書き換え
+        if prev_token is not None:
+            await create_chain_modify(
+                db, target_token=prev_token, field='next', new_value=next_token
+            )
+        if next_token is not None:
+            await create_chain_modify(
+                db, target_token=next_token, field='prev', new_value=prev_token
+            )
+
         await db.commit()
         return
 

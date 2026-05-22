@@ -30,31 +30,33 @@ def apply_modify(base: SampleAnnotation, edit: AnnotationEdit) -> SampleAnnotati
         * edit.prev が非 None なら base.prev を edit.prev に上書き
         * それ以外 (edit.prev=None かつ prev_cleared=False) は base.prev を維持
         * next も同様
+    - set_committed_value を使うことで属性を上書きするが,SQLAlchemy セッションには dirty として記録されない (= 後の flush で DB に書き出されない).これにより transient なマージ操作と DB 永続化を分離する.
     """
     if edit.translation is not None:
-        base.translation = edit.translation
+        set_committed_value(base, 'translation', edit.translation)
     if edit.rotation is not None:
-        base.rotation = edit.rotation
+        set_committed_value(base, 'rotation', edit.rotation)
     if edit.size is not None:
-        base.size = edit.size
+        set_committed_value(base, 'size', edit.size)
 
-    # prev の 3 段階処理
+    # prev: 3 段階処理
     if edit.prev_cleared:
-        base.prev = None
+        set_committed_value(base, 'prev', None)
     elif edit.prev is not None:
-        base.prev = edit.prev
+        set_committed_value(base, 'prev', edit.prev)
     # else: base.prev を維持
 
-    # next の 3 段階処理
+    # next: 3 段階処理
     if edit.next_cleared:
-        base.next = None
+        set_committed_value(base, 'next', None)
     elif edit.next is not None:
-        base.next = edit.next
+        set_committed_value(base, 'next', edit.next)
     # else: base.next を維持
 
     if edit.visibility_token is not None:
-        base.visibility_token = edit.visibility_token
+        set_committed_value(base, 'visibility_token', edit.visibility_token)
 
+    # edit_version は SQLAlchemy 属性ではない (動的属性) ので普通の代入で OK
     base.edit_version = edit.version  # type: ignore[attr-defined]
     return base
 

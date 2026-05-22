@@ -96,3 +96,26 @@ export function useCreateAnnotation() {
     },
   })
 }
+
+// DELETE /annotations/{token} — アノテーション論理削除
+export interface DeleteAnnotationVariables {
+  token:          string
+  sample_token:   string
+  instance_token: string
+}
+
+export function useDeleteAnnotation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ token }: DeleteAnnotationVariables) =>
+      apiFetch<void>(`/annotations/${token}`, { method: 'DELETE' }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['annotation', variables.token] })
+      queryClient.invalidateQueries({ queryKey: ['annotations'] })
+      queryClient.invalidateQueries({ queryKey: ['sample-annotations', variables.sample_token] })
+      queryClient.invalidateQueries({ queryKey: ['instance-annotations', variables.instance_token] })
+      queryClient.invalidateQueries({ queryKey: ['sample-instances', variables.sample_token] })
+      queryClient.invalidateQueries({ queryKey: ['instances'] })
+    },
+  })
+}

@@ -7,6 +7,8 @@ import SampleList from '@/components/sample/SampleList'
 import InstanceList from '@/components/instance/InstanceList'
 import AnnotationViewer from '@/components/annotation/AnnotationViewer'
 import AnnotationEditPanel from '@/components/annotation/AnnotationEditPanel'
+import { useDeleteAnnotation } from '@/api/annotations'
+import { ApiError } from '@/api/client'
 import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
 import { useSamples, useSampleInstances, useSampleAnnotations } from '@/api/samples'
@@ -286,6 +288,8 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     return egoPoses.find((p) => p.sample_token === st) ?? null
   }, [editSession?.fixedSampleToken, egoPoses])
 
+  const deleteAnnotation = useDeleteAnnotation()
+
   // キーボードショートカット
   useEditKeyboardShortcuts({ egoPose: editingEgoPose })
 
@@ -371,16 +375,38 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
               {/* Delete BBox */}
               <div className="relative flex-1 group" style={{ minWidth: '80px' }}>
                   <button
-                      disabled={!canDeleteBBox}
+                      disabled={!canDeleteBBox || deleteAnnotation.isPending}
                       className="w-full py-1.5 text-xs font-medium rounded text-white"
                       style={{
-                          background: canDeleteBBox ? '#DC2626' : '#374151',
-                          cursor:     canDeleteBBox ? 'pointer' : 'not-allowed',
-                          opacity:    canDeleteBBox ? 1 : 0.5,
+                          background: (canDeleteBBox && !deleteAnnotation.isPending) ? '#DC2626' : '#374151',
+                          cursor:     (canDeleteBBox && !deleteAnnotation.isPending) ? 'pointer' : 'not-allowed',
+                          opacity:    (canDeleteBBox && !deleteAnnotation.isPending) ? 1 : 0.5,
                       }}
-                      onClick={() => { /* TODO: 削除ロジック */ }}
+                      onClick={async () => {
+                          if (!selectedAnnotation) return
+                          const confirmed = window.confirm('Delete this annotation? This cannot be undone in this session.')
+                          if (!confirmed) return
+                          try {
+                              await deleteAnnotation.mutateAsync({
+                                  token:          selectedAnnotation.token,
+                                  sample_token:   selectedAnnotation.sample_token,
+                                  instance_token: selectedAnnotation.instance_token,
+                              })
+                              setListSelectedSampleToken(null)
+                          } catch (e) {
+                              if (e instanceof ApiError) {
+                                  if (e.status === 404) {
+                                      setListSelectedSampleToken(null)
+                                  } else {
+                                      alert(`Delete failed: ${e.message}`)
+                                  }
+                              } else {
+                                  alert(`Unexpected error: ${(e as Error).message}`)
+                              }
+                          }
+                      }}
                   >
-                      Delete BBox
+                      {deleteAnnotation.isPending ? 'Deleting...' : 'Delete BBox'}
                   </button>
                   {!canDeleteBBox && (
                       <div

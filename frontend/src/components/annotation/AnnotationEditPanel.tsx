@@ -317,6 +317,18 @@ export default function AnnotationEditPanel({
 
   const handleSaveBBox = async () => {
     if (!currentAnnotation || !editSession) return
+
+    // Add モード + new instance の場合, category_token が空でないかチェック
+    if (editSession.mode === 'add') {
+        const isNewInstance =
+            currentAnnotation.instance_token === '' ||
+            currentAnnotation.instance_token === '__new__'
+        if (isNewInstance && !currentAnnotation.category_token) {
+            alert('Please select a category for the new instance.')
+            return
+        }
+    }
+    
     try {
       if (editSession.mode === 'edit') {
         await updateAnnotation.mutateAsync({

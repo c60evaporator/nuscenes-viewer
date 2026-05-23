@@ -129,13 +129,20 @@ If you run Docker Compose directly instead of Makefile, run this once before `do
 chmod +x db/initdb.d/*.sh
 ```
 
-### 5. Migration and data import (Only first time)
+### 5. Migration
+
+Run the migration to create a database.
+
+```bash
+# Migration (make sure the db container is launched by `make dev` in advance)
+make migrate
+```
+
+### 6. Data import
 
 This app must load the nuScenes metadata to PostGIS DB before using it, so please run the following commands.
 
 ```bash
-# Migration (make sure the db container is launched in advance)
-make migrate
 # Import Mini dataset
 docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0-mini
 # Import Map expansion
@@ -273,30 +280,42 @@ Holding a key down triggers continuous execution. One undo step is recorded per 
 
 ---
 
-### Annotation (Bounding Box)
-
-Open the annotation editor from the Sample view by clicking **"Annotations"**.
-
-There are four ways to edit bounding box
-
-1. **3D point cloud**: Drag handles or use the Unity-like gizmo to resize/rotate
-- **Camera images**: Bounding boxes update in real time across all 6 cameras
-- **Keyboard shortcuts**: `W/A/S/D` to move, `Q/E` to rotate, `Enter` to save
-
-##### 1. LIDAR_TOP (BEV)
-
-
-
-##### 2. 3D Pointcloud
-
-
-##### 3. 
-
----
-
 ### Annotation (Map expansion)
 
 Comming soon
+
+---
+
+### Database operation
+
+#### Migration (database schema update)
+
+When the database schema is needed to be updated, run the following command.
+
+```bash
+docker compose run -v ./backend/alembic:/app/alembic --rm migrations alembic upgrade head
+```
+
+#### Delete and re-construct the database
+
+To completely delete the database, run the following command
+
+```bash
+docker compose down -v
+```
+
+To import the dataset again, run the follwing command after locate the dataset properly
+
+```bash
+# Launch the system
+make dev
+# Migration
+make migrate
+# Import Mini dataset (Please change the dataset )
+docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0-mini
+# Import Map expansion
+docker compose exec api python scripts/import_nuscenes_map.py
+```
 
 ## Roadmap
 

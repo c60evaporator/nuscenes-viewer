@@ -617,15 +617,7 @@ export default function AnnotationEditPanel({
 
       {/* ── Save BBox ボタン ──────────────────────────────────────────── */}
       <button
-        disabled={
-          !isDirty ||
-          updateAnnotation.isPending ||
-          createAnnotation.isPending ||
-          // 新規追加: new instance なのに category 未選択
-          (editSession?.mode === 'add' &&
-          (currentAnnotation?.instance_token === '' || currentAnnotation?.instance_token === '__new__') &&
-          !currentAnnotation?.category_token)
-        }
+        disabled={!isDirty || isSaving}
         style={{
           width:        '100%',
           padding:      '8px',

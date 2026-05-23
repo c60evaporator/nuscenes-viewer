@@ -76,6 +76,13 @@ async def create_annotation(
 
     # 1. instance を準備
     if data.new_instance is not None:
+        # new instanceかつcategory_token未指定はエラー
+        if not data.new_instance.category_token:
+            raise HTTPException(
+                status_code=400,
+                detail="category_token is required when creating a new instance",
+            )
+        # new instance の場合: instance_edit を作成して instance_token を取得
         new_instance_edit = await instance_edit_repo.create(
             category_token=data.new_instance.category_token,
         )

@@ -73,9 +73,6 @@ export default function EditingBBoxLayer({
         ? frozenAnnotationRef.current
         : currentAnnotation
 
-    // 矢印は操作中も最新値で更新 (Rect と違って draggable ではないので OK)
-    const arrowAnnotation = currentAnnotation
-
     // ── BBox 上面のピクセル座標を計算 ──────────────────────────────────────────
     const globalCorners = bboxCornersToGlobal(
         renderedAnnotation.translation,
@@ -121,10 +118,10 @@ export default function EditingBBoxLayer({
     const arrowExtra = Math.min(1.0, renderedAnnotation.size[1] * 0.3)
     // グローバル座標で矢印の始点・終点を計算
     const arrowStartGlobal = getBBoxFrontCenter(
-        arrowAnnotation.translation, arrowAnnotation.rotation, arrowAnnotation.size,
+        currentAnnotation.translation, currentAnnotation.rotation, currentAnnotation.size,
     )
     const arrowEndGlobal = getBBoxArrowTip(
-        arrowAnnotation.translation, arrowAnnotation.rotation, arrowAnnotation.size, arrowExtra,
+        currentAnnotation.translation, currentAnnotation.rotation, currentAnnotation.size, arrowExtra,
     )
     // グローバル → センサー → BEV ピクセル
     const arrowStartSensor = globalToSensor(arrowStartGlobal, egoPose, lidarCalibSensor)

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSensorImage } from '@/api/sensorData'
 import { project3DTo2D, bboxCornersToGlobal, projectMapCoordsToCamera } from '@/lib/coordinateUtils'
-import { drawBBox2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint, drawProjectedArrow, drawProjectedLabel } from '@/lib/canvasUtils'
+import { drawBBox2D, drawArrow2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint, drawProjectedArrow, drawProjectedLabel } from '@/lib/canvasUtils'
+import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import { LAYER_COLORS } from '@/layers/MapAnnotationLayers'
 import { MAP_PROJECTION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
@@ -345,6 +346,21 @@ export default function CameraImageCanvas({
           ? '#FFFF00'
           : '#00AAFF'
       drawBBox2D(ctx, corners2D, color)
+
+      // 矢印描画
+      const arrowExtra = Math.min(1.0, ann.size[1] * 0.3)
+      const arrowStartGlobal = getBBoxFrontCenter(ann.translation, ann.rotation, ann.size)
+      const arrowEndGlobal   = getBBoxArrowTip(ann.translation, ann.rotation, ann.size, arrowExtra)
+      const arrowStartPx = project3DTo2D(arrowStartGlobal, intrinsic, egoPose, calibArray)
+      const arrowEndPx   = project3DTo2D(arrowEndGlobal,   intrinsic, egoPose, calibArray)
+      if (arrowStartPx !== null && arrowEndPx !== null) {
+          drawArrow2D(
+              ctx,
+              [arrowStartPx[0] * scaleX, arrowStartPx[1] * scaleY],
+              [arrowEndPx[0]   * scaleX, arrowEndPx[1]   * scaleY],
+              color, 2, 10, 10,
+          )
+      }
     }
 
     bboxRectsRef.current = newBBoxRects

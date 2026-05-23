@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Stage, Layer, Rect, Transformer } from 'react-konva'
+import { Stage, Layer, Rect, Arrow, Transformer } from 'react-konva'
 import type Konva from 'konva'
 import { useEditStore } from '@/store/editStore'
 import {
@@ -10,6 +10,7 @@ import {
     axisAngleToQuaternion,
 } from '@/lib/coordinateUtils'
 import { sensorToBevPixel, bevPixelToSensor, type BevViewParams } from '@/lib/canvasUtils'
+import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import { SIZE_MIN } from '@/lib/bboxEditOps'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -111,6 +112,21 @@ export default function EditingBBoxLayer({
     // ピクセル単位サイズ
     const widthPx  = renderedAnnotation.size[0] * viewParams.scale
     const lengthPx = renderedAnnotation.size[1] * viewParams.scale
+
+    // 矢印の長さ: min(1m, length * 0.3)
+    const arrowExtra = Math.min(1.0, renderedAnnotation.size[1] * 0.3)
+    // グローバル座標で矢印の始点・終点を計算
+    const arrowStartGlobal = getBBoxFrontCenter(
+        renderedAnnotation.translation, renderedAnnotation.rotation, renderedAnnotation.size,
+    )
+    const arrowEndGlobal = getBBoxArrowTip(
+        renderedAnnotation.translation, renderedAnnotation.rotation, renderedAnnotation.size, arrowExtra,
+    )
+    // グローバル → センサー → BEV ピクセル
+    const arrowStartSensor = globalToSensor(arrowStartGlobal, egoPose, lidarCalibSensor)
+    const arrowEndSensor   = globalToSensor(arrowEndGlobal,   egoPose, lidarCalibSensor)
+    const [arrowStartX, arrowStartY] = toBevKonva(arrowStartSensor[0], arrowStartSensor[1])
+    const [arrowEndX,   arrowEndY]   = toBevKonva(arrowEndSensor[0],   arrowEndSensor[1])
 
     // ── ドラッグハンドラ (並進) ────────────────────────────────────────────────
     const handleDragStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -269,6 +285,15 @@ export default function EditingBBoxLayer({
                         const stage = e.target.getStage()
                         if (stage) stage.container().style.cursor = ''
                     }}
+                />
+                <Arrow
+                    points={[arrowStartX, arrowStartY, arrowEndX, arrowEndY]}
+                    stroke='#FF8C00'
+                    fill='#FF8C00'
+                    strokeWidth={3}
+                    pointerLength={8}
+                    pointerWidth={8}
+                    listening={false}
                 />
                 <Transformer
                     ref={transformerRef}

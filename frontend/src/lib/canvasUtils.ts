@@ -308,6 +308,58 @@ export function drawPointCloud(
   ctx.restore()
 }
 
+/**
+ * 2D 平面に矢印 (線 + 矢じり) を描画する.
+ * 既に Y 軸反転済みの座標系 (BEV 用) で動作する.
+ */
+export function drawArrow2D(
+    ctx: CanvasRenderingContext2D,
+    start: [number, number],
+    end: [number, number],
+    color: string,
+    lineWidth = 2,
+    arrowHeadLength = 6,
+    arrowHeadWidth  = 6,
+): void {
+    const [sx, sy] = start
+    const [ex, ey] = end
+    const dx = ex - sx
+    const dy = ey - sy
+    const len = Math.hypot(dx, dy)
+    if (len < 0.001) return
+
+    // 線分
+    ctx.strokeStyle = color
+    ctx.lineWidth   = lineWidth
+    ctx.beginPath()
+    ctx.moveTo(sx, sy)
+    ctx.lineTo(ex, ey)
+    ctx.stroke()
+
+    // 矢じり (三角形)
+    const ux = dx / len
+    const uy = dy / len
+    const px = -uy  // 垂直方向 (左)
+    const py = ux
+
+    const tipX = ex
+    const tipY = ey
+    const baseX = ex - ux * arrowHeadLength
+    const baseY = ey - uy * arrowHeadLength
+    const leftX  = baseX + px * (arrowHeadWidth / 2)
+    const leftY  = baseY + py * (arrowHeadWidth / 2)
+    const rightX = baseX - px * (arrowHeadWidth / 2)
+    const rightY = baseY - py * (arrowHeadWidth / 2)
+
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.moveTo(tipX, tipY)
+    ctx.lineTo(leftX, leftY)
+    ctx.lineTo(rightX, rightY)
+    ctx.closePath()
+    ctx.fill()
+}
+
 // ── Map フィーチャー投影描画 ──────────────────────────────────────────────────
 
 type RGBA = [number, number, number, number]

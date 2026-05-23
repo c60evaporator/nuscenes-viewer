@@ -616,6 +616,29 @@ export function sensorOffsetToGlobalOffset(
 }
 
 /**
+ * クォータニオン q でベクトル v を回転する.
+ *
+ * @param v        回転対象のベクトル [x, y, z]
+ * @param rotation クォータニオン [w, x, y, z] (nuScenes 形式)
+ * @returns        回転後のベクトル [x', y', z']
+ *
+ * 数学: v' = q * (0, v) * q^(-1) のベクトル成分 (q^(-1) は単位 q では q の共役と一致)
+ */
+export function rotateVectorByQuaternion(
+    v: [number, number, number] | number[],
+    rotation: number[],
+): [number, number, number] {
+    // v を純粋クォータニオン (w=0, x=v[0], y=v[1], z=v[2]) として扱う
+    const vQuat = [0, v[0], v[1], v[2]]
+    const qConj = quaternionConjugate(rotation)
+    // q * v * q_conj
+    const tmp    = multiplyQuaternions(rotation, vQuat)
+    const result = multiplyQuaternions(tmp, qConj)
+    // 結果のベクトル成分 [x, y, z] (w 成分は理論上 0)
+    return [result[1], result[2], result[3]]
+}
+
+/**
  * センサー座標系の点をグローバル座標系に変換する（globalToSensor の逆変換）
  *
  * @param sensorPoint センサー座標系の [x, y, z]

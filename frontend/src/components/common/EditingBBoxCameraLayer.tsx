@@ -1,6 +1,7 @@
-import { Stage, Layer, Line } from 'react-konva'
+import { Stage, Layer, Line, Arrow } from 'react-konva'
 import { useEditStore } from '@/store/editStore'
 import { bboxCornersToGlobal, project3DTo2D } from '@/lib/coordinateUtils'
+import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import type { CalibratedSensor } from '@/types/sensor'
 
 interface Props {
@@ -68,6 +69,25 @@ export default function EditingBBoxCameraLayer({
 
     if (validEdges.length === 0) return null
 
+    // 矢印の描画判定
+    const arrowExtra = Math.min(1.0, currentAnnotation.size[1] * 0.3)
+    const arrowStartGlobal = getBBoxFrontCenter(
+        currentAnnotation.translation,
+        currentAnnotation.rotation,
+        currentAnnotation.size,
+    )
+    const arrowEndGlobal = getBBoxArrowTip(
+        currentAnnotation.translation,
+        currentAnnotation.rotation,
+        currentAnnotation.size,
+        arrowExtra,
+    )
+    // グローバル → カメラ画像座標へ投影
+    const arrowStartPx = project3DTo2D(arrowStartGlobal, calibratedSensor.camera_intrinsic, egoPose, calibArray)
+    const arrowEndPx   = project3DTo2D(arrowEndGlobal,   calibratedSensor.camera_intrinsic, egoPose, calibArray)
+    // 両方の投影が有効な場合のみ描画
+    const arrowVisible = arrowStartPx !== null && arrowEndPx !== null
+
     return (
         <Stage
             width={displayW}
@@ -85,6 +105,20 @@ export default function EditingBBoxCameraLayer({
                         listening={false}
                     />
                 ))}
+                {arrowVisible && (
+                    <Arrow
+                        points={[
+                            arrowStartPx![0] * scaleX, arrowStartPx![1] * scaleY,
+                            arrowEndPx![0]   * scaleX, arrowEndPx![1]   * scaleY,
+                        ]}
+                        stroke='#FF8C00'
+                        fill='#FF8C00'
+                        strokeWidth={3}
+                        pointerLength={10}
+                        pointerWidth={10}
+                        listening={false}
+                    />
+                )}
             </Layer>
         </Stage>
     )

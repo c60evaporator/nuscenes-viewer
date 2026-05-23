@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePointCloud } from '@/api/sensorData'
 import { useBasemap } from '@/api/maps'
-import { drawPointCloud, drawBBox2D, sensorToBevPixel, type BevViewParams } from '@/lib/canvasUtils'
+import { drawPointCloud, drawBBox2D, drawArrow2D, sensorToBevPixel, type BevViewParams } from '@/lib/canvasUtils'
 import { bboxCornersToGlobal, globalToSensor, globalToMapPixel, NUSCENES_MAP_META } from '@/lib/coordinateUtils'
+import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import EditingBBoxLayer from './EditingBBoxLayer'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
@@ -239,6 +240,15 @@ export default function PointCloudCanvas({
             ? '#FFD700'
             : '#00FF88'
         drawBBox2D(ctx, corners2D, color)
+        // 矢印描画
+        const arrowExtra = Math.min(1.0, ann.size[1] * 0.3)
+        const arrowStartGlobal = getBBoxFrontCenter(ann.translation, ann.rotation, ann.size)
+        const arrowEndGlobal   = getBBoxArrowTip(ann.translation, ann.rotation, ann.size, arrowExtra)
+        const arrowStartSensor = globalToSensor(arrowStartGlobal, egoPose, lidarCalibSensor)
+        const arrowEndSensor   = globalToSensor(arrowEndGlobal,   egoPose, lidarCalibSensor)
+        const arrowStartPx = sensorToBevPixel(arrowStartSensor[0], arrowStartSensor[1], viewParams)
+        const arrowEndPx   = sensorToBevPixel(arrowEndSensor[0],   arrowEndSensor[1],   viewParams)
+        drawArrow2D(ctx, arrowStartPx, arrowEndPx, color, 2, 6, 6)
       }
     }
     ctx.restore()  // 点群、BBox 描画後に restore して点群描画の座標系を元に戻す

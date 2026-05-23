@@ -9,6 +9,7 @@ import {
     sensorOffsetToGlobalOffset,
     Q_SENSOR_TO_VIEW, Q_VIEW_TO_SENSOR,
 } from '@/lib/coordinateUtils'
+import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -63,6 +64,44 @@ function computeDisplay(
     return { displayCenter: center, displayQuaternion: displayQuat, edgePoints }
 }
 
+function computeArrow(
+    ann: Annotation,
+    egoPose: EgoPosePoint,
+    lidarCalibSensor: { translation: number[]; rotation: number[] },
+): {
+    startDisplay:    [number, number, number]
+    endDisplay:      [number, number, number]
+    coneQuaternion:  THREE.Quaternion
+    coneLength:      number
+} {
+    const arrowExtra = Math.min(1.0, ann.size[1] * 0.3)
+    const startGlobal = getBBoxFrontCenter(ann.translation, ann.rotation, ann.size)
+    const endGlobal   = getBBoxArrowTip(ann.translation, ann.rotation, ann.size, arrowExtra)
+
+    const globalToDisplay = (g: [number, number, number]): [number, number, number] => {
+        const s = globalToSensor(g, egoPose, lidarCalibSensor)
+        return [s[1], -s[0], s[2]]
+    }
+    const startDisplay = globalToDisplay(startGlobal)
+    const endDisplay   = globalToDisplay(endGlobal)
+
+    const coneLen = Math.min(0.4, arrowExtra * 0.5)
+    const dir = new THREE.Vector3(
+        endDisplay[0] - startDisplay[0],
+        endDisplay[1] - startDisplay[1],
+        endDisplay[2] - startDisplay[2],
+    ).normalize()
+    const coneQ = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0), dir,
+    )
+
+    return {
+        startDisplay, endDisplay,
+        coneQuaternion: coneQ,
+        coneLength:     coneLen,
+    }
+}
+
 export default function EditingBBox3D({
     ann, egoPose, lidarCalibSensor, transformMode, orbitControlsRef,
 }: Props) {
@@ -79,6 +118,10 @@ export default function EditingBBox3D({
     const dragStartTranslationRef = useRef<number[] | null>(null)
     const dragStartRotationRef    = useRef<number[] | null>(null)
 
+    // 矢印用 refs
+    const arrowLineRef = useRef<any>(null)
+    const arrowConeRef = useRef<THREE.Mesh>(null)
+
     // props を ref で保持 (useFrame からアクセスするため)
     const egoPoseRef = useRef(egoPose)
     egoPoseRef.current = egoPose
@@ -87,6 +130,7 @@ export default function EditingBBox3D({
 
     // 初期表示用（JSX の初期値として渡す）
     const initial = computeDisplay(ann, egoPose, lidarCalibSensor)
+    const initialArrow = computeArrow(ann, egoPose, lidarCalibSensor)
 
     // ── useFrame: React Scheduler を介さず毎フレーム直接更新 ──
     useFrame(() => {
@@ -113,6 +157,21 @@ export default function EditingBBox3D({
         if (!isDraggingRef.current && meshRef.current) {
             meshRef.current.position.set(displayCenter[0], displayCenter[1], displayCenter[2])
             meshRef.current.quaternion.copy(displayQuaternion)
+        }
+
+        // 矢印更新
+        const arrow = computeArrow(annNow, ego, calib)
+        const arrowLine = arrowLineRef.current
+        if (arrowLine?.geometry && typeof arrowLine.geometry.setPositions === 'function') {
+            const flat = new Float32Array([
+                arrow.startDisplay[0], arrow.startDisplay[1], arrow.startDisplay[2],
+                arrow.endDisplay[0],   arrow.endDisplay[1],   arrow.endDisplay[2],
+            ])
+            arrowLine.geometry.setPositions(flat)
+        }
+        if (arrowConeRef.current) {
+            arrowConeRef.current.position.set(arrow.endDisplay[0], arrow.endDisplay[1], arrow.endDisplay[2])
+            arrowConeRef.current.quaternion.copy(arrow.coneQuaternion)
         }
     })
 
@@ -196,6 +255,23 @@ export default function EditingBBox3D({
                 lineWidth={2}
                 segments
             />
+
+            {/* 矢印: 線 */}
+            <Line
+                ref={arrowLineRef}
+                points={[initialArrow.startDisplay, initialArrow.endDisplay]}
+                color='#FF8C00'
+                lineWidth={3}
+            />
+            {/* 矢印: 矢じり (cone) */}
+            <mesh
+                ref={arrowConeRef}
+                position={initialArrow.endDisplay}
+                quaternion={initialArrow.coneQuaternion}
+            >
+                <coneGeometry args={[initialArrow.coneLength * 0.4, initialArrow.coneLength, 8]} />
+                <meshBasicMaterial color='#FF8C00' />
+            </mesh>
 
             {/* TransformControls のターゲット mesh（透明、position/quaternion は useFrame が管理） */}
             <mesh ref={meshRef}>

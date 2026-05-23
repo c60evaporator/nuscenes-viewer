@@ -12,6 +12,7 @@ import {
 import EditingBBox3D from '@/components/annotation/EditingBBox3D'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
+import BBoxArrow3D from './BBoxArrow3D'
 
 interface Props {
     sampleDataToken:  string
@@ -373,6 +374,15 @@ const NormalBBoxMesh = memo(function NormalBBoxMesh({
         <group>
             {/* ワイヤーフレーム (drei Line で太さ指定) */}
             <Line points={edgePoints} color={color} lineWidth={lineWidth} segments />
+
+            {/* 前方向矢印 */}
+            <BBoxArrow3D
+                ann={ann}
+                egoPose={egoPose}
+                lidarCalibSensor={lidarCalibSensor}
+                color={color}
+                lineWidth={lineWidth + 1}   // BBox より少し太く
+            />
 
             {/* クリック判定用 (透明) */}
             {onClick && (

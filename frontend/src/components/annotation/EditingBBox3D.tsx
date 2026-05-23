@@ -208,7 +208,7 @@ export default function EditingBBox3D({
                 ref={transformControlsRef}
                 object={meshRef as React.RefObject<THREE.Object3D>}
                 mode={transformMode}
-                space='world'
+                space='local'
                 onMouseDown={handleMouseDown}
                 onChange={handleChange}
                 onMouseUp={handleMouseUp}

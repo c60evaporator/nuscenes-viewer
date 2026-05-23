@@ -41,6 +41,7 @@ export default function EditingBBoxLayer({
 
     const rectRef        = useRef<Konva.Rect>(null)
     const transformerRef = useRef<Konva.Transformer>(null)
+    const arrowRef = useRef<Konva.Arrow>(null)
 
     // 操作中の表示凍結
     const isInteractingRef    = useRef(false)
@@ -71,6 +72,9 @@ export default function EditingBBoxLayer({
     const renderedAnnotation = (isInteractingRef.current && frozenAnnotationRef.current)
         ? frozenAnnotationRef.current
         : currentAnnotation
+
+    // 矢印は操作中も最新値で更新 (Rect と違って draggable ではないので OK)
+    const arrowAnnotation = currentAnnotation
 
     // ── BBox 上面のピクセル座標を計算 ──────────────────────────────────────────
     const globalCorners = bboxCornersToGlobal(
@@ -117,10 +121,10 @@ export default function EditingBBoxLayer({
     const arrowExtra = Math.min(1.0, renderedAnnotation.size[1] * 0.3)
     // グローバル座標で矢印の始点・終点を計算
     const arrowStartGlobal = getBBoxFrontCenter(
-        renderedAnnotation.translation, renderedAnnotation.rotation, renderedAnnotation.size,
+        arrowAnnotation.translation, arrowAnnotation.rotation, arrowAnnotation.size,
     )
     const arrowEndGlobal = getBBoxArrowTip(
-        renderedAnnotation.translation, renderedAnnotation.rotation, renderedAnnotation.size, arrowExtra,
+        arrowAnnotation.translation, arrowAnnotation.rotation, arrowAnnotation.size, arrowExtra,
     )
     // グローバル → センサー → BEV ピクセル
     const arrowStartSensor = globalToSensor(arrowStartGlobal, egoPose, lidarCalibSensor)
@@ -150,8 +154,9 @@ export default function EditingBBoxLayer({
             egoPose,
             lidarCalibSensor,
         )
+        const newTranslation = [newGlobal[0], newGlobal[1], startGlobalZRef.current]
         // BEV操作はXY平面のみ。センサー傾きによるZ結合を防ぐため、global Z は固定する。
-        updateSessionLive({ translation: [newGlobal[0], newGlobal[1], startGlobalZRef.current] })
+        updateSessionLive({ translation: newTranslation })
     }
 
     const handleDragMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -213,12 +218,14 @@ export default function EditingBBoxLayer({
             egoPose,
             lidarCalibSensor,
         )
+        const newTranslation = [newGlobalTranslation[0], newGlobalTranslation[1], startGlobalZRef.current]
+        const newSize        = [newWidthM, newLengthM, transformStartSizeRef.current[2]]
 
         updateSessionLive({
             // BEV操作はXY平面のみ。センサー傾きによるZ結合を防ぐため、global Z は固定する。
-            translation: [newGlobalTranslation[0], newGlobalTranslation[1], startGlobalZRef.current],
+            translation: newTranslation,
             rotation:    newQuaternion,
-            size:        [newWidthM, newLengthM, transformStartSizeRef.current[2]],
+            size:        newSize,
         })
     }
 

@@ -93,6 +93,28 @@ export function useEditKeyboardShortcuts({ egoPose }: { egoPose: EgoPosePoint | 
         const onKeyDown = (e: KeyboardEvent) => {
             if (!useEditStore.getState().session) return
             if (FORM_TAGS.has((e.target as HTMLElement).tagName)) return
+            
+            // ── Undo / Redo ──
+            // Ctrl+Z (Win/Linux) または Cmd+Z (Mac)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+                e.preventDefault()
+                if (e.shiftKey) {
+                    // Ctrl+Shift+Z = Redo
+                    useEditStore.getState().redo()
+                } else {
+                    // Ctrl+Z = Undo
+                    useEditStore.getState().undo()
+                }
+                return
+            }
+            // Ctrl+Y (Win/Linux) = Redo
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+                e.preventDefault()
+                useEditStore.getState().redo()
+                return
+            }
+
+            // ── リピートキー処理 ──
             const action = getAction(e)
             if (!action) return
             e.preventDefault()

@@ -90,6 +90,29 @@ deploy-frontend:
 		--no-cli-pager
 	@echo "Frontend deployed successfully."
 
+rds-migration:
+	cd terraform/deploy && AWS_PROFILE=terraform terraform init -upgrade && \
+		AWS_PROFILE=terraform terraform apply -auto-approve \
+		-var="region=$(REGION)" \
+		-var="project_name=$(PROJECT_NAME)" \
+		-var="multi_az=$(MULTI_AZ)"
+	aws ecs run-task \
+		--cluster $(CLUSTER) \
+		--task-definition $(PROJECT_NAME)-migration-task \
+		--launch-type FARGATE \
+		--network-configuration "awsvpcConfiguration={subnets=[$(PRIVATE_SUBNET_ID)],securityGroups=[$(SG_ECS_ID)],assignPublicIp=DISABLED}" \
+		--region $(REGION) \
+		--no-cli-pager \
+		--query 'tasks[0].{taskArn:taskArn,lastStatus:lastStatus}' \
+		--output table
+	@echo "Waiting for migration task to complete..."
+	sleep 120
+	cd terraform/deploy && AWS_PROFILE=terraform terraform destroy -auto-approve \
+		-var="region=$(REGION)" \
+		-var="project_name=$(PROJECT_NAME)" \
+		-var="multi_az=$(MULTI_AZ)"
+	@echo "Migration completed. Check ECS console for task status."
+
 maintenance-up:
 	cd terraform/maintenance && AWS_PROFILE=terraform terraform init -upgrade && \
 		AWS_PROFILE=terraform terraform apply -auto-approve \

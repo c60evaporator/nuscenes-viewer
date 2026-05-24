@@ -332,62 +332,90 @@ class AnnotationRepository:
     async def update(
         self, token: str, data: AnnotationUpdate
     ) -> SampleAnnotation | None:
-        """SampleAnnotation を直接更新せず, annotation_edits に modify レコードを作成/更新する.
+        """
+        SampleAnnotation を直接更新せず, annotation_edits に modify レコードを作成/更新する.
+
+        既存 SampleAnnotation の場合: annotation_edits('modify') を作成/更新
+        AnnotationEdit('add') の場合: そのレコード自体を直接更新
 
         楽観的ロック:
             - 既存 modify edit がある場合, data.version との一致を確認
             - 不一致なら OptimisticLockError を投げる
             - 既存 modify edit がない場合 (初回編集), version チェックなし
         """
-        # base SampleAnnotation の存在確認 (元データを直接取得, マージなし)
+        # まず既存 SampleAnnotation を`annotations`テーブルから探す
         base_result = await self.db.execute(
             _base_query().where(SampleAnnotation.token == token)
         )
         base_ann = base_result.scalar_one_or_none()
-        if base_ann is None:
-            return None
-
+        # 編集結果保存テーブル`annotation_edits`操作用のリポジトリを用意
         edit_repo = AnnotationEditRepository(self.db)
-        edit = await edit_repo.get_modify_by_base(token)
+        
+        # ── ケース 1: 既存 SampleAnnotation が存在する場合 (modify edit 経由) ──
+        if base_ann is not None:
+            edit = await edit_repo.get_modify_by_base(token)
 
-        if edit is None:
-            # 初回編集: version チェック免除
-            edit = await edit_repo.create_modify(
-                base_token=token,
-                sample_token=base_ann.sample_token,
-                instance_token=base_ann.instance_token,
-                translation=data.translation,
-                rotation=data.rotation,
-                size=data.size,
-                visibility_token=data.visibility_token,
-                attribute_tokens=data.attribute_tokens,
-            )
-        else:
-            # 既存編集あり: version チェック
-            if data.version is None or data.version != edit.version:
-                raise OptimisticLockError(
-                    current_version=edit.version,
-                    expected_version=data.version,
+            if edit is None:
+                edit = await edit_repo.create_modify(
+                    base_token=token,
+                    sample_token=base_ann.sample_token,
+                    instance_token=base_ann.instance_token,
+                    translation=data.translation,
+                    rotation=data.rotation,
+                    size=data.size,
+                    visibility_token=data.visibility_token,
+                    attribute_tokens=data.attribute_tokens,
                 )
-            # 部分上書き + version increment
-            if data.translation is not None:
-                edit.translation = data.translation
-            if data.rotation is not None:
-                edit.rotation = data.rotation
-            if data.size is not None:
-                edit.size = data.size
-            if data.visibility_token is not None:
-                edit.visibility_token = data.visibility_token
-            if data.attribute_tokens is not None:
-                edit.attribute_tokens = data.attribute_tokens
-            edit.version += 1
-            await self.db.flush()
+            else:
+                if data.version is None or data.version != edit.version:
+                    raise OptimisticLockError(
+                        current_version=edit.version,
+                        expected_version=data.version,
+                    )
+                if data.translation is not None:
+                    edit.translation = data.translation
+                if data.rotation is not None:
+                    edit.rotation = data.rotation
+                if data.size is not None:
+                    edit.size = data.size
+                if data.visibility_token is not None:
+                    edit.visibility_token = data.visibility_token
+                if data.attribute_tokens is not None:
+                    edit.attribute_tokens = data.attribute_tokens
+                edit.version += 1
+                await self.db.flush()
 
-        # マージ結果を返す
-        with self.db.no_autoflush:  # ← no_autoflush で囲む
-            apply_modify(base_ann, edit)
-            await apply_attribute_tokens(self.db, base_ann, edit.attribute_tokens)
-            await apply_visibility(self.db, base_ann, edit.visibility_token)
-        # base_ann に edit_version を一時的にセットして返す
-        base_ann.edit_version = edit.version  # type: ignore[attr-defined]
-        return base_ann
+            with self.db.no_autoflush:
+                apply_modify(base_ann, edit)
+                await apply_attribute_tokens(self.db, base_ann, edit.attribute_tokens)
+                await apply_visibility(self.db, base_ann, edit.visibility_token)
+            return base_ann
+
+        # ── ケース 2: AnnotationEdit('add') の場合 (直接更新) ──
+        add_edit = await edit_repo.get_add_by_token(token)
+        if add_edit is None:
+            return None   # SampleAnnotation も add edit も無い → 404
+
+        # 楽観的ロック
+        if data.version is None or data.version != add_edit.version:
+            raise OptimisticLockError(
+                current_version=add_edit.version,
+                expected_version=data.version,
+            )
+
+        # add edit のフィールドを直接更新
+        if data.translation is not None:
+            add_edit.translation = data.translation
+        if data.rotation is not None:
+            add_edit.rotation = data.rotation
+        if data.size is not None:
+            add_edit.size = data.size
+        if data.visibility_token is not None:
+            add_edit.visibility_token = data.visibility_token
+        if data.attribute_tokens is not None:
+            add_edit.attribute_tokens = data.attribute_tokens
+        add_edit.version += 1
+        await self.db.flush()
+
+        # synthesize_from_add で SampleAnnotation 風オブジェクトに変換して返す
+        return await synthesize_from_add(self.db, add_edit)

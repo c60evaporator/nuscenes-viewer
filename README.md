@@ -149,7 +149,7 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 docker compose exec api python scripts/import_nuscenes_map.py
 ```
 
-Also you can import Trainval dataset as follows
+Also you can import Trainval dataset as follows (Trainval dataset is huge, so it may take more than 10 minutes).
 
 ```bash
 docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0-trainval
@@ -313,7 +313,7 @@ To import the dataset again, run the follwing command after locate the dataset p
 make dev
 # Migration
 make migrate
-# Import Mini dataset (Please change the dataset )
+# Import Mini dataset (Please change the dataset name such as `v1.0-trainval`)
 docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0-mini
 # Import Map expansion
 docker compose exec api python scripts/import_nuscenes_map.py

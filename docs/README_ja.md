@@ -151,7 +151,7 @@ docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0
 docker compose exec api python scripts/import_nuscenes_map.py
 ```
 
-Trainvalデータセットを使用したい場合は、2つめのコマンドを以下のように変更してください。
+Trainvalデータセットを使用したい場合は、2つめのコマンドを以下のように変更してください（Trainvalデータセットはサイズが大きいため、数十分かかることもあります）。
 
 ```bash
 docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0-trainval
@@ -322,7 +322,7 @@ docker compose down -v
 make dev
 # Migration
 make migrate
-# Import Mini dataset (Please change the dataset )
+# Import Mini dataset (データセット名を適宜`v1.0-trainval`等に変えてください)
 docker compose exec api python scripts/import_nuscenes.py --dataset-version v1.0-mini
 # Import Map expansion
 docker compose exec api python scripts/import_nuscenes_map.py

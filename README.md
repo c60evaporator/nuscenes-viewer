@@ -275,6 +275,8 @@ During an editing session, the following shortcuts are active (except when typin
 | `M` | Rotate counter-clockwise around global z-axis (left rotation) |
 | `.` | Rotate clockwise around global z-axis (right rotation) |
 | `Shift + any key` | Larger step (10x) |
+| `Ctrl+Z`(Windows) / `Cmd+Z`(Mac) | Undo |
+| `Ctrl+Y`(Windows) / `Cmd+Shift+Z`(Mac) | Redo |
 
 Holding a key down triggers continuous execution. One undo step is recorded per key press-and-release.
 

@@ -32,9 +32,12 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   parameter_group_name   = aws_db_parameter_group.main.name
 
+  availability_zone       = var.multi_az ? null : "${var.region}a"
+  multi_az                = var.multi_az
+
   publicly_accessible         = false
   skip_final_snapshot         = true
-  backup_retention_period     = 1
+  backup_retention_period     = 7
   auto_minor_version_upgrade  = false
   storage_encrypted           = true
 

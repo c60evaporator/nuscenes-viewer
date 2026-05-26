@@ -14,12 +14,6 @@ variable "account_id" {
   type        = string
 }
 
-variable "distribution_id" {
-  description = "CloudFront distribution ID"
-  type        = string
-  default     = ""
-}
-
 variable "multi_az" {
   description = "Enable multi-AZ deployment"
   type        = bool
@@ -48,4 +42,16 @@ variable "ecs_memory" {
   description = "ECS task memory in MB"
   type        = number
   default     = 2048
+}
+
+variable "static_oac_id" {
+  description = "CloudFront OAC ID for static S3 bucket. If empty, a new OAC will be created."
+  type        = string
+  default     = ""
+}
+
+variable "web_acl_id" {
+  description = "WAF Web ACL ARN for CloudFront. Required when using existing distribution with pricing plan."
+  type        = string
+  default     = ""
 }

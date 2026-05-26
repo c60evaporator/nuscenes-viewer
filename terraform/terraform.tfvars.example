@@ -1,5 +1,6 @@
 account_id      = "your-aws-account-id"
 region          = "ap-northeast-1"
 project_name    = "nuscenes-viewer"
-distribution_id = "your-cloudfront-distribution-id"
+static_oac_id   = ""
+web_acl_id      = ""
 multi_az        = false

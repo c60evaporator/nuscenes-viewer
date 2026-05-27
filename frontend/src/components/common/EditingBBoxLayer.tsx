@@ -41,7 +41,6 @@ export default function EditingBBoxLayer({
 
     const rectRef        = useRef<Konva.Rect>(null)
     const transformerRef = useRef<Konva.Transformer>(null)
-    const arrowRef = useRef<Konva.Arrow>(null)
 
     // 操作中の表示凍結
     const isInteractingRef    = useRef(false)

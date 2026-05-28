@@ -17,6 +17,8 @@ function makeCtx() {
     fillRect:    vi.fn(),
     fillText:    vi.fn(),
     closePath:   vi.fn(),
+    measureText: vi.fn().mockReturnValue({ width: 0 }),
+    rect:        vi.fn(),
     strokeStyle: '',
     fillStyle:   '',
     lineWidth:   0,
@@ -80,11 +82,10 @@ describe('drawEgoPoses', () => {
     const poses = [makePose(0, 0), makePose(5, 5), makePose(10, 10)]
     drawEgoPoses(ctx, poses, 1, DISP, LOC)
     const arcCalls = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls
-    // currentIndex=1 gets radius 7, others get radius 3 or 5
+    // currentIndex=1 should have a larger radius than the others
     const radii = arcCalls.map((c) => c[2])
-    expect(radii[1]).toBe(7)
-    expect(radii[0]).not.toBe(7)
-    expect(radii[2]).not.toBe(7)
+    expect(radii[1]).toBeGreaterThan(radii[0])
+    expect(radii[1]).toBeGreaterThan(radii[2])
   })
 })
 

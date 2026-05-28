@@ -29,7 +29,8 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql+psycopg2://test:test@localhost:5432/nuscenes_test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
       POSTGRES_DB: nuscenes_test
       POSTGRES_USER: test
       POSTGRES_PASSWORD: test

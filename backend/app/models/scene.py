@@ -1,6 +1,12 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String, Integer, BigInteger, ForeignKey, Text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.sensor import SampleData
+    from app.models.annotation import SampleAnnotation
 
 class Log(Base):
     """走行ログ（場所・車両・日付等のメタ情報）"""

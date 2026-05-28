@@ -6,10 +6,12 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict
 OptionalToken = Annotated[str | None, BeforeValidator(lambda v: None if v == "" else (str(v) if v else None))]
 
 # 空リスト [] → None（CalibratedSensor.camera_intrinsic 用）
-_empty_list_to_none = lambda v: None if v == [] else v
+def _empty_list_to_none(v):
+    return None if v == [] else v
 
 # 0 → None（SampleData.height / width 用：非カメラセンサーは 0 で記録される）
-_zero_to_none = lambda v: None if v == 0 else v
+def _zero_to_none(v):
+    return None if v == 0 else v
 
 
 # ── Log ───────────────────────────────────────────────────────────────────────

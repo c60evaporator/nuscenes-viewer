@@ -7,13 +7,11 @@ import json
 import logging
 import os
 import time
-from math import cos, radians
-from uuid import UUID, uuid5, NAMESPACE_URL
+from uuid import uuid5, NAMESPACE_URL
 import io
 
 from geoalchemy2.shape import from_shape
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon
-from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 

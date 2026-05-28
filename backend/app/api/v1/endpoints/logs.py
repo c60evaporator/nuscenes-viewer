@@ -18,5 +18,5 @@ async def list_logs(
     total, logs = await SceneRepository(db).get_all_logs(limit, offset)
     return PaginatedResponse(
         total=total, limit=limit, offset=offset,
-        items=[LogResponse.model_validate(l) for l in logs],
+        items=[LogResponse.model_validate(log) for log in logs],
     )

@@ -3,7 +3,6 @@
 POST /annotations (新規 BBox 追加) と DELETE /annotations/{token} (論理削除) を扱う.
 GET 系のマージ動作も併せて検証.
 """
-import pytest
 from httpx import AsyncClient
 
 from app.models.annotation import SampleAnnotation

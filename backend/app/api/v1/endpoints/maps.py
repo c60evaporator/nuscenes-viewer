@@ -1,6 +1,5 @@
 import io
 import re
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -8,7 +7,6 @@ from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.geometry import to_geojson_feature_collection
-from app.core.config import settings
 from app.dependencies import get_db
 from app.repositories.map import MapRepository
 from app.schemas.common import PaginatedResponse

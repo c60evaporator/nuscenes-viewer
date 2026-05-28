@@ -6,7 +6,6 @@ from httpx import AsyncClient, ASGITransport
 from shapely.geometry import LineString, MultiPolygon, Polygon
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import selectinload
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings

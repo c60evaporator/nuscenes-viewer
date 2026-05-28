@@ -3,7 +3,6 @@
 テストデータは conftest.py の sample_annotation fixture 経由でその都度投入し、
 テスト終了後にロールバックする。実際の NuScenes インポートデータには依存しない。
 """
-import pytest
 from httpx import AsyncClient
 
 from app.models.annotation import SampleAnnotation

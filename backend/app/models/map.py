@@ -1,8 +1,6 @@
-from uuid import uuid4
-import enum
 
-from sqlalchemy import ForeignKey, Enum, Index, UniqueConstraint
-from sqlalchemy import Integer, Float, Boolean, String, Uuid, JSON
+from sqlalchemy import ForeignKey
+from sqlalchemy import Float, Boolean, String, JSON
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from geoalchemy2 import Geometry
 

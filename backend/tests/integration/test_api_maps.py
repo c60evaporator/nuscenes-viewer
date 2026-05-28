@@ -11,7 +11,6 @@ location="test-boston-seaport" を使うことで実際の NuScenes データと
 未実装エンドポイント（スキップ）:
   GET /api/v1/maps/{token}/layers — エンドポイント未実装のため全テストをスキップ
 """
-import pytest
 from httpx import AsyncClient
 
 from app.models.map import MapMeta

@@ -12,7 +12,6 @@
   GET /api/v1/scenes/{token}/ego-poses
   GET /api/v1/samples/{token}/instances
 """
-import pytest
 from httpx import AsyncClient
 
 from app.models.scene import Scene

@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.scene import Log, Sample, Scene
-from app.models.sensor import CalibratedSensor, SampleData
+from app.models.sensor import SampleData
 
 
 class SceneRepository:

@@ -31,3 +31,8 @@ output "cloudfront_distribution_id" {
   value       = aws_cloudfront_distribution.main.id
   description = "CloudFront distribution ID"
 }
+
+output "github_actions_role_arn" {
+  description = "IAM Role ARN for GitHub Actions OIDC"
+  value       = aws_iam_role.github_actions.arn
+}

@@ -11,8 +11,11 @@ provider "aws" {
   region = var.region
 }
 
-# CloudFront用（us-east-1固定）
+# For CloudFront (Fixed to us-east-1)
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
 }
+
+# For GitHub Actions
+data "aws_caller_identity" "current" {}

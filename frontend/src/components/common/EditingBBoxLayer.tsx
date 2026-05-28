@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Stage, Layer, Rect, Arrow, Transformer } from 'react-konva'
 import type Konva from 'konva'
 import { useEditStore } from '@/store/editStore'
@@ -42,9 +42,13 @@ export default function EditingBBoxLayer({
     const rectRef        = useRef<Konva.Rect>(null)
     const transformerRef = useRef<Konva.Transformer>(null)
 
-    // 操作中の表示凍結
+    // 操作中の表示凍結（ref: イベントハンドラ内の同期ロジック用）
     const isInteractingRef    = useRef(false)
     const frozenAnnotationRef = useRef<typeof currentAnnotation>(null)
+
+    // 操作中の表示凍結（state: レンダー中の参照用 mirror）
+    const [renderIsInteracting,   setRenderIsInteracting]   = useState(false)
+    const [renderFrozenAnnotation, setRenderFrozenAnnotation] = useState<typeof currentAnnotation>(null)
 
     // rAF スロットリング (updateSessionLive を 60Hz に制限)
     const dragRafRef      = useRef<number | null>(null)
@@ -68,8 +72,8 @@ export default function EditingBBoxLayer({
     if (!session || !currentAnnotation || !egoPose || !lidarCalibSensor) return null
 
     // 操作中は凍結値を使い、他ビューへの毎フレーム更新を避ける
-    const renderedAnnotation = (isInteractingRef.current && frozenAnnotationRef.current)
-        ? frozenAnnotationRef.current
+    const renderedAnnotation = (renderIsInteracting && renderFrozenAnnotation)
+        ? renderFrozenAnnotation
         : currentAnnotation
 
     // ── BBox 上面のピクセル座標を計算 ──────────────────────────────────────────
@@ -135,6 +139,8 @@ export default function EditingBBoxLayer({
 
         isInteractingRef.current    = true
         frozenAnnotationRef.current = currentAnnotation
+        setRenderIsInteracting(true)
+        setRenderFrozenAnnotation(currentAnnotation)
 
         startGlobalZRef.current = currentAnnotation.translation[2]
         const startSensor = globalToSensor(currentAnnotation.translation, egoPose, lidarCalibSensor)
@@ -172,6 +178,8 @@ export default function EditingBBoxLayer({
         commitChange()
         isInteractingRef.current    = false
         frozenAnnotationRef.current = null
+        setRenderIsInteracting(false)
+        setRenderFrozenAnnotation(null)
         startGlobalZRef.current     = 0
         startSensorZRef.current     = 0
     }
@@ -183,6 +191,8 @@ export default function EditingBBoxLayer({
 
         isInteractingRef.current    = true
         frozenAnnotationRef.current = currentAnnotation
+        setRenderIsInteracting(true)
+        setRenderFrozenAnnotation(currentAnnotation)
 
         const node = e.target as Konva.Rect
         transformStartScreenYawRef.current  = node.rotation()
@@ -247,6 +257,8 @@ export default function EditingBBoxLayer({
 
         isInteractingRef.current            = false
         frozenAnnotationRef.current         = null
+        setRenderIsInteracting(false)
+        setRenderFrozenAnnotation(null)
         transformStartScreenYawRef.current  = 0
         transformStartQuaternionRef.current = null
         transformStartSizeRef.current       = null

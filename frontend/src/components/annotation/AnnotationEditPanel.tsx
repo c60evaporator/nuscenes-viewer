@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useVisibilities, useAttributes, useUpdateAnnotation, useCreateAnnotation } from '@/api/annotations'
 import { ApiError } from '@/api/client'
 import { useCategories } from '@/api/categories'
@@ -156,12 +156,15 @@ function EditableInput({ value, placeholder, enabled, onCommit }: EditableInputP
   const fmt = (v: number | undefined) => (v !== undefined ? v.toFixed(3) : '')
   const [localValue, setLocalValue] = useState(fmt(value))
   const [isTyping,   setIsTyping]   = useState(false)
+  const [prevValue,  setPrevValue]  = useState(value)
   const inputRef     = useRef<HTMLInputElement>(null)
   const cancelingRef = useRef(false)
 
-  useEffect(() => {
-    if (!isTyping) setLocalValue(fmt(value))
-  }, [value, isTyping])
+  // 派生 state: 外部の value が変わり、かつ入力中でなければ表示値を同期する
+  if (!isTyping && prevValue !== value) {
+    setPrevValue(value)
+    setLocalValue(fmt(value))
+  }
 
   const commit = () => {
     if (cancelingRef.current) {

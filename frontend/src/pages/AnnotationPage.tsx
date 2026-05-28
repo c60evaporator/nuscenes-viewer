@@ -75,8 +75,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scenesData, locationLogTokens])
 
-  // location 変更時にリセット
-  useEffect(() => {
+  // location 変更時にリセット（派生 state）
+  const [prevMapLocation, setPrevMapLocation] = useState(currentMapLocation)
+  if (prevMapLocation !== currentMapLocation) {
+    setPrevMapLocation(currentMapLocation)
     if (!lockedSceneToken) {
       setSelectedSceneToken(null)
       setSelectedSampleToken(null)
@@ -84,19 +86,22 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       setListSelectedSampleToken(null)
       setListSelectedInstanceToken(null)
     }
-  }, [currentMapLocation])
+  }
 
-  // 初期 Scene の設定
-  useEffect(() => {
+  // 初期 Scene の設定（派生 state）
+  const sceneInitKey = `${lockedSceneToken ?? ''}-${locationScenes.map((s) => s.token).join(',')}`
+  const [prevSceneInit, setPrevSceneInit] = useState('')
+  if (prevSceneInit !== sceneInitKey) {
+    setPrevSceneInit(sceneInitKey)
     if (lockedSceneToken) {
       setSelectedSceneToken(lockedSceneToken)
-      return
+    } else {
+      const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
+      if (!isValidScene && locationScenes.length > 0) {
+        setSelectedSceneToken(locationScenes[0].token)
+      }
     }
-    const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
-    if (!isValidScene && locationScenes.length > 0) {
-      setSelectedSceneToken(locationScenes[0].token)
-    }
-  }, [lockedSceneToken, locationScenes])
+  }
 
   // Sample リスト（Scene に紐づく）
   const { data: samplesRaw } = useSamples(selectedSceneToken)
@@ -205,7 +210,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
           endSession()
       }
       prevEffectiveSampleTokenRef.current = effectiveSampleToken
-  }, [effectiveSampleToken])
+  }, [effectiveSampleToken, endSession])
 
   // Instance フィルタ変更時にリセット (前回値と比較)
   const prevEffectiveInstanceTokenRef = useRef<string | null | undefined>(undefined)
@@ -217,7 +222,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
           endSession()
       }
       prevEffectiveInstanceTokenRef.current = effectiveInstanceToken
-  }, [effectiveInstanceToken])
+  }, [effectiveInstanceToken, endSession])
 
   // Viewer に渡す sampleToken / instanceToken
   // add モード + instance フィルタ時は editSession.fixedSampleToken（prev/next）を優先

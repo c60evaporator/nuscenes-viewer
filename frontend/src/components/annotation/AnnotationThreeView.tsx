@@ -27,9 +27,9 @@ interface Props {
 const FORM_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
 
 // Canvas 内のカメラを外部 ref に橋渡しする
-function CameraRefBridge({ cameraRefOut }: { cameraRefOut: React.MutableRefObject<THREE.Camera | null> }) {
+function CameraRefBridge({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.Camera | null> }) {
     const { camera } = useThree()
-    useEffect(() => { cameraRefOut.current = camera }, [camera, cameraRefOut])
+    useEffect(() => { cameraRef.current = camera }, [camera, cameraRef])
     return null
 }
 
@@ -83,7 +83,7 @@ export default function AnnotationThreeView({
     const currentAnnotation = useEditStore((s) => s.getCurrentAnnotation())
 
     const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate')
-    const orbitControlsRef = useRef<any>(null)
+    const orbitControlsRef = useRef<React.ElementRef<typeof OrbitControls>>(null)
     const cameraRef        = useRef<THREE.Camera | null>(null)
     const mouseInsideRef   = useRef(false)
 
@@ -189,7 +189,7 @@ export default function AnnotationThreeView({
                 }}
             >
                 {/* Canvas 内のカメラを外部 ref に橋渡し */}
-                <CameraRefBridge cameraRefOut={cameraRef} />
+                <CameraRefBridge cameraRef={cameraRef} />
 
                 {/* 座標軸: X=赤(前), Y=緑(左), Z=青(上)、長さ10m */}
                 <Line points={[[0,0,0],[10,0,0]]} color='red'   lineWidth={1} />

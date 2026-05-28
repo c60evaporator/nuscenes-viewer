@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useLayoutEffect } from 'react'
 
 interface UseLongPressOptions {
     onTick:      () => void
@@ -29,8 +29,10 @@ export function useLongPressButton({
     const onReleaseRef = useRef(onRelease)
 
     // 毎レンダーで最新のコールバックに更新する
-    onTickRef.current    = onTick
-    onReleaseRef.current = onRelease
+    useLayoutEffect(() => {
+        onTickRef.current    = onTick
+        onReleaseRef.current = onRelease
+    })
 
     const stop = () => {
         if (timeoutRef.current)  { clearTimeout(timeoutRef.current);   timeoutRef.current  = null }

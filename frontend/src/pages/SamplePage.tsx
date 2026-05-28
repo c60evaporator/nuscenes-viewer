@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import LeftPane from '@/components/layout/LeftPane'
 import RightPane from '@/components/layout/RightPane'
@@ -57,25 +57,30 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scenesData, locationLogTokens])
 
-  // location 変更時にリセット
-  useEffect(() => {
+  // location 変更時にリセット（派生 state）
+  const [prevMapLocation, setPrevMapLocation] = useState(currentMapLocation)
+  if (prevMapLocation !== currentMapLocation) {
+    setPrevMapLocation(currentMapLocation)
     if (!lockedSceneToken) {
       setSelectedSceneToken(null)
       setSample(null)
     }
-  }, [currentMapLocation])
+  }
 
-  // 初期 Scene の設定（lockedSceneToken → 最初の Scene）
-  useEffect(() => {
+  // 初期 Scene の設定（派生 state）
+  const sceneInitKey = `${lockedSceneToken ?? ''}-${locationScenes.map((s) => s.token).join(',')}`
+  const [prevSceneInit, setPrevSceneInit] = useState('')
+  if (prevSceneInit !== sceneInitKey) {
+    setPrevSceneInit(sceneInitKey)
     if (lockedSceneToken) {
       setSelectedSceneToken(lockedSceneToken)
-      return
+    } else {
+      const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
+      if (!isValidScene && locationScenes.length > 0) {
+        setSelectedSceneToken(locationScenes[0].token)
+      }
     }
-    const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
-    if (!isValidScene && locationScenes.length > 0) {
-      setSelectedSceneToken(locationScenes[0].token)
-    }
-  }, [lockedSceneToken, locationScenes])
+  }
 
   // サンプルリスト（timestamp 昇順）
   const { data: samplesRaw } = useSamples(selectedSceneToken)
@@ -84,12 +89,14 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
     [samplesRaw],
   )
 
-  // リスト選択 → スライダー連動（currentSampleToken または samples が変わった時）
-  useEffect(() => {
-    if (samples.length === 0) return
+  // リスト選択 → スライダー連動（派生 state）
+  const sliderSyncKey = `${currentSampleToken ?? ''}-${samples.map((s) => s.token).join(',')}`
+  const [prevSliderSyncKey, setPrevSliderSyncKey] = useState(sliderSyncKey)
+  if (prevSliderSyncKey !== sliderSyncKey && samples.length > 0) {
+    setPrevSliderSyncKey(sliderSyncKey)
     const idx = samples.findIndex((s) => s.token === currentSampleToken)
     setCurrentSampleIndex(idx >= 0 ? idx : 0)
-  }, [currentSampleToken, samples])
+  }
 
   // スライダー → リスト選択連動
   const handleSliderChange = (index: number) => {

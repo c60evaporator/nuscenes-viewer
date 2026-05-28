@@ -83,11 +83,13 @@ export default function MapViewer({ mapToken, location, onFeatureClick, selected
     {},
   )
 
-  // Scene切り替え時に Viewport を再初期化（Ego Poses モード）
+  // Scene切り替え時に Viewport を再初期化（Ego Poses モード、派生 state）
   const trajectoryKey = egoPoses?.[0]?.sample_token ?? ''
-  useEffect(() => {
+  const [prevTrajectoryKey, setPrevTrajectoryKey] = useState(trajectoryKey)
+  if (prevTrajectoryKey !== trajectoryKey) {
+    setPrevTrajectoryKey(trajectoryKey)
     if (egoPoses && egoPoses.length > 0) setViewInitialized(false)
-  }, [trajectoryKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   // Viewport 初期化（egoPoses 優先、なければ GeoJSON bounds）
   useEffect(() => {
@@ -176,10 +178,12 @@ export default function MapViewer({ mapToken, location, onFeatureClick, selected
     setViewInitialized(true)
   }, [egoPoses, location, layerData, viewInitialized])
 
-  // mapToken 変更時に Viewport を再初期化できるようにリセット
-  useEffect(() => {
+  // mapToken 変更時に Viewport を再初期化できるようにリセット（派生 state）
+  const [prevMapToken, setPrevMapToken] = useState(mapToken)
+  if (prevMapToken !== mapToken) {
+    setPrevMapToken(mapToken)
     setViewInitialized(false)
-  }, [mapToken])
+  }
 
   // GeoJsonLayer 生成
   const geoJsonLayers = ALL_MAP_LAYERS

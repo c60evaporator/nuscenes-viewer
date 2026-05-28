@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Select,
@@ -40,7 +40,7 @@ export default function Header({ activeTab, onTabChange }: HeaderProps) {
     [logsData],
   )
 
-  const handleLocationChange = (location: string) => {
+  const handleLocationChange = useCallback((location: string) => {
     setMapLocation(location)
     unlock()
     queryClient.prefetchQuery({
@@ -53,14 +53,14 @@ export default function Header({ activeTab, onTabChange }: HeaderProps) {
       },
       staleTime: Infinity,
     })
-  }
+  }, [setMapLocation, unlock, queryClient])
 
   // データ取得後に初期 location をセット（プリフェッチも実行）
   useEffect(() => {
     if (!currentMapLocation && locations.length > 0) {
       handleLocationChange(locations[0])
     }
-  }, [locations, currentMapLocation])
+  }, [locations, currentMapLocation, handleLocationChange])
 
   const handleTabChange = (tab: TabId) => {
     unlock()

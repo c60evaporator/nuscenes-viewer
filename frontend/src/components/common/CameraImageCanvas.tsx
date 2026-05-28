@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useLayoutEffect } from 'react'
 import { useSensorImage } from '@/api/sensorData'
 import { project3DTo2D, bboxCornersToGlobal, projectMapCoordsToCamera } from '@/lib/coordinateUtils'
 import { drawBBox2D, drawArrow2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint, drawProjectedArrow, drawProjectedLabel } from '@/lib/canvasUtils'
@@ -393,7 +393,7 @@ export default function CameraImageCanvas({
     projectedFeaturesRef.current = newProjectedFeatures
   }
 
-  drawBBoxesRef.current = drawBBoxes
+  useLayoutEffect(() => { drawBBoxesRef.current = drawBBoxes })
 
   // リサイズ時に BBox を再描画
   useEffect(() => {

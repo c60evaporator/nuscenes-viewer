@@ -1,5 +1,6 @@
 # ── Environment and data ──────────────────────────────────────────────────────────────
 .env
+.venv/
 /data/*
 !/data/.gitkeep
 docs/images/movies

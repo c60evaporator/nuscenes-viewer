@@ -29,12 +29,10 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
   const { data: logsData   } = useLogsByLocation(currentMapLocation)
   const { data: scenesData } = useScenes({ limit: 500 })
 
-  const logs = logsData ?? []
-
   // ロケーション内の log token セット
   const locationLogTokens = useMemo(
-    () => new Set(logs.map((l) => l.token)),
-    [logs],
+    () => new Set((logsData ?? []).map((l) => l.token)),
+    [logsData],
   )
 
   // ロケーション絞り込み → Log フィルタ → 名前順ソート
@@ -95,7 +93,7 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
         <LeftPane
           filter={
             <SceneFilter
-              logs={logs}
+              logs={logsData ?? []}
               selectedLogToken={selectedLogToken}
               onFilterChange={setSelectedLogToken}
             />

@@ -12,7 +12,7 @@ export const useLayerStore = create<LayerState>((set, get) => ({
   visibleLayers: new Set(['pointcloud', 'bbox3d', 'drivable_area']),
   toggle: (id) => set((s) => {
     const next = new Set(s.visibleLayers)
-    next.has(id) ? next.delete(id) : next.add(id)
+    if (next.has(id)) { next.delete(id) } else { next.add(id) }
     return { visibleLayers: next }
   }),
   isVisible: (id) => get().visibleLayers.has(id),

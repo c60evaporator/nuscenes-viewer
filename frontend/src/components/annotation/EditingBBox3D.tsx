@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useLayoutEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Line, TransformControls } from '@react-three/drei'
@@ -13,12 +13,25 @@ import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
 
+interface OrbitControlsLike {
+    enabled: boolean
+    target:  { set: (x: number, y: number, z: number) => void }
+    update:  () => void
+}
+interface TransformControlsLike {
+    addEventListener(type: string, cb: (e: { value: boolean }) => void): void
+    removeEventListener(type: string, cb: (e: { value: boolean }) => void): void
+}
+interface Line2Like {
+    geometry: { setPositions: (pos: ArrayLike<number>) => void } | null
+}
+
 interface Props {
     ann:              Annotation
     egoPose:          EgoPosePoint
     lidarCalibSensor: { translation: number[]; rotation: number[] }
     transformMode:    'translate' | 'rotate'
-    orbitControlsRef: React.RefObject<any>
+    orbitControlsRef: React.RefObject<OrbitControlsLike | null>
 }
 
 const BBOX_EDGES: [number, number][] = [
@@ -106,8 +119,8 @@ export default function EditingBBox3D({
     ann, egoPose, lidarCalibSensor, transformMode, orbitControlsRef,
 }: Props) {
     const meshRef              = useRef<THREE.Mesh>(null)
-    const lineRef              = useRef<any>(null)
-    const transformControlsRef = useRef<any>(null)
+    const lineRef              = useRef<Line2Like | null>(null)
+    const transformControlsRef = useRef<TransformControlsLike | null>(null)
 
     const updateSessionLive = useEditStore((s) => s.updateSessionLive)
     const commitChange      = useEditStore((s) => s.commitChange)
@@ -119,14 +132,16 @@ export default function EditingBBox3D({
     const dragStartRotationRef    = useRef<number[] | null>(null)
 
     // 矢印用 refs
-    const arrowLineRef = useRef<any>(null)
+    const arrowLineRef = useRef<Line2Like | null>(null)
     const arrowConeRef = useRef<THREE.Mesh>(null)
 
     // props を ref で保持 (useFrame からアクセスするため)
     const egoPoseRef = useRef(egoPose)
-    egoPoseRef.current = egoPose
     const lidarCalibSensorRef = useRef(lidarCalibSensor)
-    lidarCalibSensorRef.current = lidarCalibSensor
+    useLayoutEffect(() => {
+        egoPoseRef.current         = egoPose
+        lidarCalibSensorRef.current = lidarCalibSensor
+    })
 
     // 初期表示用（JSX の初期値として渡す）
     const initial = computeDisplay(ann, egoPose, lidarCalibSensor)
@@ -180,7 +195,7 @@ export default function EditingBBox3D({
         const tc = transformControlsRef.current
         const oc = orbitControlsRef.current
         if (!tc || !oc) return
-        const onDraggingChanged = (e: any) => { oc.enabled = !e.value }
+        const onDraggingChanged = (e: { value: boolean }) => { oc.enabled = !e.value }
         tc.addEventListener('dragging-changed', onDraggingChanged)
         return () => tc.removeEventListener('dragging-changed', onDraggingChanged)
     })

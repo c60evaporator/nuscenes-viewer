@@ -65,11 +65,13 @@ export default function PointCloudCanvas({
     return () => observer.disconnect()
   }, [])
 
-  // サンプル切り替え時にズーム・パンをリセット
-  useEffect(() => {
+  // サンプル切り替え時にズーム・パンをリセット（派生 state）
+  const [prevSampleDataToken, setPrevSampleDataToken] = useState(sampleDataToken)
+  if (prevSampleDataToken !== sampleDataToken) {
+    setPrevSampleDataToken(sampleDataToken)
     setZoom(1)
     setPanOffset({ x: 0, y: 0 })
-  }, [sampleDataToken])
+  }
 
   const axesLimitMeters = 40
 
@@ -253,7 +255,7 @@ export default function PointCloudCanvas({
     }
     ctx.restore()  // 点群、BBox 描画後に restore して点群描画の座標系を元に戻す
     bboxRectsRef.current = newBBoxRects
-  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, editingInstanceToken, location, pointSize, viewParams])
+  }, [data, bitmap, annotations, egoPose, lidarCalibSensor, highlightInstanceToken, editingInstanceToken, location, pointSize, viewParams, panOffset.x, panOffset.y, zoom])
 
   const hitTestBBox = useCallback((screenX: number, screenY: number): string | null => {
     const canvas = canvasRef.current

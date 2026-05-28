@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useLayoutEffect } from 'react'
 import { useEditStore } from '@/store/editStore'
 import { translateAnnotation, rotateAnnotation, resizeAnnotation, type EgoDirection } from '@/lib/bboxEditOps'
 import type { EgoPosePoint } from '@/types/sensor'
@@ -22,7 +22,7 @@ const FORM_TAGS        = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
  */
 export function useEditKeyboardShortcuts({ egoPose }: { egoPose: EgoPosePoint | null }) {
     const egoPoseRef = useRef(egoPose)
-    egoPoseRef.current = egoPose
+    useLayoutEffect(() => { egoPoseRef.current = egoPose })
 
     const pressedRef   = useRef(new Set<string>())
     const timeoutsRef  = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -129,14 +129,18 @@ export function useEditKeyboardShortcuts({ egoPose }: { egoPose: EgoPosePoint | 
         window.addEventListener('keydown', onKeyDown)
         window.addEventListener('keyup', onKeyUp)
 
+        const timeouts  = timeoutsRef.current
+        const intervals = intervalsRef.current
+        const pressed   = pressedRef.current
+
         return () => {
             window.removeEventListener('keydown', onKeyDown)
             window.removeEventListener('keyup', onKeyUp)
-            timeoutsRef.current.forEach(clearTimeout)
-            intervalsRef.current.forEach(clearInterval)
-            timeoutsRef.current.clear()
-            intervalsRef.current.clear()
-            pressedRef.current.clear()
+            timeouts.forEach(clearTimeout)
+            intervals.forEach(clearInterval)
+            timeouts.clear()
+            intervals.clear()
+            pressed.clear()
         }
     }, [])  // マウント時に1回だけ登録。動的な値はすべて ref 経由で参照
 }

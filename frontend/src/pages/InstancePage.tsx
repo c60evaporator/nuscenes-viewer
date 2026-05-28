@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import LeftPane from '@/components/layout/LeftPane'
 import RightPane from '@/components/layout/RightPane'
@@ -52,26 +52,31 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scenesData, locationLogTokens])
 
-  // location 変更時にリセット
-  useEffect(() => {
+  // location 変更時にリセット（派生 state）
+  const [prevMapLocation, setPrevMapLocation] = useState(currentMapLocation)
+  if (prevMapLocation !== currentMapLocation) {
+    setPrevMapLocation(currentMapLocation)
     if (!lockedSceneToken) {
       setSelectedSceneToken(null)
       setSelectedCategoryName(null)
       setInstance(null)
     }
-  }, [currentMapLocation])
+  }
 
-  // 初期 Scene の設定
-  useEffect(() => {
+  // 初期 Scene の設定（派生 state）
+  const sceneInitKey = `${lockedSceneToken ?? ''}-${locationScenes.map((s) => s.token).join(',')}`
+  const [prevSceneInit, setPrevSceneInit] = useState('')
+  if (prevSceneInit !== sceneInitKey) {
+    setPrevSceneInit(sceneInitKey)
     if (lockedSceneToken) {
       setSelectedSceneToken(lockedSceneToken)
-      return
+    } else {
+      const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
+      if (!isValidScene && locationScenes.length > 0) {
+        setSelectedSceneToken(locationScenes[0].token)
+      }
     }
-    const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
-    if (!isValidScene && locationScenes.length > 0) {
-      setSelectedSceneToken(locationScenes[0].token)
-    }
-  }, [lockedSceneToken, locationScenes])
+  }
 
   // カテゴリリスト
   const { data: categoriesData } = useCategories()
@@ -92,24 +97,25 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
     [annotationsRaw],
   )
 
-  // スライダーインデックスをアノテーション変更時にリセット（中央に設定）
-  useEffect(() => {
-    if (allAnnotations.length > 0) {
-      setCurrentAnnotationIndex(Math.floor(allAnnotations.length / 2))
-    } else {
-      setCurrentAnnotationIndex(0)
-    }
-  }, [currentInstanceToken, allAnnotations.length])
+  // スライダーインデックスをアノテーション変更時にリセット（中央に設定、派生 state）
+  const instanceAnnKey = `${currentInstanceToken ?? ''}-${allAnnotations.length}`
+  const [prevInstanceAnnKey, setPrevInstanceAnnKey] = useState(instanceAnnKey)
+  if (prevInstanceAnnKey !== instanceAnnKey) {
+    setPrevInstanceAnnKey(instanceAnnKey)
+    setCurrentAnnotationIndex(allAnnotations.length > 0 ? Math.floor(allAnnotations.length / 2) : 0)
+  }
 
   const currentAnnotation = allAnnotations[currentAnnotationIndex] ?? null
 
   // 現在サンプルの全アノテーション（BBox クリック時の instance_token 逆引き用）
   const { data: sampleAnnotations } = useSampleAnnotations(currentAnnotation?.sample_token ?? null)
 
-  // annotation が切り替わったらハイライトをリセット
-  useEffect(() => {
+  // annotation が切り替わったらハイライトをリセット（派生 state）
+  const [prevAnnToken, setPrevAnnToken] = useState(currentAnnotation?.token)
+  if (prevAnnToken !== currentAnnotation?.token) {
+    setPrevAnnToken(currentAnnotation?.token)
     setHighlightAnnToken(null)
-  }, [currentAnnotation?.token])
+  }
 
   const handleBBoxClick = (annToken: string) => {
     setHighlightAnnToken(annToken)

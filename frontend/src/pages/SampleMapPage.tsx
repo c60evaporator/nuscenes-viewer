@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import LeftPane from '@/components/layout/LeftPane'
 import RightPane from '@/components/layout/RightPane'
@@ -52,18 +52,20 @@ export default function SampleMapPage({ activeTab, onTabChange }: SampleMapPageP
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scenesData, locationLogTokens])
 
-  // 初期 Scene の設定（lockedSceneToken → 最初の Scene）
-  useEffect(() => {
+  // 初期 Scene の設定（派生 state）
+  const sceneInitKey = `${lockedSceneToken ?? ''}-${locationScenes.map((s) => s.token).join(',')}`
+  const [prevSceneInit, setPrevSceneInit] = useState('')
+  if (prevSceneInit !== sceneInitKey) {
+    setPrevSceneInit(sceneInitKey)
     if (lockedSceneToken) {
       setSelectedSceneToken(lockedSceneToken)
-      return
+    } else {
+      const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
+      if (!isValidScene && locationScenes.length > 0) {
+        setSelectedSceneToken(locationScenes[0].token)
+      }
     }
-    const isValidScene = locationScenes.some((s) => s.token === selectedSceneToken)
-    if (!isValidScene && locationScenes.length > 0) {
-      setSelectedSceneToken(locationScenes[0].token)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lockedSceneToken, locationScenes])
+  }
 
   // サンプルリスト
   const { data: samplesRaw } = useSamples(selectedSceneToken)
@@ -75,15 +77,18 @@ export default function SampleMapPage({ activeTab, onTabChange }: SampleMapPageP
   // センサーデータ
   const { data: sensorDataMap } = useSampleSensorData(currentSampleToken)
 
-  // 選択チャンネルが利用可能かチェック（利用不可なら DEFAULT_CHANNEL に戻す）
-  useEffect(() => {
+  // 選択チャンネルが利用可能かチェック（利用不可なら DEFAULT_CHANNEL に戻す、派生 state）
+  const channelKey = `${selectedChannel}-${Object.keys(sensorDataMap ?? {}).join(',')}`
+  const [prevChannelKey, setPrevChannelKey] = useState(channelKey)
+  if (prevChannelKey !== channelKey) {
+    setPrevChannelKey(channelKey)
     if (sensorDataMap && !(selectedChannel in sensorDataMap)) {
       const fallback = DEFAULT_CHANNEL in sensorDataMap
         ? DEFAULT_CHANNEL
         : Object.keys(sensorDataMap)[0] ?? DEFAULT_CHANNEL
       setSelectedChannel(fallback)
     }
-  }, [sensorDataMap, selectedChannel])
+  }
 
   // Calibrated Sensors
   const { data: calibSensorsData } = useCalibratedSensors()

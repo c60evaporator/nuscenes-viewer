@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useLayoutEffect } from 'react'
 import { useBasemap } from '@/api/maps'
 import { drawEgoPoses, drawEgoPosesBackground } from '@/lib/canvasUtils'
 import { egoPoseToPixel } from '@/lib/coordinateUtils'
@@ -39,7 +39,7 @@ export default function MapCanvas({
 
   // zoom を ref でも保持（centerPoint effect から stale closure なしで参照するため）
   const zoomRef = useRef(zoom)
-  zoomRef.current = zoom
+  useLayoutEffect(() => { zoomRef.current = zoom })
 
   // basemap 全体がコンテナに収まる最小ズームを計算
   const calcMinZoom = () => {
@@ -95,11 +95,14 @@ export default function MapCanvas({
     drawEgoPoses(ctx, egoPoses, currentIndex, displaySize, location, showStartEnd)
   }, [bitmap, egoPoses, currentIndex, showStartEnd, location, backgroundEgoPoseGroups])
 
-  // cropToContent: ego poses の範囲にズームし、重心をコンテナ中央にセンタリング
-  useEffect(() => {
-    if (!cropToContent || egoPoses.length === 0 || !bitmap) return
-    if (containerSize.w === 0 || containerSize.h === 0) return
+  // cropToContent: ego poses の範囲にズームし、重心をコンテナ中央にセンタリング（派生 state）
+  const cropDepsKey = cropToContent
+    ? `${location}-${egoPoses[0]?.sample_token ?? ''}-${egoPoses.length}-${containerSize.w}x${containerSize.h}-${bitmap?.width ?? 0}`
+    : ''
+  const [prevCropDepsKey, setPrevCropDepsKey] = useState(cropDepsKey)
 
+  if (cropDepsKey && prevCropDepsKey !== cropDepsKey && bitmap && containerSize.w > 0 && containerSize.h > 0 && egoPoses.length > 0) {
+    setPrevCropDepsKey(cropDepsKey)
     const displaySize: [number, number] = [bitmap.width, bitmap.height]
     const pixels = egoPoses.map((p) => egoPoseToPixel(p.translation, location, displaySize))
     const pxs    = pixels.map(([px]) => px)
@@ -108,21 +111,15 @@ export default function MapCanvas({
     const minY = Math.min(...pys), maxY = Math.max(...pys)
     const rangeX = (maxX - minX) || 1
     const rangeY = (maxY - minY) || 1
-
     const padding = 40
     const scaleX  = (bitmap.width  - padding * 2) / rangeX
     const scaleY  = (bitmap.height - padding * 2) / rangeY
     const newZoom = Math.min(Math.min(scaleX, scaleY), 5)
-    setZoom(newZoom)
-
     const cx = (minX + maxX) / 2
     const cy = (minY + maxY) / 2
-    const { w: cW, h: cH } = containerSize
-    setOffset({
-      x: cW / 2 - cx * newZoom,
-      y: cH / 2 - cy * newZoom,
-    })
-  }, [cropToContent, egoPoses, bitmap, location, containerSize])
+    setZoom(newZoom)
+    setOffset({ x: containerSize.w / 2 - cx * newZoom, y: containerSize.h / 2 - cy * newZoom })
+  }
 
   // centerPoint: 指定座標をコンテナ中央に合わせる（cropToContent=true / fitToMap=true のときは除外）
   useEffect(() => {
@@ -139,64 +136,45 @@ export default function MapCanvas({
     })
   }, [centerPoint, bitmap, location, cropToContent, fitToMap, containerSize])
 
-  // location または軌跡（先頭 ego pose）が変わったらリセット
+  // location または軌跡（先頭 ego pose）が変わったらリセット（派生 state）
   const trajectoryKey = egoPoses[0]?.sample_token ?? ''
-  useEffect(() => {
+  const locationKey   = `${location}-${trajectoryKey}`
+  const [prevLocationKey, setPrevLocationKey] = useState('')
+
+  if (prevLocationKey !== locationKey) {
+    setPrevLocationKey(locationKey)
     setPendingReset(true)
-  }, [location, trajectoryKey])
+  }
 
-  // bitmap と containerSize が揃ったらリセットを実行
-  useEffect(() => {
-    if (!pendingReset) return
-    if (containerSize.w === 0 || !bitmap) return
+  // bitmap と containerSize が揃ったらリセットを実行（派生 state）
+  if (pendingReset && containerSize.w > 0 && bitmap) {
+    const minZ = Math.min(containerSize.w / bitmap.width, containerSize.h / bitmap.height) || 0.05
 
-    // fitToMap: 地図全体が見えるズームに固定（軌跡ベースのズームをスキップ）
-    if (fitToMap) {
-      setZoom(calcMinZoom())
+    if (fitToMap || cropToContent) {
+      setZoom(minZ)
       setOffset({ x: 0, y: 0 })
       setPendingReset(false)
-      return
-    }
-
-    // cropToContent モードは cropToContent effect に委ねる
-    if (cropToContent) {
-      setOffset({ x: 0, y: 0 })
-      setZoom(calcMinZoom())
-      setPendingReset(false)
-      return
-    }
-
-    // 複数点がなければ全体表示（centerPoint effect がオフセットを担う）
-    if (egoPoses.length < 2) {
+    } else if (egoPoses.length < 2) {
       if (!centerPoint) setOffset({ x: 0, y: 0 })
-      setZoom(calcMinZoom())
+      setZoom(minZ)
       setPendingReset(false)
-      return
+    } else {
+      const displaySize: [number, number] = [bitmap.width, bitmap.height]
+      const pixels = egoPoses.map((p) => egoPoseToPixel(p.translation, location, displaySize))
+      const pxs    = pixels.map(([px]) => px)
+      const pys    = pixels.map(([, py]) => py)
+      const minX = Math.min(...pxs), maxX = Math.max(...pxs)
+      const minY = Math.min(...pys), maxY = Math.max(...pys)
+      const maxRange = Math.max((maxX - minX) || 1, (maxY - minY) || 1)
+      const newZoom  = Math.min(Math.max(containerSize.w / (maxRange * 3), minZ), 5)
+      const [cx, cy] = centerPoint
+        ? egoPoseToPixel([centerPoint[0], centerPoint[1], 0], location, displaySize)
+        : [(minX + maxX) / 2, (minY + maxY) / 2]
+      setZoom(newZoom)
+      setOffset({ x: containerSize.w / 2 - cx * newZoom, y: containerSize.h / 2 - cy * newZoom })
+      setPendingReset(false)
     }
-
-    // 軌跡の最大スパンの 3 倍がコンテナ幅になるズームに設定
-    const displaySize: [number, number] = [bitmap.width, bitmap.height]
-    const pixels = egoPoses.map((p) => egoPoseToPixel(p.translation, location, displaySize))
-    const pxs    = pixels.map(([px]) => px)
-    const pys    = pixels.map(([, py]) => py)
-    const minX = Math.min(...pxs), maxX = Math.max(...pxs)
-    const minY = Math.min(...pys), maxY = Math.max(...pys)
-    const maxRange = Math.max((maxX - minX) || 1, (maxY - minY) || 1)
-    const newZoom  = Math.min(
-      Math.max(containerSize.w / (maxRange * 3), calcMinZoom()),
-      5,
-    )
-    // centerPoint が指定されていればそこを中心に、なければ軌跡の重心
-    const [cx, cy] = centerPoint
-      ? egoPoseToPixel([centerPoint[0], centerPoint[1], 0], location, displaySize)
-      : [(minX + maxX) / 2, (minY + maxY) / 2]
-    setZoom(newZoom)
-    setOffset({
-      x: containerSize.w / 2 - cx * newZoom,
-      y: containerSize.h / 2 - cy * newZoom,
-    })
-    setPendingReset(false)
-  }, [pendingReset, containerSize, bitmap, egoPoses, location, cropToContent, centerPoint, fitToMap])
+  }
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true)

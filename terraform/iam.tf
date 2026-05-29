@@ -230,6 +230,21 @@ resource "aws_iam_role_policy" "github_actions" {
         Effect   = "Allow"
         Action   = "cloudfront:CreateInvalidation"
         Resource = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/*"
+      },
+      {
+        Sid    = "VPCEndpointDeploy"
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateVpcEndpoint",
+          "ec2:DeleteVpcEndpoints",
+          "ec2:DescribeVpcEndpoints",
+          "ec2:ModifyVpcEndpoint",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:CreateTags"
+        ]
+        Resource = "*"
       }
     ]
   })

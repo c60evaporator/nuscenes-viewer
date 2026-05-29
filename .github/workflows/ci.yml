@@ -34,6 +34,7 @@ jobs:
       POSTGRES_DB: nuscenes_test
       POSTGRES_USER: test
       POSTGRES_PASSWORD: test
+      APP_CONFIG_PATH: ${{ github.workspace }}/backend/config/settings.yml
 
     steps:
       - uses: actions/checkout@v4

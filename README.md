@@ -3,6 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 [![CI](https://github.com/c60evaporator/nuscenes-viewer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/c60evaporator/nuscenes-viewer/actions/workflows/ci.yml)
+[![Deploy](https://github.com/c60evaporator/nuscenes-viewer/actions/workflows/cd.yml/badge.svg?branch=main)](https://github.com/c60evaporator/nuscenes-viewer/actions/workflows/cd.yml)
 [![Demo](https://img.shields.io/badge/Demo-Live-brightgreen?logo=amazon-aws)](https://dtq47wxfkxb2n.cloudfront.net)
 
 **A web-based viewer and annotation tool for the nuScenes autonomous driving dataset.**

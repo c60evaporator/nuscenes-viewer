@@ -88,7 +88,9 @@ async def test_list_categories_is_list(client: AsyncClient):
     assert isinstance(body, list), f"Expected list, got: {type(body)}"
 
 
-async def test_list_categories_has_required_fields(client: AsyncClient):
+async def test_list_categories_has_required_fields(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
     resp = await client.get("/api/v1/categories")
     items = resp.json()
     assert len(items) > 0
@@ -97,8 +99,10 @@ async def test_list_categories_has_required_fields(client: AsyncClient):
         assert "name" in item
 
 
-async def test_list_categories_not_empty(client: AsyncClient):
-    """NuScenes データが存在すればカテゴリは必ず 1 件以上あること。"""
+async def test_list_categories_not_empty(
+    client: AsyncClient, sample_annotation: SampleAnnotation
+):
+    """フィクスチャが Category を1件作成するので必ず1件以上返ること。"""
     resp = await client.get("/api/v1/categories")
     assert len(resp.json()) >= 1
 

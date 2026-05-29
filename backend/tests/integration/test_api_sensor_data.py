@@ -391,6 +391,7 @@ async def test_best_camera_sample_data_token_exists(
         f"sample_data_token {sd_token!r} not found in DB"
 
 
+@pytest.mark.skip(reason="実データ依存のため CI ではスキップ。ローカルの nuScenes DB で確認済み。")
 async def test_best_camera_different_samples_return_results(client: AsyncClient):
     """複数の sample_token に対してそれぞれ 200 が返ること。
 

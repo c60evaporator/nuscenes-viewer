@@ -62,8 +62,8 @@ _ANN_SCENE_TOKEN = "scene-anntest-001"
 _ANN_SAMPLE_TOKEN = "sample-anntest-001"
 _ANN_CAT_TOKEN = "cat-anntest-001"
 _ANN_INST_TOKEN = "inst-anntest-001"
-_ANN_TOKEN = "ann-anntest-001"
-
+_ANN_TOKEN_1 = "ann-anntest-001"
+_ANN_TOKEN_2 = "ann-anntest-002"
 
 @pytest.fixture
 async def db_session():
@@ -355,8 +355,9 @@ async def sample_annotation(db_session: AsyncSession) -> SampleAnnotation:
     db_session.add(instance)
     await db_session.flush()
 
-    annotation = SampleAnnotation(
-        token=_ANN_TOKEN,
+    # SampleAnnotationは2件作る（test_list_annotations_offset_shifts_results用）。prev/next は None のまま。
+    annotation1 = SampleAnnotation(
+        token=_ANN_TOKEN_1,
         sample_token=_ANN_SAMPLE_TOKEN,
         instance_token=_ANN_INST_TOKEN,
         translation=[1.0, 2.0, 3.0],
@@ -368,10 +369,24 @@ async def sample_annotation(db_session: AsyncSession) -> SampleAnnotation:
         num_radar_pts=0,
         visibility_token=None,
     )
-    db_session.add(annotation)
+    annotation2 = SampleAnnotation(
+        token=_ANN_TOKEN_2,
+        sample_token=_ANN_SAMPLE_TOKEN,
+        instance_token=_ANN_INST_TOKEN,
+        translation=[4.0, 5.0, 6.0],
+        rotation=[1.0, 0.0, 0.0, 0.0],
+        size=[1.0, 2.0, 1.0],
+        prev=None,
+        next=None,
+        num_lidar_pts=5,
+        num_radar_pts=0,
+        visibility_token=None,
+    )
+    db_session.add(annotation1)
+    db_session.add(annotation2)
     await db_session.flush()
 
-    return annotation
+    return annotation1  # どちらか一方を返せば十分なので annotation1 を返す
 
 
 @pytest.fixture

@@ -3,6 +3,7 @@ import { usePointCloud } from '@/api/sensorData'
 import { useBasemap } from '@/api/maps'
 import { drawPointCloud, drawBBox2D, drawArrow2D, sensorToBevPixel, type BevViewParams } from '@/lib/canvasUtils'
 import { bboxCornersToGlobal, globalToSensor, globalToMapPixel, NUSCENES_MAP_META } from '@/lib/coordinateUtils'
+import { ANNOTATION } from '@/config/settings'
 import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import EditingBBoxLayer from './EditingBBoxLayer'
 import type { Annotation } from '@/types/annotation'
@@ -236,11 +237,13 @@ export default function PointCloudCanvas({
           maxY:  Math.max(...allY),
         })
 
-        const color = ann.instance_token === editingInstanceToken
+        const isEditingAnn = ann.instance_token === editingInstanceToken
+        const color = isEditingAnn
           ? '#FF8C00'
           : ann.instance_token === highlightInstanceToken
             ? '#FFD700'
             : '#00FF88'
+        if (isEditingAnn) ctx.globalAlpha = ANNOTATION.EDITING_ORIGINAL_OPACITY
         drawBBox2D(ctx, corners2D, color)
         // 矢印描画
         const arrowExtra = Math.min(1.0, ann.size[1] * 0.3)
@@ -251,6 +254,7 @@ export default function PointCloudCanvas({
         const arrowStartPx = sensorToBevPixel(arrowStartSensor[0], arrowStartSensor[1], viewParams)
         const arrowEndPx   = sensorToBevPixel(arrowEndSensor[0],   arrowEndSensor[1],   viewParams)
         drawArrow2D(ctx, arrowStartPx, arrowEndPx, color, 2, 6, 6)
+        if (isEditingAnn) ctx.globalAlpha = 1.0
       }
     }
     ctx.restore()  // 点群、BBox 描画後に restore して点群描画の座標系を元に戻す

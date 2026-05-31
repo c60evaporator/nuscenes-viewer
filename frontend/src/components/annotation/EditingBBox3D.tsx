@@ -264,6 +264,7 @@ export default function EditingBBox3D({
         <>
             {/* オレンジワイヤーフレーム（useFrame で直接更新） */}
             <Line
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ref={lineRef as React.MutableRefObject<any>}
                 points={initial.edgePoints}
                 color='#FF8C00'
@@ -273,6 +274,7 @@ export default function EditingBBox3D({
 
             {/* 矢印: 線 */}
             <Line
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ref={arrowLineRef as React.MutableRefObject<any>}
                 points={[initialArrow.startDisplay, initialArrow.endDisplay]}
                 color='#FF8C00'
@@ -296,6 +298,7 @@ export default function EditingBBox3D({
 
             {/* TransformControls */}
             <TransformControls
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ref={transformControlsRef as React.MutableRefObject<any>}
                 object={meshRef as React.RefObject<THREE.Object3D>}
                 mode={transformMode}

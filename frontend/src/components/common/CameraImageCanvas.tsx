@@ -4,7 +4,7 @@ import { project3DTo2D, bboxCornersToGlobal, projectMapCoordsToCamera } from '@/
 import { drawBBox2D, drawArrow2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint, drawProjectedArrow, drawProjectedLabel } from '@/lib/canvasUtils'
 import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import { LAYER_COLORS } from '@/layers/MapAnnotationLayers'
-import { MAP_PROJECTION } from '@/config/settings'
+import { MAP_PROJECTION, ANNOTATION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor } from '@/types/sensor'
 import type { GeoJSONFeatureCollection, GeoJSONMapFeature, MapLayer } from '@/types/map'
@@ -340,11 +340,13 @@ export default function CameraImageCanvas({
         maxY:  Math.max(...allY),
       })
 
-      const color = ann.instance_token === editingInstanceToken
+      const isEditingAnn = ann.instance_token === editingInstanceToken
+      const color = isEditingAnn
         ? '#FF8C00'
         : ann.instance_token === highlightInstanceToken
           ? '#FFFF00'
           : '#00AAFF'
+      if (isEditingAnn) ctx.globalAlpha = ANNOTATION.EDITING_ORIGINAL_OPACITY
       drawBBox2D(ctx, corners2D, color)
 
       // 矢印描画
@@ -361,6 +363,7 @@ export default function CameraImageCanvas({
               color, 2, 10, 10,
           )
       }
+      if (isEditingAnn) ctx.globalAlpha = 1.0
     }
 
     bboxRectsRef.current = newBBoxRects

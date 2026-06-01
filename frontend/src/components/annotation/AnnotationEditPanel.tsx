@@ -13,6 +13,7 @@ import {
     SIZE_MIN,
 } from '@/lib/bboxEditOps'
 import { useEditStore } from '@/store/editStore'
+import { ANNOTATION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -23,6 +24,19 @@ interface Props {
   egoPose?:               EgoPosePoint | null
   addModePrev?:           string | null
   addModeNext?:           string | null
+}
+
+// カテゴリ名からデフォルトサイズを階層的に解決する（vehicle.emergency.ambulance → vehicle.emergency → vehicle の順）
+function resolveDefaultSize(categoryName: string): [number, number, number] | null {
+  const sizes = ANNOTATION.DEFAULT_BBOX_SIZES
+  let name = categoryName
+  while (name.length > 0) {
+    if (name in sizes) return sizes[name]
+    const lastDot = name.lastIndexOf('.')
+    if (lastDot === -1) break
+    name = name.slice(0, lastDot)
+  }
+  return null
 }
 
 // ── スタイル定数 ────────────────────────────────────────────────────────────
@@ -598,7 +612,16 @@ export default function AnnotationEditPanel({
           style={selectFor(categoryEnabled)}
           onChange={(e) => {
             if (!currentAnnotation) return
-            updateSessionLive({ category_token: e.target.value })
+            const newToken = e.target.value
+            const changes: Partial<Annotation> = { category_token: newToken }
+            if (editSession?.mode === 'add') {
+              const cat = categories.find((c) => c.token === newToken)
+              if (cat) {
+                const defaultSize = resolveDefaultSize(cat.name)
+                if (defaultSize) changes.size = defaultSize
+              }
+            }
+            updateSessionLive(changes)
             commitChange()
           }}
         >

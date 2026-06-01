@@ -1,26 +1,25 @@
-// Configuration source: frontend/config/settings.yml
-// Update both files when changing values.
+import rawSettings from '../../config/settings.yml'
+
+interface SettingsYml {
+  map_projection: { max_distance_m: number }
+  layer_display_order: string[]
+  annotation: {
+    editing_original_opacity: number
+    category_order: string[]
+    default_bbox_sizes: Record<string, [number, number, number]>
+  }
+}
+
+const s = rawSettings as unknown as SettingsYml
 
 export const MAP_PROJECTION = {
-  MAX_DISTANCE_M: 75,
+  MAX_DISTANCE_M: s.map_projection.max_distance_m,
 } as const
 
 export const ANNOTATION = {
-  EDITING_ORIGINAL_OPACITY: 0.3,
+  EDITING_ORIGINAL_OPACITY: s.annotation.editing_original_opacity,
+  CATEGORY_ORDER:            s.annotation.category_order as string[],
+  DEFAULT_BBOX_SIZES:        s.annotation.default_bbox_sizes as Record<string, [number, number, number]>,
 } as const
 
-// 下から上への描画順。settings.yml の layer_display_order と同期すること
-export const LAYER_DISPLAY_ORDER = [
-  'drivable_area',
-  'road_block',
-  'road_segment',
-  'carpark_area',
-  'walkway',
-  'ped_crossing',
-  'stop_line',
-  'lane_connector',
-  'lane',
-  'road_divider',
-  'lane_divider',
-  'traffic_light',
-] as const
+export const LAYER_DISPLAY_ORDER = s.layer_display_order as string[]

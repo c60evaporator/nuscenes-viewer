@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useVisibilities, useAttributes, useUpdateAnnotation, useCreateAnnotation } from '@/api/annotations'
 import { ApiError } from '@/api/client'
 import { useCategories } from '@/api/categories'
@@ -13,6 +13,7 @@ import {
     SIZE_MIN,
 } from '@/lib/bboxEditOps'
 import { useEditStore } from '@/store/editStore'
+import { ANNOTATION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -23,6 +24,19 @@ interface Props {
   egoPose?:               EgoPosePoint | null
   addModePrev?:           string | null
   addModeNext?:           string | null
+}
+
+// カテゴリ名からデフォルトサイズを階層的に解決する（vehicle.emergency.ambulance → vehicle.emergency → vehicle の順）
+function resolveDefaultSize(categoryName: string): [number, number, number] | null {
+  const sizes = ANNOTATION.DEFAULT_BBOX_SIZES
+  let name = categoryName
+  while (name.length > 0) {
+    if (name in sizes) return sizes[name]
+    const lastDot = name.lastIndexOf('.')
+    if (lastDot === -1) break
+    name = name.slice(0, lastDot)
+  }
+  return null
 }
 
 // ── スタイル定数 ────────────────────────────────────────────────────────────
@@ -249,6 +263,15 @@ export default function AnnotationEditPanel({
   const { data: visibilities = [] } = useVisibilities()
   const { data: attributes   = [] } = useAttributes()
   const { data: categories   = [] } = useCategories()
+  const sortedCategories = useMemo(() => {
+    const orderMap = new Map(ANNOTATION.CATEGORY_ORDER.map((name, i) => [name, i]))
+    return [...categories].sort((a, b) => {
+      const ai = orderMap.has(a.name) ? orderMap.get(a.name)! : Infinity
+      const bi = orderMap.has(b.name) ? orderMap.get(b.name)! : Infinity
+      if (ai !== bi) return ai - bi
+      return a.name.localeCompare(b.name)
+    })
+  }, [categories])
   const { data: samples      = [] } = useSceneSamples(sceneToken)
   const { data: instancesRes }      = useInstances({ sceneToken: sceneToken ?? undefined, limit: 500 })
   const instances = instancesRes?.items ?? []
@@ -598,12 +621,21 @@ export default function AnnotationEditPanel({
           style={selectFor(categoryEnabled)}
           onChange={(e) => {
             if (!currentAnnotation) return
-            updateSessionLive({ category_token: e.target.value })
+            const newToken = e.target.value
+            const changes: Partial<Annotation> = { category_token: newToken }
+            if (editSession?.mode === 'add') {
+              const cat = categories.find((c) => c.token === newToken)
+              if (cat) {
+                const defaultSize = resolveDefaultSize(cat.name)
+                if (defaultSize) changes.size = defaultSize
+              }
+            }
+            updateSessionLive(changes)
             commitChange()
           }}
         >
           <option value="">—</option>
-          {categories.map((c) => (
+          {sortedCategories.map((c) => (
             <option key={c.token} value={c.token}>{c.name}</option>
           ))}
         </select>

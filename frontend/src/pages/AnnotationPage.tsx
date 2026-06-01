@@ -130,6 +130,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // Instance アノテーション（Instance フィルタが有効な場合に取得）
   const effectiveInstanceToken = lockSource === 'instance' ? (lockedInstanceToken ?? selectedInstanceToken) : null
   const { data: instanceAnnotationsRaw } = useInstanceAnnotations(effectiveInstanceToken)
+  // Sample フィルタ時: 選択インスタンスの先頭・末尾サンプル判定用（Instance フィルタ時は null で無効化）
+  const { data: sampleModeInstanceAnns } = useInstanceAnnotations(
+    !effectiveInstanceToken ? listSelectedInstanceToken : null
+  )
 
   // add モード + Sample フィルタ時の隣接サンプルインスタンス取得（インスタンス選択肢フィルタリング用）
   const sceneIdxOfCurrentSample = (!!effectiveSampleToken && !effectiveInstanceToken)
@@ -270,10 +274,23 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     && listSelectedSampleToken !== null
     && listSelectedSampleToken === instanceLastSampleToken
     && nextSampleToken !== null
-  const canDeleteBBox = hasInstanceFilter && !isEditing
-    && listSelectedSampleToken !== null
-    && (listSelectedSampleToken === instanceFirstSampleToken
-        || listSelectedSampleToken === instanceLastSampleToken)
+  // Sample フィルタ時: 選択インスタンスの先頭・末尾サンプルが現在のサンプルかどうか
+  const sampleModeFirstToken = sampleModeInstanceAnns?.[0]?.sample_token ?? null
+  const sampleModeLastToken  = sampleModeInstanceAnns?.[sampleModeInstanceAnns.length - 1]?.sample_token ?? null
+  const sampleModeIsEndpoint = hasSampleFilter && !hasInstanceFilter
+    && listSelectedInstanceToken !== null
+    && effectiveSampleToken !== null
+    && (effectiveSampleToken === sampleModeFirstToken || effectiveSampleToken === sampleModeLastToken)
+
+  const canDeleteBBox = !isEditing && (
+    // Instance フィルタ時（既存ロジック）
+    (hasInstanceFilter
+      && listSelectedSampleToken !== null
+      && (listSelectedSampleToken === instanceFirstSampleToken
+          || listSelectedSampleToken === instanceLastSampleToken))
+    // Sample フィルタ時（新規）
+    || sampleModeIsEndpoint
+  )
 
   // Calibrated Sensors
   const { data: calibSensorsData } = useCalibratedSensors()
@@ -398,10 +415,12 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                                   instance_token: selectedAnnotation.instance_token,
                               })
                               setListSelectedSampleToken(null)
+                              if (hasSampleFilter && !hasInstanceFilter) setListSelectedInstanceToken(null)
                           } catch (e) {
                               if (e instanceof ApiError) {
                                   if (e.status === 404) {
                                       setListSelectedSampleToken(null)
+                                      if (hasSampleFilter && !hasInstanceFilter) setListSelectedInstanceToken(null)
                                   } else {
                                       alert(`Delete failed: ${e.message}`)
                                   }
@@ -427,7 +446,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                           "
                           style={{ width: '220px' }}
                       >
-                          To delete BBox, go to the "Instance" view and click "Annotations" button, then select the first or last annotation
+                          Only FIRST or LAST annotation<br/> of the instance can be deleted
                       </div>
                   )}
               </div>

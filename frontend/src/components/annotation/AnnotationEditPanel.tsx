@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useVisibilities, useAttributes, useUpdateAnnotation, useCreateAnnotation } from '@/api/annotations'
 import { ApiError } from '@/api/client'
 import { useCategories } from '@/api/categories'
@@ -263,6 +263,15 @@ export default function AnnotationEditPanel({
   const { data: visibilities = [] } = useVisibilities()
   const { data: attributes   = [] } = useAttributes()
   const { data: categories   = [] } = useCategories()
+  const sortedCategories = useMemo(() => {
+    const orderMap = new Map(ANNOTATION.CATEGORY_ORDER.map((name, i) => [name, i]))
+    return [...categories].sort((a, b) => {
+      const ai = orderMap.has(a.name) ? orderMap.get(a.name)! : Infinity
+      const bi = orderMap.has(b.name) ? orderMap.get(b.name)! : Infinity
+      if (ai !== bi) return ai - bi
+      return a.name.localeCompare(b.name)
+    })
+  }, [categories])
   const { data: samples      = [] } = useSceneSamples(sceneToken)
   const { data: instancesRes }      = useInstances({ sceneToken: sceneToken ?? undefined, limit: 500 })
   const instances = instancesRes?.items ?? []
@@ -626,7 +635,7 @@ export default function AnnotationEditPanel({
           }}
         >
           <option value="">—</option>
-          {categories.map((c) => (
+          {sortedCategories.map((c) => (
             <option key={c.token} value={c.token}>{c.name}</option>
           ))}
         </select>

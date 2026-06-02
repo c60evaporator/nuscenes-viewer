@@ -11,15 +11,29 @@ import { useLogs } from '@/api/logs'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 
+import SceneIcon      from '@/assets/icons/scene.svg?react'
+import SampleIcon     from '@/assets/icons/sample.svg?react'
+import InstanceIcon   from '@/assets/icons/instance.svg?react'
+import AnnotationIcon from '@/assets/icons/annotation.svg?react'
+import MapIcon        from '@/assets/icons/map.svg?react'
+import SampleMapIcon  from '@/assets/icons/sample_map.svg?react'
+
 export type TabId = 'scene' | 'sample' | 'instance' | 'annotation' | 'map' | 'sample-map'
 
-export const TABS: { id: TabId; label: string }[] = [
-  { id: 'scene',      label: 'Scene' },
-  { id: 'sample',     label: 'Sample' },
-  { id: 'instance',   label: 'Instance' },
-  { id: 'annotation', label: 'Annotation' },
-  { id: 'map',        label: 'Map' },
-  { id: 'sample-map', label: 'Sample&Map' },
+const ACTIVE_COLOR   = '#4A90D9'
+const INACTIVE_COLOR = '#ffffff'
+
+export const TABS: {
+  id:    TabId
+  label: string
+  Icon:  React.FC<React.SVGProps<SVGSVGElement>>
+}[] = [
+  { id: 'scene',      label: 'Scene',      Icon: SceneIcon },
+  { id: 'sample',     label: 'Sample',     Icon: SampleIcon },
+  { id: 'instance',   label: 'Instance',   Icon: InstanceIcon },
+  { id: 'annotation', label: 'Annotation', Icon: AnnotationIcon },
+  { id: 'map',        label: 'Map',        Icon: MapIcon },
+  { id: 'sample-map', label: 'Sample&Map', Icon: SampleMapIcon },
 ]
 
 interface HeaderProps {
@@ -90,18 +104,29 @@ export default function Header({ activeTab, onTabChange }: HeaderProps) {
 
       {/* タブ */}
       <nav className="flex items-center gap-1">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => handleTabChange(tab.id)}
-            className="px-3 py-1 text-sm font-medium rounded transition-colors"
-            style={{
-              color: activeTab === tab.id ? '#4A90D9' : '#ffffff',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map(({ id, label, Icon }) => {
+          const isActive = activeTab === id
+          const color    = isActive ? ACTIVE_COLOR : INACTIVE_COLOR
+          return (
+            <button
+              key={id}
+              onClick={() => handleTabChange(id)}
+              className="flex flex-col items-center px-3 py-1 rounded transition-colors gap-0.5"
+            >
+              <Icon
+                width={22}
+                height={22}
+                style={{ fill: color, color }}
+              />
+              <span
+                className="text-xs font-medium"
+                style={{ color }}
+              >
+                {label}
+              </span>
+            </button>
+          )
+        })}
       </nav>
     </header>
   )

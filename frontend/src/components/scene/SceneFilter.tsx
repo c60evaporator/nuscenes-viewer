@@ -22,10 +22,10 @@ export default function SceneFilter({ logs, selectedLogToken, onFilterChange }: 
         onValueChange={(v) => onFilterChange(v === '__all__' ? null : v)}
       >
         <SelectTrigger className="h-8 text-xs bg-gray-700 border-gray-500 text-white">
-          <SelectValue placeholder="すべて" />
+          <SelectValue placeholder="ALL" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__" className="text-xs">すべて</SelectItem>
+          <SelectItem value="__all__" className="text-xs">ALL</SelectItem>
           {logs.map((log) => (
             <SelectItem key={log.token} value={log.token} className="text-xs">
               {log.logfile}

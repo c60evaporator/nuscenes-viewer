@@ -64,10 +64,10 @@ export default function InstanceFilter({
           onValueChange={(v) => onCategoryChange(v === '__all__' ? null : v)}
         >
           <SelectTrigger className="h-8 text-xs border-gray-500 text-white" style={{ backgroundColor: '#374151' }}>
-            <SelectValue placeholder="すべて" />
+            <SelectValue placeholder="ALL" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__" className="text-xs">すべて</SelectItem>
+            <SelectItem value="__all__" className="text-xs">ALL</SelectItem>
             {categories.map((cat) => (
               <SelectItem key={cat.token} value={cat.name} className="text-xs">
                 {cat.name}

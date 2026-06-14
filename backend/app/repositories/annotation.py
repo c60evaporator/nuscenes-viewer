@@ -199,7 +199,13 @@ class AnnotationRepository:
         scene_token: str | None = None,
         category_name: str | None = None,
     ) -> tuple[int, list[Instance]]:
-        """Instance + InstanceEdit を統合し, ページング後の Instance のみ動的計算した stats を含めて返す."""
+        """
+        Instance + InstanceEdit を統合し, ページング後の Instance のみ動的計算した stats を含めて返す.
+
+        > annotationの扱い:
+        > scene_token指定時: annotationが0個のinstanceは出力対象外 (孤立instanceの除外)
+        > scene_token非指定時: annotationが0個のinstanceも出力対象 (全instanceの出力)
+        """
         # 既存 Instance クエリ
         q = (
             select(Instance)

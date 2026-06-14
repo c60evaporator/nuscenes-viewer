@@ -86,10 +86,10 @@ export default function AnnotationFilter({
             className="h-8 text-xs border-gray-500 text-white"
             style={{ backgroundColor: sampleTokenLocked ? '#4a4a4a' : '#374151' }}
           >
-            <SelectValue placeholder="すべて" />
+            <SelectValue placeholder="ALL" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL} className="text-xs">すべて</SelectItem>
+            <SelectItem value={ALL} className="text-xs">ALL</SelectItem>
             {samples.map((s, i) => (
               <SelectItem key={s.token} value={s.token} className="text-xs">
                 #{i + 1} — {new Date(s.timestamp / 1000).toLocaleTimeString('ja-JP')}
@@ -124,10 +124,10 @@ export default function AnnotationFilter({
               className="h-8 text-xs border-gray-500 text-white"
               style={{ backgroundColor: '#374151' }}
             >
-              <SelectValue placeholder="すべて" />
+              <SelectValue placeholder="ALL" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL} className="text-xs">すべて</SelectItem>
+              <SelectItem value={ALL} className="text-xs">ALL</SelectItem>
               {instanceSummaries.map((inst) => (
                 <SelectItem key={inst.instance_token} value={inst.instance_token} className="text-xs">
                   {inst.category_name} ({inst.nbr_annotations})

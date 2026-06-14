@@ -15,6 +15,7 @@ import { useCalibratedSensors } from '@/api/sensors'
 import { useMapByLocation } from '@/api/maps'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
+import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import type { CalibratedSensor } from '@/types/sensor'
 import type { GeoJSONMapFeature, MapLayer } from '@/types/map'
 import type { TabId } from '@/components/layout/Header'
@@ -101,10 +102,8 @@ export default function SampleMapPage({ activeTab, onTabChange }: SampleMapPageP
   // Ego Poses
   const { data: egoPoses } = useSceneEgoPoses(selectedSceneToken)
 
-  // 現在サンプルの ego pose
-  const currentEgoPose = currentSampleToken
-    ? (egoPoses ?? []).find((p) => p.sample_token === currentSampleToken)
-    : undefined
+  // 現在サンプルの ego pose（LIDAR_TOP優先、フォールバックでsceneEgoPoses）
+  const currentEgoPose = getSampleEgoPose(sensorDataMap, egoPoses ?? [], currentSampleToken)
 
   // Map メタ
   const { data: mapMeta } = useMapByLocation(currentMapLocation)

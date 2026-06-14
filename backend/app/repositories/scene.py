@@ -1,9 +1,9 @@
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.scene import Log, Sample, Scene
-from app.models.sensor import SampleData
+from app.models.sensor import CalibratedSensor, SampleData, Sensor
 
 
 class SceneRepository:
@@ -56,21 +56,28 @@ class SceneRepository:
 
     async def get_ego_poses_by_scene(self, scene_token: str) -> list[SampleData]:
         """scene 内の各 sample につき 1 件の SampleData（is_key_frame=True）を返す。
-        DISTINCT ON (sample_token) を使い sample ごとに最も古いキーフレームを選ぶ。
+        DISTINCT ON (sample_token) を使い、LIDAR_TOP の SampleData が存在する場合は
+        それを優先し、存在しない場合は最も古いキーフレームを選ぶ。
         """
         sample_tokens_subq = (
             select(Sample.token)
             .where(Sample.scene_token == scene_token)
             .scalar_subquery()
         )
+        lidar_top_priority = case(
+            (Sensor.channel == "LIDAR_TOP", 0),
+            else_=1,
+        )
         result = await self.db.execute(
             select(SampleData)
+            .join(CalibratedSensor, SampleData.calibrated_sensor_token == CalibratedSensor.token)
+            .join(Sensor, CalibratedSensor.sensor_token == Sensor.token)
             .options(selectinload(SampleData.ego_pose))
             .where(
                 SampleData.sample_token.in_(sample_tokens_subq),
                 SampleData.is_key_frame.is_(True),
             )
-            .order_by(SampleData.sample_token, SampleData.timestamp)
+            .order_by(SampleData.sample_token, lidar_top_priority, SampleData.timestamp)
             .distinct(SampleData.sample_token)
         )
         return list(result.scalars().all())

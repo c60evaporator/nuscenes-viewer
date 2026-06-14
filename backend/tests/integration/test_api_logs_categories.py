@@ -22,6 +22,11 @@ _LGCAT_SCENE_TOKEN   = "scene-lgcat-001"
 _LGCAT_SAMPLE_TOKENS = ["sample-lgcat-001", "sample-lgcat-002", "sample-lgcat-003"]
 _LGCAT_TIMESTAMPS    = [1_100_000, 2_200_000, 3_300_000]
 
+# ── fixture 定数（conftest.py の _LPRI_* と一致させる） ──────────────────────
+_LPRI_SCENE_TOKEN       = "scene-lpri-001"
+_LPRI_SAMPLE_TOKEN      = "sample-lpri-001"
+_LPRI_LIDAR_TRANSLATION = [100.0, 0.0, 0.0]
+
 # sample_annotation fixture のサンプルトークン（conftest.py と一致）
 _ANN_SAMPLE_TOKEN = "sample-anntest-001"
 
@@ -165,6 +170,17 @@ async def test_get_ego_poses_ordered_by_timestamp(client: AsyncClient, log_and_s
 async def test_get_ego_poses_not_found_returns_404(client: AsyncClient):
     resp = await client.get("/api/v1/scenes/scene-does-not-exist-000/ego-poses")
     assert resp.status_code == 404
+
+
+async def test_get_ego_poses_prefers_lidar_top(client: AsyncClient, lidar_priority_scene: Scene):
+    """sample 内に CAM_FRONT（timestamp が早い）と LIDAR_TOP（timestamp が遅い）の
+    キーフレームが両方ある場合、LIDAR_TOP の ego_pose が返ること。"""
+    resp = await client.get(f"/api/v1/scenes/{_LPRI_SCENE_TOKEN}/ego-poses")
+    assert resp.status_code == 200
+    items = resp.json()
+    assert len(items) == 1
+    assert items[0]["sample_token"] == _LPRI_SAMPLE_TOKEN
+    assert items[0]["translation"] == _LPRI_LIDAR_TRANSLATION
 
 
 # ── GET /api/v1/samples/{token}/instances ────────────────────────────────────

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.dependencies import get_db
 from app.main import app
 from app.models.annotation import Category, Instance, SampleAnnotation
+from app.models.annotation_edit import AnnotationEdit
 from app.models.map import DrivableArea, Lane, MapLine, MapMeta, MapPolygon, RoadDivider, RoadSegment
 from app.models.scene import Log, Sample, Scene
 from app.models.sensor import CalibratedSensor, EgoPose, SampleData, Sensor
@@ -55,6 +56,24 @@ _LGCAT_SD_TOKENS     = ["sd-lgcat-001",     "sd-lgcat-002",     "sd-lgcat-003"]
 _LGCAT_TIMESTAMPS    = [1_100_000, 2_200_000, 3_300_000]
 
 
+# ── lidar_priority_scene テスト用定数 ─────────────────────────────────────────
+
+_LPRI_LOG_TOKEN          = "log-lpri-001"
+_LPRI_SCENE_TOKEN        = "scene-lpri-001"
+_LPRI_SAMPLE_TOKEN       = "sample-lpri-001"
+_LPRI_LIDAR_SENSOR_TOKEN = "sensor-lpri-lidar"
+_LPRI_CAM_SENSOR_TOKEN   = "sensor-lpri-cam"
+_LPRI_LIDAR_CS_TOKEN     = "cs-lpri-lidar"
+_LPRI_CAM_CS_TOKEN       = "cs-lpri-cam"
+_LPRI_LIDAR_EP_TOKEN     = "ep-lpri-lidar"
+_LPRI_CAM_EP_TOKEN       = "ep-lpri-cam"
+_LPRI_LIDAR_SD_TOKEN     = "sd-lpri-lidar"
+_LPRI_CAM_SD_TOKEN       = "sd-lpri-cam"
+_LPRI_TIMESTAMP          = 5_000_000
+_LPRI_LIDAR_TRANSLATION  = [100.0, 0.0, 0.0]
+_LPRI_CAM_TRANSLATION    = [0.0, 0.0, 0.0]
+
+
 # ── アノテーションテスト用定数 ────────────────────────────────────────────────
 
 _ANN_LOG_TOKEN = "log-anntest-001"
@@ -64,6 +83,7 @@ _ANN_CAT_TOKEN = "cat-anntest-001"
 _ANN_INST_TOKEN = "inst-anntest-001"
 _ANN_TOKEN_1 = "ann-anntest-001"
 _ANN_TOKEN_2 = "ann-anntest-002"
+_ANN_ADD_EDIT_TOKEN = "annedit-anntest-add-001"
 
 @pytest.fixture
 async def db_session():
@@ -189,6 +209,121 @@ async def log_and_scene(db_session: AsyncSession) -> Scene:
             next=None,
         )
         db_session.add(sd)
+    await db_session.flush()
+
+    return scene
+
+
+@pytest.fixture
+async def lidar_priority_scene(db_session: AsyncSession) -> Scene:
+    """LIDAR_TOP優先ロジック検証用の Log / Scene / Sample×1 / Sensor×2 / CalibratedSensor×2 /
+    EgoPose×2 / SampleData×2。
+
+    1つの sample に対し、CAM_FRONT（timestamp が早い）と LIDAR_TOP（timestamp が遅い）の
+    is_key_frame=True な SampleData を作成する。get_ego_poses_by_scene が timestamp に
+    関わらず LIDAR_TOP の ego_pose を返すことを確認するために使う。
+    db_session のロールバックにより、テスト終了後に全レコードが消える。
+    """
+    log = Log(
+        token=_LPRI_LOG_TOKEN,
+        logfile="lpri.log",
+        vehicle="test-vehicle-lpri",
+        date_captured="2024-01-01",
+        location="boston-seaport",
+    )
+    db_session.add(log)
+    await db_session.flush()
+
+    scene = Scene(
+        token=_LPRI_SCENE_TOKEN,
+        log_token=_LPRI_LOG_TOKEN,
+        name="scene-lpri-alpha",
+        description=None,
+        nbr_samples=1,
+        first_sample_token=_LPRI_SAMPLE_TOKEN,
+        last_sample_token=_LPRI_SAMPLE_TOKEN,
+    )
+    db_session.add(scene)
+    await db_session.flush()
+
+    lidar_sensor = Sensor(token=_LPRI_LIDAR_SENSOR_TOKEN, channel="LIDAR_TOP", modality="lidar")
+    cam_sensor = Sensor(token=_LPRI_CAM_SENSOR_TOKEN, channel="CAM_FRONT", modality="camera")
+    db_session.add_all([lidar_sensor, cam_sensor])
+    await db_session.flush()
+
+    lidar_cs = CalibratedSensor(
+        token=_LPRI_LIDAR_CS_TOKEN,
+        sensor_token=_LPRI_LIDAR_SENSOR_TOKEN,
+        translation=[0.0, 0.0, 1.8],
+        rotation=[1.0, 0.0, 0.0, 0.0],
+        camera_intrinsic=None,
+    )
+    cam_cs = CalibratedSensor(
+        token=_LPRI_CAM_CS_TOKEN,
+        sensor_token=_LPRI_CAM_SENSOR_TOKEN,
+        translation=[0.0, 0.0, 1.5],
+        rotation=[1.0, 0.0, 0.0, 0.0],
+        camera_intrinsic=None,
+    )
+    db_session.add_all([lidar_cs, cam_cs])
+    await db_session.flush()
+
+    # CAM_FRONT: timestamp が早い（従来ロジックではこちらが選ばれてしまう）
+    cam_ep = EgoPose(
+        token=_LPRI_CAM_EP_TOKEN,
+        timestamp=_LPRI_TIMESTAMP,
+        translation=_LPRI_CAM_TRANSLATION,
+        rotation=[1.0, 0.0, 0.0, 0.0],
+    )
+    # LIDAR_TOP: timestamp が遅い
+    lidar_ep = EgoPose(
+        token=_LPRI_LIDAR_EP_TOKEN,
+        timestamp=_LPRI_TIMESTAMP + 100,
+        translation=_LPRI_LIDAR_TRANSLATION,
+        rotation=[1.0, 0.0, 0.0, 0.0],
+    )
+    db_session.add_all([cam_ep, lidar_ep])
+    await db_session.flush()
+
+    sample = Sample(
+        token=_LPRI_SAMPLE_TOKEN,
+        scene_token=_LPRI_SCENE_TOKEN,
+        timestamp=_LPRI_TIMESTAMP,
+        prev=None,
+        next=None,
+    )
+    db_session.add(sample)
+    await db_session.flush()
+
+    cam_sd = SampleData(
+        token=_LPRI_CAM_SD_TOKEN,
+        sample_token=_LPRI_SAMPLE_TOKEN,
+        calibrated_sensor_token=_LPRI_CAM_CS_TOKEN,
+        ego_pose_token=_LPRI_CAM_EP_TOKEN,
+        filename="samples/CAM_FRONT/test.jpg",
+        fileformat="jpg",
+        timestamp=_LPRI_TIMESTAMP,
+        is_key_frame=True,
+        width=1600,
+        height=900,
+        prev=None,
+        next=None,
+    )
+    lidar_sd = SampleData(
+        token=_LPRI_LIDAR_SD_TOKEN,
+        sample_token=_LPRI_SAMPLE_TOKEN,
+        calibrated_sensor_token=_LPRI_LIDAR_CS_TOKEN,
+        ego_pose_token=_LPRI_LIDAR_EP_TOKEN,
+        filename="samples/LIDAR_TOP/test.pcd.bin",
+        fileformat="pcd",
+        timestamp=_LPRI_TIMESTAMP + 100,
+        is_key_frame=True,
+        width=None,
+        height=None,
+        prev=None,
+        next=None,
+    )
+    db_session.add_all([cam_sd, lidar_sd])
     await db_session.flush()
 
     return scene
@@ -387,6 +522,35 @@ async def sample_annotation(db_session: AsyncSession) -> SampleAnnotation:
     await db_session.flush()
 
     return annotation1  # どちらか一方を返せば十分なので annotation1 を返す
+
+
+@pytest.fixture
+async def annotation_edit_add(
+    db_session: AsyncSession, sample_annotation: SampleAnnotation
+) -> AnnotationEdit:
+    """edit_type='add' の AnnotationEdit を1件作成する。
+
+    get_all() のページング (limit) が add edit を含めても超過しないことを
+    検証する回帰テストで使用する。db_session のロールバックにより、テスト終了後に消える。
+    """
+    edit = AnnotationEdit(
+        token=_ANN_ADD_EDIT_TOKEN,
+        base_token=None,
+        edit_type="add",
+        sample_token=_ANN_SAMPLE_TOKEN,
+        instance_token=_ANN_INST_TOKEN,
+        translation=[7.0, 8.0, 9.0],
+        rotation=[1.0, 0.0, 0.0, 0.0],
+        size=[2.0, 4.0, 1.5],
+        prev=None,
+        next=None,
+        visibility_token=None,
+        attribute_tokens=None,
+        version=1,
+    )
+    db_session.add(edit)
+    await db_session.flush()
+    return edit
 
 
 @pytest.fixture

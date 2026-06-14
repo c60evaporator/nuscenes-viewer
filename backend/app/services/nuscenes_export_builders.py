@@ -115,13 +115,13 @@ async def build_log_records(
 
     return [
         {
-            'token':         l.token,
-            'logfile':       l.logfile,
-            'vehicle':       l.vehicle,
-            'date_captured': l.date_captured,
-            'location':      l.location,
+            'token':         log.token,
+            'logfile':       log.logfile,
+            'vehicle':       log.vehicle,
+            'date_captured': log.date_captured,
+            'location':      log.location,
         }
-        for l in logs
+        for log in logs
     ]
 
 
@@ -264,8 +264,8 @@ async def build_map_records(
     logs = list((await db.execute(log_stmt)).scalars().all())
 
     location_to_log_tokens: dict[str, list[str]] = {}
-    for l in logs:
-        location_to_log_tokens.setdefault(l.location, []).append(l.token)
+    for log in logs:
+        location_to_log_tokens.setdefault(log.location, []).append(log.token)
 
     records: list[dict] = []
     for m in map_metas:

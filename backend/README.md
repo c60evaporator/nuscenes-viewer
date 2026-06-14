@@ -68,3 +68,13 @@ test by each file
 docker compose exec api pytest /app/tests/unit/test_annotation_merger.py -v
 ```
 
+Linter check
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+pip install ruff
+cd backend
+ruff check .
+```

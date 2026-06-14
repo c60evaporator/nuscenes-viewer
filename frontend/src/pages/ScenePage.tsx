@@ -95,23 +95,30 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
       >
         Sample&amp;Map
       </Button>
+    </>
+  )
+
+  const exportButtons = (
+    <div className="p-3 flex flex-col gap-2">
       <Button
+        size="sm"
         className="w-full text-white text-xs"
         style={{ backgroundColor: '#4A90D9' }}
         disabled={!currentSceneToken || exporting}
         onClick={() => handleExport(currentSceneToken)}
       >
-        {exporting ? 'Exporting...' : 'Export Scene'}
+        {exporting ? 'Exporting...' : 'Export Scene as JSON'}
       </Button>
       <Button
+        size="sm"
         className="w-full text-white text-xs"
         style={{ backgroundColor: '#2D6FA8' }}
         disabled={exporting}
         onClick={() => handleExport(null)}
       >
-        {exporting ? 'Exporting...' : 'Export All'}
+        {exporting ? 'Exporting...' : 'Export All as JSON'}
       </Button>
-    </>
+    </div>
   )
 
   return (
@@ -127,6 +134,7 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
               onFilterChange={setSelectedLogToken}
             />
           }
+          footer={exportButtons}
         >
           <SceneList
             scenes={filteredScenes}

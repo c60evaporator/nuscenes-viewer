@@ -240,9 +240,12 @@ resource "aws_iam_role_policy" "github_actions" {
           "ec2:DescribeVpcEndpoints",
           "ec2:ModifyVpcEndpoint",
           "ec2:DescribeVpcs",
+          "ec2:DescribeVpcAttribute",
           "ec2:DescribeSubnets",
           "ec2:DescribeSecurityGroups",
-          "ec2:CreateTags"
+          "ec2:DescribeSecurityGroupRules",
+          "ec2:CreateTags",
+          "ec2:DescribeTags"
         ]
         Resource = "*"
       }

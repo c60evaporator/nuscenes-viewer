@@ -79,6 +79,6 @@ resource "aws_ssm_parameter" "cloudfront_data_url" {
   value = "PLACEHOLDER_CHANGE_AFTER_CLOUDFRONT_SETUP"
 
   lifecycle {
-    ignore_changes = []
+    ignore_changes = [value]
   }
 }

@@ -9,11 +9,13 @@ import AnnotationViewer from '@/components/annotation/AnnotationViewer'
 import AnnotationEditPanel from '@/components/annotation/AnnotationEditPanel'
 import { useDeleteAnnotation } from '@/api/annotations'
 import { ApiError } from '@/api/client'
+import { useCategories } from '@/api/categories'
 import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
 import { useSamples, useSampleInstances, useSampleAnnotations } from '@/api/samples'
 import { useInstanceAnnotations } from '@/api/instances'
 import { useCalibratedSensors } from '@/api/sensors'
+import { resolveDefaultSize } from '@/lib/bboxDefaults'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import { useEditStore } from '@/store/editStore'
@@ -130,6 +132,14 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // Instance アノテーション（Instance フィルタが有効な場合に取得）
   const effectiveInstanceToken = lockSource === 'instance' ? (lockedInstanceToken ?? selectedInstanceToken) : null
   const { data: instanceAnnotationsRaw } = useInstanceAnnotations(effectiveInstanceToken)
+
+  // Add BBox to prev/next 用: フィルタ中instanceのcategory名（先頭annotationから解決、全annotation同一category）
+  const { data: categories = [] } = useCategories()
+  const targetInstanceCategoryName = useMemo(() => {
+    const categoryToken = instanceAnnotationsRaw?.[0]?.category_token
+    if (!categoryToken) return null
+    return categories.find((c) => c.token === categoryToken)?.name ?? null
+  }, [instanceAnnotationsRaw, categories])
   // Sample フィルタ時: 選択インスタンスの先頭・末尾サンプル判定用（Instance フィルタ時は null で無効化）
   const { data: sampleModeInstanceAnns } = useInstanceAnnotations(
     !effectiveInstanceToken ? listSelectedInstanceToken : null
@@ -506,7 +516,9 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   onClick={() => {
                     const targetToken = prevSampleToken!
                     const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
-                    const size = [1.8, 4.6, 1.5]
+                    const size: [number, number, number] =
+                      (targetInstanceCategoryName ? resolveDefaultSize(targetInstanceCategoryName) : null)
+                      ?? [1.8, 4.6, 1.5]
                     const translation = egoPose
                       ? [egoPose.translation[0], egoPose.translation[1], egoPose.translation[2] + size[2] / 2]
                       : [0, 0, size[2] / 2]
@@ -546,7 +558,9 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   onClick={() => {
                     const targetToken = nextSampleToken!
                     const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
-                    const size = [1.8, 4.6, 1.5]
+                    const size: [number, number, number] =
+                      (targetInstanceCategoryName ? resolveDefaultSize(targetInstanceCategoryName) : null)
+                      ?? [1.8, 4.6, 1.5]
                     const translation = egoPose
                       ? [egoPose.translation[0], egoPose.translation[1], egoPose.translation[2] + size[2] / 2]
                       : [0, 0, size[2] / 2]

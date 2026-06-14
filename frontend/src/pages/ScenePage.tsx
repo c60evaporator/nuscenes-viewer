@@ -59,9 +59,23 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
   }
 
   const handleExport = async (token: string | null) => {
+    // 全シーン export の場合は確認ダイアログを表示
+    if (token === null) {
+      const ok = window.confirm(
+        'Exporting all scenes may take several minutes for large datasets. Continue?'
+      )
+      if (!ok) return
+    }
+
     try {
       setExporting(true)
-      await downloadNuscenesExport(token)
+      const { warningCount } = await downloadNuscenesExport(token)
+      if (warningCount > 0) {
+        alert(
+          `Export completed with ${warningCount} warning(s). ` +
+          `Please check WARNINGS.txt inside the ZIP file for details.`
+        )
+      }
     } catch (e) {
       alert(`Export failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
     } finally {

@@ -65,10 +65,13 @@ async def _build_export_response(
         f'nuscenes_export_{scene_token}.zip' if scene_token
         else 'nuscenes_export_all.zip'
     )
+
     return StreamingResponse(
         buf,
         media_type='application/zip',
         headers={
-            'Content-Disposition': f'attachment; filename="{download_filename}"',
+            'Content-Disposition':           f'attachment; filename="{download_filename}"',
+            'X-Export-Warning-Count':        str(len(warnings)),
+            'Access-Control-Expose-Headers': 'X-Export-Warning-Count, Content-Disposition',
         },
     )

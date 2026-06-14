@@ -4,6 +4,7 @@ import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
 import { useSampleSensorData, useSampleAnnotations } from '@/api/samples'
 import { rankCamerasByScore } from '@/lib/cameraSelection'
+import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import type { InstanceAnnotation } from '@/types/annotation'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 
@@ -41,8 +42,7 @@ export default function InstanceViewer({
   const { data: sampleAnnotations } = useSampleAnnotations(sampleToken)
 
   // 現在サンプルの ego pose（devkit 準拠: LIDAR_TOP の ego_pose を優先）
-  const currentEgoPose = (sampleDataMap?.['LIDAR_TOP']?.ego_pose
-    ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)) as EgoPosePoint | undefined
+  const currentEgoPose = getSampleEgoPose(sampleDataMap, sceneEgoPoses, sampleToken)
 
   // インスタンス全サンプルの ego pose（底部右地図用）
   const instanceEgoPoses: EgoPosePoint[] = allAnnotations

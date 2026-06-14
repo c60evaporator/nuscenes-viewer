@@ -15,6 +15,7 @@ import { useSamples, useSampleAnnotations, useSampleSensorData, useSampleInstanc
 import { useCalibratedSensors } from '@/api/sensors'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
+import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import type { CalibratedSensor } from '@/types/sensor'
 import type { TabId } from '@/components/layout/Header'
 
@@ -126,10 +127,10 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
     [samples, currentSampleToken],
   )
 
-  // 選択中 Sample の Ego Pose
+  // 選択中 Sample の Ego Pose（LIDAR_TOP優先、フォールバックでsceneEgoPoses）
   const currentEgoPose = useMemo(
-    () => (egoPoses ?? []).find((p) => p.sample_token === currentSampleToken) ?? null,
-    [egoPoses, currentSampleToken],
+    () => getSampleEgoPose(sensorDataMap, egoPoses ?? [], currentSampleToken) ?? null,
+    [sensorDataMap, egoPoses, currentSampleToken],
   )
 
   // Annotations ボタン

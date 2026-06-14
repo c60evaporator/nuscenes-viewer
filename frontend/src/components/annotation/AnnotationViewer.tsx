@@ -6,6 +6,7 @@ import AnnotationThreeView from '@/components/annotation/AnnotationThreeView'
 import { useSampleSensorData, useSampleAnnotations } from '@/api/samples'
 import { useEditStore } from '@/store/editStore'
 import { rankCamerasByScore } from '@/lib/cameraSelection'
+import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 import type { Annotation } from '@/types/annotation'
 
@@ -57,8 +58,7 @@ export default function AnnotationViewer({
     return null
   }, [currentAnnotation, instanceToken, sampleAnnotationsRaw])
 
-  const currentEgoPose = (sampleDataMap?.['LIDAR_TOP']?.ego_pose
-    ?? (sampleToken ? sceneEgoPoses.find((p) => p.sample_token === sampleToken) : undefined)) as EgoPosePoint | undefined
+  const currentEgoPose = getSampleEgoPose(sampleDataMap, sceneEgoPoses, sampleToken)
 
   // LiDAR
   // calibSensorMap は token キーなので、sampleDataMap の calibrated_sensor_token で引く

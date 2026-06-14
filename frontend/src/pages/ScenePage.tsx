@@ -9,6 +9,7 @@ import SceneViewer from '@/components/scene/SceneViewer'
 import { Button } from '@/components/ui/button'
 import { useScenes } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
+import { downloadNuscenesExport } from '@/api/export'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import type { TabId } from '@/components/layout/Header'
@@ -20,6 +21,7 @@ interface ScenePageProps {
 
 export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
   const [selectedLogToken, setSelectedLogToken] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const currentMapLocation = useViewerStore((s) => s.currentMapLocation)
   const currentSceneToken  = useViewerStore((s) => s.currentSceneToken)
@@ -56,6 +58,17 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
     onTabChange(tab)
   }
 
+  const handleExport = async (token: string | null) => {
+    try {
+      setExporting(true)
+      await downloadNuscenesExport(token)
+    } catch (e) {
+      alert(`Export failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const navButtons = (
     <>
       <Button
@@ -81,6 +94,22 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
         onClick={() => navigate('sample-map')}
       >
         Sample&amp;Map
+      </Button>
+      <Button
+        className="w-full text-white text-xs"
+        style={{ backgroundColor: '#4A90D9' }}
+        disabled={!currentSceneToken || exporting}
+        onClick={() => handleExport(currentSceneToken)}
+      >
+        {exporting ? 'Exporting...' : 'Export Scene'}
+      </Button>
+      <Button
+        className="w-full text-white text-xs"
+        style={{ backgroundColor: '#2D6FA8' }}
+        disabled={exporting}
+        onClick={() => handleExport(null)}
+      >
+        {exporting ? 'Exporting...' : 'Export All'}
       </Button>
     </>
   )

@@ -10,6 +10,7 @@ from app.api.v1.endpoints.samples import router as samples_router
 from app.api.v1.endpoints.scenes import router as scenes_router
 from app.api.v1.endpoints.sensors import router as sensors_router
 from app.api.v1.endpoints.visibilities import router as visibilities_router
+from app.api.v1.endpoints.export import router as export_router
 
 router = APIRouter()
 router.include_router(scenes_router)
@@ -22,3 +23,4 @@ router.include_router(categories_router)
 router.include_router(instances_router)
 router.include_router(visibilities_router)
 router.include_router(attributes_router)
+router.include_router(export_router)

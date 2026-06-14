@@ -9,6 +9,7 @@ import SceneViewer from '@/components/scene/SceneViewer'
 import { Button } from '@/components/ui/button'
 import { useScenes } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
+import { downloadNuscenesExport } from '@/api/export'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import type { TabId } from '@/components/layout/Header'
@@ -20,6 +21,7 @@ interface ScenePageProps {
 
 export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
   const [selectedLogToken, setSelectedLogToken] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const currentMapLocation = useViewerStore((s) => s.currentMapLocation)
   const currentSceneToken  = useViewerStore((s) => s.currentSceneToken)
@@ -56,6 +58,31 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
     onTabChange(tab)
   }
 
+  const handleExport = async (token: string | null) => {
+    // 全シーン export の場合は確認ダイアログを表示
+    if (token === null) {
+      const ok = window.confirm(
+        'Exporting all scenes may take several minutes for large datasets. Continue?'
+      )
+      if (!ok) return
+    }
+
+    try {
+      setExporting(true)
+      const { warningCount } = await downloadNuscenesExport(token)
+      if (warningCount > 0) {
+        alert(
+          `Export completed with ${warningCount} warning(s). ` +
+          `Please check WARNINGS.txt inside the ZIP file for details.`
+        )
+      }
+    } catch (e) {
+      alert(`Export failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const navButtons = (
     <>
       <Button
@@ -85,6 +112,29 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
     </>
   )
 
+  const exportButtons = (
+    <div className="p-3 flex flex-col gap-2">
+      <Button
+        size="sm"
+        className="w-full text-white text-xs"
+        style={{ backgroundColor: '#4A90D9' }}
+        disabled={!currentSceneToken || exporting}
+        onClick={() => handleExport(currentSceneToken)}
+      >
+        {exporting ? 'Exporting...' : 'Export Scene as JSON'}
+      </Button>
+      <Button
+        size="sm"
+        className="w-full text-white text-xs"
+        style={{ backgroundColor: '#2D6FA8' }}
+        disabled={exporting}
+        onClick={() => handleExport(null)}
+      >
+        {exporting ? 'Exporting...' : 'Export All as JSON'}
+      </Button>
+    </div>
+  )
+
   return (
     <MainLayout
       activeTab={activeTab}
@@ -98,6 +148,7 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
               onFilterChange={setSelectedLogToken}
             />
           }
+          footer={exportButtons}
         >
           <SceneList
             scenes={filteredScenes}

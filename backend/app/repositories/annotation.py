@@ -32,34 +32,47 @@ class AnnotationRepository:
     ) -> tuple[int, list[SampleAnnotation]]:
         """SampleAnnotation 全件をマージ済みで返す.
 
-        単純化のため: 削除済みは結果から除外, add edits は末尾に追加.
-        total は (元 - 削除) + add の数.
-        ページングは大まかな実装. 厳密な順序整合性は限定的.
+        [add edits（created_at昇順）] + [visible base（削除を除いた元データ, token昇順）]
+        を1つの仮想リストとみなし、その全体に対して limit/offset でページングする。
+        新規追加分を先頭に置くことで、limit を超過させずに常に一覧へ反映させる。
+        total は (元 - 削除) + 追加.
         """
         # 全 edits を取得
         edits_result = await self.db.execute(select(AnnotationEdit))
         edits = list(edits_result.scalars().all())
 
-        delete_set = {e.base_token for e in edits if e.edit_type == 'delete' and e.base_token}
-        adds_count = sum(1 for e in edits if e.edit_type == 'add')
+        delete_set   = {e.base_token for e in edits if e.edit_type == 'delete' and e.base_token}
+        modify_edits = [e for e in edits if e.edit_type == 'modify']
+        adds = sorted(
+            (e for e in edits if e.edit_type == 'add'),
+            key=lambda e: (e.created_at, e.token),
+        )
 
         # total: 元 - 削除 + 追加
         original_total = (await self.db.execute(
             select(func.count()).select_from(SampleAnnotation)
         )).scalar_one()
-        total = original_total - len(delete_set) + adds_count
+        visible_base_count = original_total - len(delete_set)
+        total = visible_base_count + len(adds)
 
-        # ページングしてベースを取得 (削除は SQL では除外しないでマージ時に対応)
-        result = await self.db.execute(
-            _base_query()
-            .order_by(SampleAnnotation.token)
-            .limit(limit)
-            .offset(offset)
-        )
-        base_anns = list(result.scalars().all())
+        # 仮想リストの [offset, offset+limit) を add / base に振り分ける
+        adds_limit = max(0, min(limit, len(adds) - offset))
+        adds_page = adds[offset: offset + adds_limit]
+
+        base_offset = max(0, offset - len(adds))
+        base_limit  = limit - len(adds_page)
+        base_anns: list[SampleAnnotation] = []
+        if base_limit > 0:
+            q = _base_query()
+            if delete_set:
+                q = q.where(SampleAnnotation.token.notin_(delete_set))
+            result = await self.db.execute(
+                q.order_by(SampleAnnotation.token).limit(base_limit).offset(base_offset)
+            )
+            base_anns = list(result.scalars().all())
 
         # マージ
-        merged = await merge_annotations(self.db, base_anns, edits)
+        merged = await merge_annotations(self.db, base_anns, modify_edits + adds_page)
         return total, merged
 
     async def get_by_token(self, token: str) -> SampleAnnotation | None:
@@ -199,7 +212,13 @@ class AnnotationRepository:
         scene_token: str | None = None,
         category_name: str | None = None,
     ) -> tuple[int, list[Instance]]:
-        """Instance + InstanceEdit を統合し, ページング後の Instance のみ動的計算した stats を含めて返す."""
+        """
+        Instance + InstanceEdit を統合し, ページング後の Instance のみ動的計算した stats を含めて返す.
+
+        > annotationの扱い:
+        > scene_token指定時: annotationが0個のinstanceは出力対象外 (孤立instanceの除外)
+        > scene_token非指定時: annotationが0個のinstanceも出力対象 (全instanceの出力)
+        """
         # 既存 Instance クエリ
         q = (
             select(Instance)

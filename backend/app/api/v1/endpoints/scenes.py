@@ -44,6 +44,11 @@ async def get_scene_samples(token: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{token}/ego-poses", response_model=list[SampleEgoPoseResponse])
 async def get_scene_ego_poses(token: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get ego poses for all samples in the scene, sorted by timestamp.
+
+    Each ego pose uses LIDAR_TOP if it exists, otherwise uses the oldest available ego_pose.
+    """
     repo = SceneRepository(db)
     scene = await repo.get_by_token(token)
     if not scene:

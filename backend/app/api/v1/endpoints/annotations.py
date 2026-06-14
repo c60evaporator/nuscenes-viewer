@@ -128,6 +128,9 @@ async def delete_annotation(
 
     削除対象の prev/next を読み取り, それぞれの隣接 annotation の
     next/prev も更新して chain の整合性を保つ.
+
+    > annotationが0になった孤立instanceは削除しない（Undoしたくなったときのため残す）
+    > 孤立instanceはDB上に残り続けることに注意が必要だが、GETエンドポイントのレスポンスやJSON出力から除外する等で対応済
     """
     ann_repo  = AnnotationRepository(db)
     edit_repo = AnnotationEditRepository(db)

@@ -93,7 +93,12 @@ export default function SampleMapViewer({
         ) : isLidar && sensorBrief ? (
           <PointCloudCanvas
             sampleDataToken={sensorBrief.token}
-            egoPose={egoPose}
+            egoPose={{
+              sample_token: currentSampleToken ?? '',
+              timestamp:    0,
+              translation:  sensorBrief.ego_pose.translation,
+              rotation:     sensorBrief.ego_pose.rotation,
+            }}
             lidarCalibSensor={lidarCalibArray}
             annotations={[]}
             className="w-full h-full"

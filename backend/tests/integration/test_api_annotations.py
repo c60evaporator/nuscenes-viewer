@@ -6,6 +6,7 @@
 from httpx import AsyncClient
 
 from app.models.annotation import SampleAnnotation
+from app.models.annotation_edit import AnnotationEdit
 
 
 _ANN_TOKEN = "ann-anntest-001"
@@ -32,6 +33,16 @@ async def test_list_annotations_limit_restricts_count(client: AsyncClient, sampl
     body = resp.json()
     assert len(body["items"]) == 1
     assert body["limit"] == 1
+
+
+async def test_list_annotations_limit_restricts_count_with_add_edit(
+    client: AsyncClient,
+    sample_annotation: SampleAnnotation,
+    annotation_edit_add: AnnotationEdit,
+):
+    """add edit が存在していても、limit=1 のとき items は 1件のみ返ること。"""
+    resp = await client.get("/api/v1/annotations?limit=1")
+    assert len(resp.json()["items"]) == 1
 
 
 async def test_list_annotations_offset_shifts_results(client: AsyncClient, sample_annotation: SampleAnnotation):

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Group, Panel, Separator } from 'react-resizable-panels'
 import MapCanvas from '@/components/common/MapCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
@@ -9,6 +10,9 @@ import { rankCamerasByScore } from '@/lib/cameraSelection'
 import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 import type { Annotation } from '@/types/annotation'
+
+const H_SEP = 'h-1 bg-[#374151] hover:bg-blue-400 cursor-row-resize transition-colors'
+const V_SEP = 'w-1 bg-[#374151] hover:bg-blue-400 cursor-col-resize transition-colors'
 
 interface AnnotationViewerProps {
   sampleToken:   string | null
@@ -61,7 +65,6 @@ export default function AnnotationViewer({
   const currentEgoPose = getSampleEgoPose(sampleDataMap, sceneEgoPoses, sampleToken)
 
   // LiDAR
-  // calibSensorMap は token キーなので、sampleDataMap の calibrated_sensor_token で引く
   const lidarBrief = sampleDataMap?.['LIDAR_TOP']
   const lidarCalib = lidarBrief?.calibrated_sensor_token
     ? calibSensorMap[lidarBrief.calibrated_sensor_token]
@@ -84,7 +87,6 @@ export default function AnnotationViewer({
   const bestCameraSensor = rankedCameras[0]
 
   // Camera (1st best)
-  // チャンネル選択後、calibrated_sensor_token でサンプルに紐づく正確なキャリブを取得
   const cameraBrief   = bestCameraSensor ? sampleDataMap?.[bestCameraSensor.channel] : undefined
   const cameraCalib   = cameraBrief?.calibrated_sensor_token
     ? calibSensorMap[cameraBrief.calibrated_sensor_token]
@@ -105,89 +107,107 @@ export default function AnnotationViewer({
   }
 
   return (
-    <div className="flex w-full h-full">
-      {/* 左列: カメラ + Map（各 1/2） */}
-      <div className="flex-1 min-w-0 flex flex-col" style={{ borderRight: '1px solid #374151' }}>
-        {/* 最適カメラ */}
-        <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900" style={{ borderBottom: '1px solid #374151' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-            {bestCameraSensor?.channel ?? 'CAMERA'}
-          </div>
-          {bestCameraSensor && cameraBrief && cameraCalib ? (
-            <CameraImageCanvas
-              sampleDataToken={cameraBrief.token}
-              calibratedSensor={cameraCalib}
-              egoPose={cameraEgoPose}
-              annotations={sampleAnnotations}
-              highlightInstanceToken={instanceToken ?? undefined}
-              editingInstanceToken={editingInstanceToken}
-              onBBoxClick={handleBBoxClick}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="Please select an instance" />
-          )}
-        </div>
+    <Group orientation="horizontal" className="w-full h-full">
+      {/* 左列: カメラ + Map */}
+      <Panel defaultSize={50}>
+        <Group orientation="vertical" className="h-full">
+          {/* 最適カメラ */}
+          <Panel defaultSize={50}>
+            <div className="w-full h-full relative overflow-hidden bg-gray-900">
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
+                {bestCameraSensor?.channel ?? 'CAMERA'}
+              </div>
+              {bestCameraSensor && cameraBrief && cameraCalib ? (
+                <CameraImageCanvas
+                  sampleDataToken={cameraBrief.token}
+                  calibratedSensor={cameraCalib}
+                  egoPose={cameraEgoPose}
+                  annotations={sampleAnnotations}
+                  highlightInstanceToken={instanceToken ?? undefined}
+                  editingInstanceToken={editingInstanceToken}
+                  onBBoxClick={handleBBoxClick}
+                  className="w-full h-full"
+                />
+              ) : (
+                <Placeholder text="Please select an instance" />
+              )}
+            </div>
+          </Panel>
 
-        {/* 地図（現在サンプルの ego pose） */}
-        <div className="flex-1 min-h-0 relative overflow-hidden">
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>EGO POSE</div>
-          {location && currentEgoPose ? (
-            <MapCanvas
-              location={location}
-              egoPoses={sceneEgoPoses.length > 0 ? sceneEgoPoses : [currentEgoPose]}
-              currentIndex={sceneEgoPoses.findIndex((p) => p.sample_token === sampleToken)}
-              showStartEnd={false}
-              centerPoint={[currentEgoPose.translation[0], currentEgoPose.translation[1]]}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No Map" />
-          )}
-        </div>
-      </div>
+          <Separator className={H_SEP} />
 
-      {/* 右列: LIDAR（上 1/2） + Three.js 予約スペース（下 1/2） */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* LIDAR BEV */}
-        <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900" style={{ borderBottom: '1px solid #374151' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>LIDAR_TOP</div>
-          {lidarBrief ? (
-            <PointCloudCanvas
-              sampleDataToken={lidarBrief.token}
-              annotations={sampleAnnotations}
-              egoPose={currentEgoPose}
-              lidarCalibSensor={lidarCalibArray}
-              highlightInstanceToken={instanceToken ?? undefined}
-              editingInstanceToken={editingInstanceToken}
-              onBBoxClick={handleBBoxClick}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No LIDAR_TOP" />
-          )}
-        </div>
+          {/* 地図（現在サンプルの ego pose） */}
+          <Panel defaultSize={50}>
+            <div className="w-full h-full relative overflow-hidden">
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>EGO POSE</div>
+              {location && currentEgoPose ? (
+                <MapCanvas
+                  location={location}
+                  egoPoses={sceneEgoPoses.length > 0 ? sceneEgoPoses : [currentEgoPose]}
+                  currentIndex={sceneEgoPoses.findIndex((p) => p.sample_token === sampleToken)}
+                  showStartEnd={false}
+                  centerPoint={[currentEgoPose.translation[0], currentEgoPose.translation[1]]}
+                  className="w-full h-full"
+                />
+              ) : (
+                <Placeholder text="No Map" />
+              )}
+            </div>
+          </Panel>
+        </Group>
+      </Panel>
 
-        {/* Three.js 3D点群表示 */}
-        <div className="flex-1 min-h-0 relative overflow-hidden bg-gray-900">
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-            3D VIEW
-          </div>
-          {lidarBrief ? (
-            <AnnotationThreeView
-              sampleDataToken={lidarBrief.token}
-              annotations={sampleAnnotations}
-              egoPose={currentEgoPose}
-              lidarCalibSensor={lidarCalibArray}
-              highlightInstanceToken={instanceToken ?? undefined}
-              editingInstanceToken={editingInstanceToken}
-              onBBoxClick={handleBBoxClick}
-            />
-          ) : (
-            <Placeholder text="No LIDAR_TOP" />
-          )}
-        </div>
-      </div>
-    </div>
+      <Separator className={V_SEP} />
+
+      {/* 右列: LIDAR + Three.js 3D VIEW */}
+      <Panel defaultSize={50}>
+        <Group orientation="vertical" className="h-full">
+          {/* LIDAR BEV */}
+          <Panel defaultSize={50}>
+            <div className="w-full h-full relative overflow-hidden bg-gray-900">
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>LIDAR_TOP</div>
+              {lidarBrief ? (
+                <PointCloudCanvas
+                  sampleDataToken={lidarBrief.token}
+                  annotations={sampleAnnotations}
+                  egoPose={currentEgoPose}
+                  lidarCalibSensor={lidarCalibArray}
+                  highlightInstanceToken={instanceToken ?? undefined}
+                  editingInstanceToken={editingInstanceToken}
+                  onBBoxClick={handleBBoxClick}
+                  className="w-full h-full"
+                />
+              ) : (
+                <Placeholder text="No LIDAR_TOP" />
+              )}
+            </div>
+          </Panel>
+
+          <Separator className={H_SEP} />
+
+          {/* Three.js 3D点群表示 */}
+          <Panel defaultSize={50}>
+            <div className="w-full h-full relative overflow-hidden bg-gray-900">
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
+                3D VIEW
+              </div>
+              {lidarBrief ? (
+                <AnnotationThreeView
+                  sampleDataToken={lidarBrief.token}
+                  annotations={sampleAnnotations}
+                  egoPose={currentEgoPose}
+                  lidarCalibSensor={lidarCalibArray}
+                  highlightInstanceToken={instanceToken ?? undefined}
+                  editingInstanceToken={editingInstanceToken}
+                  onBBoxClick={handleBBoxClick}
+                />
+              ) : (
+                <Placeholder text="No LIDAR_TOP" />
+              )}
+            </div>
+          </Panel>
+        </Group>
+      </Panel>
+    </Group>
   )
 }

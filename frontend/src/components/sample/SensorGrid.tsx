@@ -1,6 +1,10 @@
+import { Group, Panel, Separator } from 'react-resizable-panels'
 import SensorCell from './SensorCell'
 import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor, EgoPosePoint, SensorDataMap } from '@/types/sensor'
+
+const H_SEP = 'h-1 bg-[#374151] hover:bg-blue-400 cursor-row-resize transition-colors'
+const V_SEP = 'w-1 bg-[#374151] hover:bg-blue-400 cursor-col-resize transition-colors'
 
 export type GridConfig = string[][]
 
@@ -41,31 +45,43 @@ export default function SensorGrid({
     )
   }
 
+  const rowElements = config.flatMap((row, ri) => {
+    const rowEl = (
+      <Panel key={`row-${ri}`} defaultSize={100 / config.length}>
+        <Group orientation="horizontal" className="h-full">
+          {row.flatMap((channel, ci) => {
+            const cellEl = (
+              <Panel key={`cell-${ri}-${ci}`} defaultSize={100 / row.length}>
+                <div className="w-full h-full relative overflow-hidden">
+                  <SensorCell
+                    channel={channel}
+                    sampleToken={sampleToken}
+                    sampleDataMap={sampleDataMap}
+                    annotations={annotations}
+                    egoPoses={egoPoses}
+                    calibSensorMap={calibSensorMap}
+                    location={location}
+                    onBBoxClick={onBBoxClick}
+                    highlightInstanceToken={highlightInstanceToken}
+                  />
+                </div>
+              </Panel>
+            )
+            return ci === 0
+              ? [cellEl]
+              : [<Separator key={`vsep-${ri}-${ci}`} className={V_SEP} />, cellEl]
+          })}
+        </Group>
+      </Panel>
+    )
+    return ri === 0
+      ? [rowEl]
+      : [<Separator key={`hsep-${ri}`} className={H_SEP} />, rowEl]
+  })
+
   return (
-    <div className="flex flex-col w-full h-full">
-      {config.map((row, rowIdx) => (
-        <div key={rowIdx} className="flex flex-1 min-h-0">
-          {row.map((channel) => (
-            <div
-              key={channel}
-              className="flex-1 min-w-0 relative"
-              style={{ border: '1px solid #374151' }}
-            >
-              <SensorCell
-                channel={channel}
-                sampleToken={sampleToken}
-                sampleDataMap={sampleDataMap}
-                annotations={annotations}
-                egoPoses={egoPoses}
-                calibSensorMap={calibSensorMap}
-                location={location}
-                onBBoxClick={onBBoxClick}
-                highlightInstanceToken={highlightInstanceToken}
-              />
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
+    <Group orientation="vertical" className="w-full h-full">
+      {rowElements}
+    </Group>
   )
 }

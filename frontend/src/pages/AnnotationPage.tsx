@@ -50,6 +50,12 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const [selectedSampleToken,   setSelectedSampleToken]   = useState<string | null>(lockedSampleToken ?? null)
   const [selectedInstanceToken, setSelectedInstanceToken] = useState<string | null>(lockedInstanceToken ?? null)
 
+  // Skip モードの錨（最初に「Add BBox to next/prev」を押したときのアノテーショントークン）
+  const [skipAnchor, setSkipAnchor] = useState<{
+    direction:   'next' | 'prev'
+    anchorToken: string
+  } | null>(null)
+
   // リスト選択 state（左ペインのリストで選択した値）
   const [listSelectedSampleToken,   setListSelectedSampleToken]   = useState<string | null>(null)
   // Sample画面から遷移時はviewerStoreの選択インスタンスを初期値として引き継ぐ
@@ -244,6 +250,11 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       prevEffectiveInstanceTokenRef.current = effectiveInstanceToken
   }, [effectiveInstanceToken, endSession])
 
+  // editMode が view に戻ったら skipAnchor をリセット
+  useEffect(() => {
+    if (editMode === 'view') setSkipAnchor(null)
+  }, [editMode])
+
   // Viewer に渡す sampleToken / instanceToken
   // add モード + instance フィルタ時は editSession.fixedSampleToken（prev/next）を優先
   const viewSampleToken = (editMode === 'add' && editSession?.fixedSampleToken)
@@ -290,6 +301,30 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     && listSelectedSampleToken !== null
     && listSelectedSampleToken === instanceLastSampleToken
     && nextSampleToken !== null
+  // Skip ボタン（Instance フィルタ + add モード時）
+  const currentFixedIdx = editSession
+    ? samples.findIndex((s) => s.token === editSession.fixedSampleToken)
+    : -1
+  const canSkipToNext =
+    editMode === 'add' &&
+    hasInstanceFilter &&
+    editSession !== null &&
+    (
+      skipAnchor?.direction === 'next' ||
+      (skipAnchor === null && editSession.fixedSampleToken === nextSampleToken)
+    ) &&
+    currentFixedIdx >= 0 &&
+    currentFixedIdx < samples.length - 1
+  const canSkipToPrev =
+    editMode === 'add' &&
+    hasInstanceFilter &&
+    editSession !== null &&
+    (
+      skipAnchor?.direction === 'prev' ||
+      (skipAnchor === null && editSession.fixedSampleToken === prevSampleToken)
+    ) &&
+    currentFixedIdx > 0
+
   // Sample フィルタ時: 選択インスタンスの先頭・末尾サンプルが現在のサンプルかどうか
   const sampleModeFirstToken = sampleModeInstanceAnns?.[0]?.sample_token ?? null
   const sampleModeLastToken  = sampleModeInstanceAnns?.[sampleModeInstanceAnns.length - 1]?.sample_token ?? null
@@ -337,6 +372,14 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
 
     // Instance フィルタ時 (Add BBox to prev/next)
     if (hasInstanceFilter && editSession.fixedSampleToken) {
+      // skip モード中: 錨を使う（fixedSampleToken 比較より先に判定）
+      if (skipAnchor?.direction === 'next') {
+        return { addModePrev: skipAnchor.anchorToken, addModeNext: null }
+      }
+      if (skipAnchor?.direction === 'prev') {
+        return { addModePrev: null, addModeNext: skipAnchor.anchorToken }
+      }
+
       if (editSession.fixedSampleToken === prevSampleToken) {
         const firstAnn = (instanceAnnotationsRaw ?? [])[0]
         return { addModePrev: null, addModeNext: firstAnn?.token ?? null }
@@ -364,8 +407,49 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     return { addModePrev: null, addModeNext: null }
   }, [
     editMode, editSession, hasInstanceFilter, prevSampleToken, nextSampleToken, instanceAnnotationsRaw,
-    prevSampleAnnotationsForAdd, nextSampleAnnotationsForAdd,
+    prevSampleAnnotationsForAdd, nextSampleAnnotationsForAdd, skipAnchor,
   ])
+
+  // Skip 用: 対象サンプルの ego pose 位置に translation を合わせた template を生成
+  const makeSkipTemplate = (targetSampleToken: string): Annotation => {
+    const draft = editSession!.draft
+    const ep = egoPoses?.find((p) => p.sample_token === targetSampleToken)
+    const translation = ep
+      ? [ep.translation[0], ep.translation[1], ep.translation[2] + draft.size[2] / 2]
+      : draft.translation
+    return { ...draft, token: '', sample_token: targetSampleToken, translation }
+  }
+
+  const handleSkipToNext = () => {
+    if (!editSession || currentFixedIdx < 0 || currentFixedIdx >= samples.length - 1) return
+    const newToken = samples[currentFixedIdx + 1].token
+    if (skipAnchor === null) {
+      const annList = instanceAnnotationsRaw ?? []
+      const lastAnn = annList[annList.length - 1]
+      setSkipAnchor({ direction: 'next', anchorToken: lastAnn?.token ?? '' })
+    }
+    startAddSession({
+      template:             makeSkipTemplate(newToken),
+      fixedSampleToken:     newToken,
+      fixedInstanceToken:   editSession.fixedInstanceToken,
+      isInstanceSelectable: false,
+    })
+  }
+
+  const handleSkipToPrev = () => {
+    if (!editSession || currentFixedIdx <= 0) return
+    const newToken = samples[currentFixedIdx - 1].token
+    if (skipAnchor === null) {
+      const firstAnn = (instanceAnnotationsRaw ?? [])[0]
+      setSkipAnchor({ direction: 'prev', anchorToken: firstAnn?.token ?? '' })
+    }
+    startAddSession({
+      template:             makeSkipTemplate(newToken),
+      fixedSampleToken:     newToken,
+      fixedInstanceToken:   editSession.fixedInstanceToken,
+      isInstanceSelectable: false,
+    })
+  }
 
   // Case 3 用: InstanceSummary → Instance 型マッピング
   const instanceListItems = useMemo<Instance[]>(
@@ -621,6 +705,26 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   style={{ background: '#374151', cursor: 'not-allowed', opacity: 0.5, minWidth: '80px' }}
                 >
                   Add BBox
+                </button>
+              )}
+
+              {/* Skip and Add BBox to next/prev（add モード + instance フィルタ + さらに飛ばせる場合） */}
+              {canSkipToNext && (
+                <button
+                  className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                  style={{ background: '#2D6FA8', cursor: 'pointer', minWidth: '80px' }}
+                  onClick={handleSkipToNext}
+                >
+                  Skip and Add BBox to next
+                </button>
+              )}
+              {canSkipToPrev && (
+                <button
+                  className="flex-1 py-1.5 text-xs font-medium rounded text-white"
+                  style={{ background: '#2D6FA8', cursor: 'pointer', minWidth: '80px' }}
+                  onClick={handleSkipToPrev}
+                >
+                  Skip and Add BBox to prev
                 </button>
               )}
             </div>

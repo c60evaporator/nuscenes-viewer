@@ -345,7 +345,7 @@ export default function CameraImageCanvas({
         ? '#FF8C00'
         : ann.instance_token === highlightInstanceToken
           ? '#FFFF00'
-          : '#00AAFF'
+          : '#4ADE80'
       if (isEditingAnn) ctx.globalAlpha = ANNOTATION.EDITING_ORIGINAL_OPACITY
       drawBBox2D(ctx, corners2D, color)
 

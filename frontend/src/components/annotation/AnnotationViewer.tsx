@@ -125,7 +125,7 @@ export default function AnnotationViewer({
               className="w-full h-full"
             />
           ) : (
-            <Placeholder text="No Camera" />
+            <Placeholder text="Please select an instance" />
           )}
         </div>
 

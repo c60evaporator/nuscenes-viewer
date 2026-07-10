@@ -9,6 +9,7 @@ export interface Scene {
   first_sample_token: string
   last_sample_token:  string
   log_token:   string
+  is_user_created: boolean   // 初回インポート=false / ユーザ追加=true
 }
 
 export interface Sample {

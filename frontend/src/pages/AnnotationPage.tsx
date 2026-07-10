@@ -251,9 +251,9 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   }, [effectiveInstanceToken, endSession])
 
   // editMode が view に戻ったら skipAnchor をリセット
-  useEffect(() => {
-    if (editMode === 'view') setSkipAnchor(null)
-  }, [editMode])
+  if (editMode === 'view' && skipAnchor !== null) {
+    setSkipAnchor(null)
+  }
 
   // Viewer に渡す sampleToken / instanceToken
   // add モード + instance フィルタ時は editSession.fixedSampleToken（prev/next）を優先
@@ -355,11 +355,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const { data: egoPoses } = useSceneEgoPoses(selectedSceneToken)
 
   // 編集中BBoxに対応するego_pose（AnnotationEditPanel の並進ボタン用）
-  const editingEgoPose = useMemo(() => {
-    const st = editSession?.fixedSampleToken
-    if (!st || !egoPoses) return null
-    return egoPoses.find((p) => p.sample_token === st) ?? null
-  }, [editSession?.fixedSampleToken, egoPoses])
+  const editingSampleToken = editSession?.fixedSampleToken
+  const editingEgoPose = editingSampleToken && egoPoses
+    ? egoPoses.find((p) => p.sample_token === editingSampleToken) ?? null
+    : null
 
   const deleteAnnotation = useDeleteAnnotation()
 

@@ -215,7 +215,7 @@ export default function AnnotationThreeView({
                         color={
                             ann.instance_token === editingInstanceToken  ? '#FF8C00'
                             : ann.instance_token === highlightInstanceToken ? '#FFD700'
-                            : '#00FF88'
+                            : '#4ADE80'
                         }
                         lineWidth={ann.instance_token === editingInstanceToken ? 2 : 1.5}
                         onClick={onBBoxClick}

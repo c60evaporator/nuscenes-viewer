@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Group, Panel, Separator } from 'react-resizable-panels'
 import MapCanvas from '@/components/common/MapCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
@@ -7,6 +8,9 @@ import { rankCamerasByScore } from '@/lib/cameraSelection'
 import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import type { InstanceAnnotation } from '@/types/annotation'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
+
+const H_SEP = 'h-1 bg-[#374151] hover:bg-blue-400 cursor-row-resize transition-colors'
+const V_SEP = 'w-1 bg-[#374151] hover:bg-blue-400 cursor-col-resize transition-colors'
 
 interface InstanceViewerProps {
   instanceToken:     string | null
@@ -84,9 +88,6 @@ export default function InstanceViewer({
 
   const bestCameraSensor = rankedCameras[0]
 
-  // Camera (1st best)
-  // rankCamerasByScore でチャンネルを選択し、calibrated_sensor_token で正確なキャリブを取得
-  // （calibSensorMap は token キーなので、サンプルデータに紐づく正確なセンサーを参照できる）
   const cameraBrief   = bestCameraSensor ? sampleDataMap?.[bestCameraSensor.channel] : undefined
   const cameraCalib   = cameraBrief?.calibrated_sensor_token
     ? calibSensorMap[cameraBrief.calibrated_sensor_token]
@@ -110,84 +111,102 @@ export default function InstanceViewer({
   }
 
   return (
-    <div className="flex flex-col w-full h-full">
+    <Group orientation="vertical" className="w-full h-full">
       {/* 上 2/3: Camera + LiDAR */}
-      <div className="flex min-h-0" style={{ flex: '2 0 0' }}>
-        {/* Camera (best) */}
-        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900" style={{ borderRight: '1px solid #374151' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-            {bestCameraSensor?.channel ?? 'CAMERA'}
-          </div>
-          {bestCameraSensor && cameraBrief && cameraCalib ? (
-            <CameraImageCanvas
-              sampleDataToken={cameraBrief.token}
-              calibratedSensor={cameraCalib}
-              egoPose={cameraEgoPose}
-              annotations={sampleAnnotations ?? []}
-              highlightInstanceToken={highlightInstanceToken}
-              onBBoxClick={onBBoxClick}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No Camera" />
-          )}
-        </div>
+      <Panel defaultSize={67}>
+        <Group orientation="horizontal" className="h-full">
+          {/* Camera (best) */}
+          <Panel defaultSize={50}>
+            <div className="w-full h-full relative overflow-hidden bg-gray-900">
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
+                {bestCameraSensor?.channel ?? 'CAMERA'}
+              </div>
+              {bestCameraSensor && cameraBrief && cameraCalib ? (
+                <CameraImageCanvas
+                  sampleDataToken={cameraBrief.token}
+                  calibratedSensor={cameraCalib}
+                  egoPose={cameraEgoPose}
+                  annotations={sampleAnnotations ?? []}
+                  highlightInstanceToken={highlightInstanceToken}
+                  onBBoxClick={onBBoxClick}
+                  className="w-full h-full"
+                />
+              ) : (
+                <Placeholder text="No Camera" />
+              )}
+            </div>
+          </Panel>
 
-        {/* LiDAR BEV */}
-        <div className="flex-1 min-w-0 relative overflow-hidden bg-gray-900">
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>LIDAR_TOP</div>
-          {lidarBrief ? (
-            <PointCloudCanvas
-              sampleDataToken={lidarBrief.token}
-              annotations={sampleAnnotations ?? []}
-              egoPose={currentEgoPose}
-              lidarCalibSensor={lidarCalibArray}
-              highlightInstanceToken={highlightInstanceToken}
-              onBBoxClick={onBBoxClick}
-              location={location}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No LIDAR_TOP" />
-          )}
-        </div>
-      </div>
+          <Separator className={V_SEP} />
+
+          {/* LiDAR BEV */}
+          <Panel defaultSize={50}>
+            <div className="w-full h-full relative overflow-hidden bg-gray-900">
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>LIDAR_TOP</div>
+              {lidarBrief ? (
+                <PointCloudCanvas
+                  sampleDataToken={lidarBrief.token}
+                  annotations={sampleAnnotations ?? []}
+                  egoPose={currentEgoPose}
+                  lidarCalibSensor={lidarCalibArray}
+                  highlightInstanceToken={highlightInstanceToken}
+                  onBBoxClick={onBBoxClick}
+                  location={location}
+                  className="w-full h-full"
+                />
+              ) : (
+                <Placeholder text="No LIDAR_TOP" />
+              )}
+            </div>
+          </Panel>
+        </Group>
+      </Panel>
+
+      <Separator className={H_SEP} />
 
       {/* 下 1/3: 地図 × 2 */}
-      <div className="flex min-h-0" style={{ flex: '1 0 0', borderTop: '1px solid #374151' }}>
-        {/* 左: Scene全軌跡地図（現在 ego pose を強調） */}
-        <div className="flex-1 min-w-0 relative overflow-hidden" style={{ borderRight: '1px solid #374151' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>EGO POSE (scene)</div>
-          {location && currentEgoPose ? (
-            <MapCanvas
-              location={location}
-              egoPoses={sceneEgoPoses.length > 0 ? sceneEgoPoses : [currentEgoPose]}
-              currentIndex={sceneEgoPoses.findIndex((p) => p.sample_token === sampleToken)}
-              showStartEnd={false}
-              centerPoint={[currentEgoPose.translation[0], currentEgoPose.translation[1]]}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No Map" />
-          )}
-        </div>
+      <Panel defaultSize={33}>
+        <Group orientation="horizontal" className="h-full">
+          {/* 左: Scene全軌跡地図（現在 ego pose を強調） */}
+          <Panel defaultSize={50}>
+            <div className="w-full h-full relative overflow-hidden">
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>EGO POSE (scene)</div>
+              {location && currentEgoPose ? (
+                <MapCanvas
+                  location={location}
+                  egoPoses={sceneEgoPoses.length > 0 ? sceneEgoPoses : [currentEgoPose]}
+                  currentIndex={sceneEgoPoses.findIndex((p) => p.sample_token === sampleToken)}
+                  showStartEnd={false}
+                  centerPoint={[currentEgoPose.translation[0], currentEgoPose.translation[1]]}
+                  className="w-full h-full"
+                />
+              ) : (
+                <Placeholder text="No Map" />
+              )}
+            </div>
+          </Panel>
 
-        {/* 右: クロップ地図（全インスタンス ego pose） */}
-        <div className="flex-1 min-w-0 relative overflow-hidden">
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>EGO POSES (instance)</div>
-          {location && instanceEgoPoses.length > 0 ? (
-            <MapCanvas
-              location={location}
-              egoPoses={instanceEgoPoses}
-              currentIndex={currentInstanceEgoPoseIndex}
-              showStartEnd={false}
-              className="w-full h-full"
-            />
-          ) : (
-            <Placeholder text="No Map" />
-          )}
-        </div>
-      </div>
-    </div>
+          <Separator className={V_SEP} />
+
+          {/* 右: クロップ地図（全インスタンス ego pose） */}
+          <Panel defaultSize={50}>
+            <div className="w-full h-full relative overflow-hidden">
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>EGO POSES (instance)</div>
+              {location && instanceEgoPoses.length > 0 ? (
+                <MapCanvas
+                  location={location}
+                  egoPoses={instanceEgoPoses}
+                  currentIndex={currentInstanceEgoPoseIndex}
+                  showStartEnd={false}
+                  className="w-full h-full"
+                />
+              ) : (
+                <Placeholder text="No Map" />
+              )}
+            </div>
+          </Panel>
+        </Group>
+      </Panel>
+    </Group>
   )
 }

@@ -242,7 +242,7 @@ export default function PointCloudCanvas({
           ? '#FF8C00'
           : ann.instance_token === highlightInstanceToken
             ? '#FFD700'
-            : '#00FF88'
+            : '#4ADE80'
         if (isEditingAnn) ctx.globalAlpha = ANNOTATION.EDITING_ORIGINAL_OPACITY
         drawBBox2D(ctx, corners2D, color)
         // 矢印描画

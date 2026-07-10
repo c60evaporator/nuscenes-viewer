@@ -32,6 +32,10 @@ class CalibratedSensor(Base):
     rotation:    Mapped[list] = mapped_column(JSON, nullable=False)  # [w, x, y, z]
     # 内部パラメータ（カメラのみ。LiDAR/RADARはnull）
     camera_intrinsic: Mapped[list | None] = mapped_column(JSON, nullable=True)  # 3x3 matrix
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
+    )
     # Relationships
     sensor:      Mapped["Sensor"]           = relationship(back_populates="calibrated_sensors")
     sample_data: Mapped[list["SampleData"]] = relationship(
@@ -50,6 +54,10 @@ class EgoPose(Base):
     # グローバル座標系での位置・姿勢
     translation: Mapped[list] = mapped_column(JSON, nullable=False)  # [x, y, z]
     rotation:    Mapped[list] = mapped_column(JSON, nullable=False)  # [w, x, y, z]
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
+    )
     # Relationships
     sample_data: Mapped[list["SampleData"]] = relationship(
         back_populates="ego_pose",
@@ -90,6 +98,10 @@ class SampleData(Base):
     )
     next: Mapped[str | None] = mapped_column(
         ForeignKey("sample_data.token", ondelete="SET NULL"), nullable=True
+    )
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
     )
     # Relationships
     sample:            Mapped["Sample"]           = relationship(back_populates="sample_data")

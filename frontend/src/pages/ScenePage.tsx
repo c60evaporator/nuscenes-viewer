@@ -114,24 +114,44 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
 
   const exportButtons = (
     <div className="p-3 flex flex-col gap-2">
+      <div className="flex flex-row gap-2">
+        <Button
+          size="sm"
+          className="flex-1 text-white text-[11px]"
+          style={{ backgroundColor: '#4A90D9' }}
+          disabled
+        >
+          Add Scene
+        </Button>
+        <Button
+          size="sm"
+          className="flex-1 text-white text-[11px]"
+          style={{ backgroundColor: '#C0392B' }}
+          disabled={!currentSceneToken}
+        >
+          Delete Scene
+        </Button>
+      </div>
+      <div className="flex flex-row gap-2">
       <Button
         size="sm"
-        className="w-full text-white text-xs"
+        className="flex-1 text-white text-[11px]"
         style={{ backgroundColor: '#4A90D9' }}
         disabled={!currentSceneToken || exporting}
         onClick={() => handleExport(currentSceneToken)}
       >
-        {exporting ? 'Exporting...' : 'Export Scene as JSON'}
+        {exporting ? 'Exporting...' : 'Export Scene JSON'}
       </Button>
       <Button
         size="sm"
-        className="w-full text-white text-xs"
+        className="flex-1 text-white text-[11px]"
         style={{ backgroundColor: '#2D6FA8' }}
         disabled={exporting}
         onClick={() => handleExport(null)}
       >
-        {exporting ? 'Exporting...' : 'Export All as JSON'}
+        {exporting ? 'Exporting...' : 'Export All Scenes'}
       </Button>
+      </div>
     </div>
   )
 

@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Integer, BigInteger, ForeignKey, Text
+from sqlalchemy import String, Integer, BigInteger, Boolean, ForeignKey, Text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base
 
@@ -17,6 +17,10 @@ class Log(Base):
     vehicle:      Mapped[str] = mapped_column(String, nullable=False)
     date_captured: Mapped[str] = mapped_column(String, nullable=False)
     location:     Mapped[str] = mapped_column(String, nullable=False)  # 'boston-seaport' etc.
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
+    )
     # Relationships
     scenes: Mapped[list["Scene"]] = relationship(
         back_populates="log",
@@ -38,6 +42,10 @@ class Scene(Base):
     nbr_samples: Mapped[int] = mapped_column(Integer, nullable=False)
     first_sample_token: Mapped[str] = mapped_column(String, nullable=False)
     last_sample_token:  Mapped[str] = mapped_column(String, nullable=False)
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
+    )
     # Relationships
     log:     Mapped["Log"]          = relationship(back_populates="scenes")
     samples: Mapped[list["Sample"]] = relationship(
@@ -62,6 +70,10 @@ class Sample(Base):
     )
     next: Mapped[str | None] = mapped_column(
         ForeignKey("samples.token", ondelete="SET NULL"), nullable=True
+    )
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
     )
     # Relationships
     scene:       Mapped["Scene"]                  = relationship(back_populates="samples")

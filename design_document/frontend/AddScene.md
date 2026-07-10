@@ -29,7 +29,6 @@ scene.json/sample.json/sample_data.json/ego_pose.json/log.json/calibrated_sensor
     - JSONパースができるか
     - 全てlogのlocationが現状のmap_metaテーブルレコードのlocationに存在するか
     - 全てのsampleのscene_tokenがscenes.jsonのtokenに存在するか
-    - 全てのsample_dataのsample_tokenがsamples.jsonのtokenに存在するか。ego_pose_tokenがego_pose.jsonのtokenに存在するか。calibrated_sensor_tokenがcalibrated_sensor.jsonに存在するか
     - 全てのcalibrated_sensorのsensor_tokenがsensorsテーブルレコードのtokenに存在するか
 
 ```

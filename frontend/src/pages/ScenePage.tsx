@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import LeftPane from '@/components/layout/LeftPane'
 import RightPane from '@/components/layout/RightPane'
@@ -6,9 +6,12 @@ import SceneFilter from '@/components/scene/SceneFilter'
 import SceneList from '@/components/scene/SceneList'
 import SceneInfo from '@/components/scene/SceneInfo'
 import SceneViewer from '@/components/scene/SceneViewer'
+import AddSceneModal from '@/components/scene/AddSceneModal'
 import { Button } from '@/components/ui/button'
 import { useScenes } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
+import { useMaps } from '@/api/maps'
+import { useSensors } from '@/api/sensors'
 import { downloadNuscenesExport } from '@/api/export'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
@@ -22,6 +25,10 @@ interface ScenePageProps {
 export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
   const [selectedLogToken, setSelectedLogToken] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [addSceneOpen, setAddSceneOpen] = useState(false)
+  // Import 成功後、新 scene 名を保持 → 再フェッチ後に token 解決してスクロール＆選択
+  const [pendingScrollName, setPendingScrollName] = useState<string | null>(null)
+  const [scrollToToken, setScrollToToken] = useState<string | null>(null)
 
   const currentMapLocation = useViewerStore((s) => s.currentMapLocation)
   const currentSceneToken  = useViewerStore((s) => s.currentSceneToken)
@@ -30,6 +37,20 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
 
   const { data: logsData   } = useLogsByLocation(currentMapLocation)
   const { data: scenesData } = useScenes({ limit: 500 })
+  const { data: mapsData    } = useMaps({ limit: 100 })
+  const { data: sensorsData } = useSensors()
+
+  // バリデーション用の参照セット
+  const validLocations = useMemo(
+    () => new Set((mapsData?.items ?? []).map((m) => m.location)),
+    [mapsData],
+  )
+  const validSensorTokens = useMemo(
+    () => new Set((sensorsData?.items ?? []).map((s) => s.token)),
+    [sensorsData],
+  )
+  // 参照データ（location / sensor）が揃うまではバリデーションを走らせない
+  const refDataReady = !!mapsData && !!sensorsData
 
   // ロケーション内の log token セット
   const locationLogTokens = useMemo(
@@ -51,6 +72,17 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
     () => filteredScenes.find((s) => s.token === currentSceneToken) ?? null,
     [filteredScenes, currentSceneToken],
   )
+
+  // Import 後: 再フェッチされた一覧から新 scene の token を解決し、選択＆スクロール
+  useEffect(() => {
+    if (!pendingScrollName) return
+    const added = filteredScenes.find((s) => s.name === pendingScrollName)
+    if (added) {
+      setScene(added.token)
+      setScrollToToken(added.token)
+      setPendingScrollName(null)
+    }
+  }, [pendingScrollName, filteredScenes, setScene])
 
   const navigate = (tab: TabId) => {
     if (!currentSceneToken) return
@@ -119,7 +151,7 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
           size="sm"
           className="flex-1 text-white text-[11px]"
           style={{ backgroundColor: '#4A90D9' }}
-          disabled
+          onClick={() => setAddSceneOpen(true)}
         >
           Add Scene
         </Button>
@@ -174,6 +206,7 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
             scenes={filteredScenes}
             currentSceneToken={currentSceneToken}
             onSelect={setScene}
+            scrollToToken={scrollToToken}
           />
         </LeftPane>
       }
@@ -187,6 +220,14 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
         sceneToken={currentSceneToken}
         location={currentMapLocation}
         allSceneTokens={filteredScenes.map((s) => s.token)}
+      />
+      <AddSceneModal
+        open={addSceneOpen}
+        onClose={() => setAddSceneOpen(false)}
+        validLocations={validLocations}
+        validSensorTokens={validSensorTokens}
+        refReady={refDataReady}
+        onImported={(r) => setPendingScrollName(r.added_scene_names[0] ?? null)}
       />
     </MainLayout>
   )

@@ -1,12 +1,22 @@
+import { useEffect, useRef } from 'react'
 import type { Scene } from '@/types/scene'
 
 interface SceneListProps {
   scenes:            Scene[]
   currentSceneToken: string | null
   onSelect:          (token: string) => void
+  scrollToToken?:    string | null   // 指定 token の項目を可視域までスクロール（Import 後の新 scene 用）
 }
 
-export default function SceneList({ scenes, currentSceneToken, onSelect }: SceneListProps) {
+export default function SceneList({ scenes, currentSceneToken, onSelect, scrollToToken }: SceneListProps) {
+  const itemRefs = useRef<Map<string, HTMLLIElement>>(new Map())
+
+  useEffect(() => {
+    if (!scrollToToken) return
+    const el = itemRefs.current.get(scrollToToken)
+    if (el) el.scrollIntoView({ block: 'center' })
+  }, [scrollToToken, scenes])
+
   if (scenes.length === 0) {
     return (
       <p className="p-3 text-gray-400 text-xs">シーンがありません</p>
@@ -28,6 +38,10 @@ export default function SceneList({ scenes, currentSceneToken, onSelect }: Scene
         return (
           <li
             key={scene.token}
+            ref={(el) => {
+              if (el) itemRefs.current.set(scene.token, el)
+              else    itemRefs.current.delete(scene.token)
+            }}
             onClick={() => onSelect(scene.token)}
             className="px-3 py-2 cursor-pointer hover:bg-blue-50 transition-colors"
             style={{

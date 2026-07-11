@@ -8,7 +8,8 @@ import SceneInfo from '@/components/scene/SceneInfo'
 import SceneViewer from '@/components/scene/SceneViewer'
 import AddSceneModal from '@/components/scene/AddSceneModal'
 import { Button } from '@/components/ui/button'
-import { useScenes } from '@/api/scenes'
+import { useScenes, useDeleteScene } from '@/api/scenes'
+import { ApiError } from '@/api/client'
 import { useLogsByLocation } from '@/api/logs'
 import { useMaps } from '@/api/maps'
 import { useSensors } from '@/api/sensors'
@@ -84,6 +85,30 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
     }
   }, [pendingScrollName, filteredScenes, setScene])
 
+  const deleteScene = useDeleteScene()
+
+  const handleDeleteScene = async () => {
+    if (!selectedScene) return
+    const ok = window.confirm(
+      `Delete "${selectedScene.name}"? This action cannot be undone.`
+    )
+    if (!ok) return
+
+    try {
+      const r = await deleteScene.mutateAsync(selectedScene.token)
+      setScene(null)
+      alert(`${r.deleted_scene_name} and its related records are deleted`)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 403) {
+        alert('Only user-added scenes can be deleted.')
+      } else if (e instanceof ApiError && e.status === 404) {
+        alert('Scene not found. It may have already been deleted.')
+      } else {
+        alert(`Delete failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+      }
+    }
+  }
+
   const navigate = (tab: TabId) => {
     if (!currentSceneToken) return
     lock('scene', { sceneToken: currentSceneToken })
@@ -155,14 +180,25 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
         >
           Add Scene
         </Button>
-        <Button
-          size="sm"
-          className="flex-1 text-white text-[11px]"
-          style={{ backgroundColor: '#C0392B' }}
-          disabled={!currentSceneToken}
+        {/* disabled ボタンはマウスイベントを発火しないため、ツールチップはラッパーに付ける */}
+        <div
+          className="flex-1"
+          title={
+            selectedScene && !selectedScene.is_user_created
+              ? 'Only user-added scenes can be deleted'
+              : undefined
+          }
         >
-          Delete Scene
-        </Button>
+          <Button
+            size="sm"
+            className="w-full text-white text-[11px]"
+            style={{ backgroundColor: '#C0392B' }}
+            disabled={!selectedScene?.is_user_created || deleteScene.isPending}
+            onClick={handleDeleteScene}
+          >
+            {deleteScene.isPending ? 'Deleting...' : 'Delete Scene'}
+          </Button>
+        </div>
       </div>
       <div className="flex flex-row gap-2">
       <Button

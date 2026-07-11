@@ -137,7 +137,7 @@ export default function AddSceneModal({
             <>
               {/* フォルダ選択 */}
               <p className="text-xs text-gray-500 mb-2">
-                6 個の JSON（scene / sample / sample_data / ego_pose / log / calibrated_sensor）を含むフォルダを選択してください。
+                Please select a folder containing JSON files (scene / sample / sample_data / ego_pose / log / calibrated_sensor.json).
               </p>
               <input
                 ref={inputRef}

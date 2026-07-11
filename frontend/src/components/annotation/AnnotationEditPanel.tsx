@@ -14,7 +14,7 @@ import {
 } from '@/lib/bboxEditOps'
 import { resolveDefaultSize } from '@/lib/bboxDefaults'
 import { useEditStore } from '@/store/editStore'
-import { ANNOTATION } from '@/config/settings'
+import { compareCategoryOrder } from '@/lib/categoryOrder'
 import type { Annotation } from '@/types/annotation'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -251,15 +251,10 @@ export default function AnnotationEditPanel({
   const { data: visibilities = [] } = useVisibilities()
   const { data: attributes   = [] } = useAttributes()
   const { data: categories   = [] } = useCategories()
-  const sortedCategories = useMemo(() => {
-    const orderMap = new Map(ANNOTATION.CATEGORY_ORDER.map((name, i) => [name, i]))
-    return [...categories].sort((a, b) => {
-      const ai = orderMap.has(a.name) ? orderMap.get(a.name)! : Infinity
-      const bi = orderMap.has(b.name) ? orderMap.get(b.name)! : Infinity
-      if (ai !== bi) return ai - bi
-      return a.name.localeCompare(b.name)
-    })
-  }, [categories])
+  const sortedCategories = useMemo(
+    () => [...categories].sort((a, b) => compareCategoryOrder(a.name, b.name)),
+    [categories],
+  )
   const { data: samples      = [] } = useSceneSamples(sceneToken)
   const { data: instancesRes }      = useInstances({ sceneToken: sceneToken ?? undefined, limit: 500 })
   const instances = instancesRes?.items ?? []

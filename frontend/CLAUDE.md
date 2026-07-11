@@ -71,7 +71,7 @@ nuscenes-viewerのフロントエンド
 
 ### 3. Instance
 - `Map Selection`プルダウンメニューで選択したMapに紐づくInstance情報を表示する
-- 左側のペインにInstanceの一覧をリスト表示（ソートはカテゴリ→名前順）。クリックで特定のInstanceを選択できるようにする
+- 左側のペインにInstanceの一覧をリスト表示（ソートは`frontend/config/settings.yml`の`annotation.category_order`の順番）。クリックで特定のInstanceを選択できるようにする
 - 左側のペイン上側にプルダウンメニューのSceneフィルタを設置し、リスト表示対象のInstanceを絞れるようにする。デフォルト値は最初のScene。Scene画面から`Instances`ボタンで遷移した場合、このフィルタは変更できないようにする（操作するためには一度画面上側のタブで別画面に遷移する必要がある）
 - Sceneフィルタの下にCategoryフィルタを設置（フィルタなしをデフォルトの選択肢にする）
 - 左側のペイン下部には、選択インスタンスを含むサンプルを選択するためのSliderを設置（サンプルは時間順で並び替える）。このSliderで選択されたサンプルのアノテーションを、中央のメイン画面で表示する
@@ -84,7 +84,7 @@ nuscenes-viewerのフロントエンド
 
 ### 4. Annotation
 - `Map Selection`プルダウンメニューで選択したMapに紐づくAnnotation情報を表示する
-- 左側のペインにAnnotationの一覧をリスト表示（ソートはカテゴリ→名前順）。クリックで特定のAnnotationを選択できるようにする
+- 左側のペインにAnnotationの一覧をリスト表示。Instance画面から`Annotations`ボタンで遷移した場合はアノテーションのSample一覧を、それ以外の場合はアノテーションのInstance一覧をリスト表示する。クリックで特定のAnnotationを選択できるようにする
 - 左側のペイン上側にプルダウンメニューのSceneフィルタを設置し、リスト表示対象のInstanceを絞れるようにする。デフォルト値は最初のScene。Sample画面またはInstance画面から`Annotations`ボタンで遷移した場合、このフィルタは変更できないようにする（操作するためには一度画面上側のタブで別画面に遷移する必要がある）
 - Sceneフィルタの下にSampleフィルタを設置（`Annotations`ボタンで遷移していない場合、フィルタなしをデフォルトの選択肢にする）。Sample画面から`Annotations`ボタンで遷移した場合、このフィルタは変更できないようにする（操作するためには一度画面上側のタブで別画面に遷移する必要がある）
 - Sampleフィルタの下にInstanceフィルタを設置（`Annotations`ボタンで遷移していない場合、フィルタなしをデフォルトの選択肢にする）。Instance画面から`Annotations`ボタンで遷移した場合、このフィルタは変更できないようにする（操作するためには一度画面上側のタブで別画面に遷移する必要がある）

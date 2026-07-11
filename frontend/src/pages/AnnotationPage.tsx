@@ -17,6 +17,7 @@ import { useInstanceAnnotations } from '@/api/instances'
 import { useCalibratedSensors } from '@/api/sensors'
 import { resolveDefaultSize } from '@/lib/bboxDefaults'
 import { rankCamerasByScore, sortCameraChannels, pickDefaultCameraChannel } from '@/lib/cameraSelection'
+import { compareCategoryOrder } from '@/lib/categoryOrder'
 import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
@@ -530,15 +531,20 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   }
 
   // Case 3 用: InstanceSummary → Instance 型マッピング
+  // settings.yml annotation.category_order の順に表示（同一カテゴリ内は token 順）
   const instanceListItems = useMemo<Instance[]>(
-    () => (instanceSummaries ?? []).map((is) => ({
-      token:                  is.instance_token,
-      category_token:         '',
-      category_name:          is.category_name,
-      nbr_annotations:        is.nbr_annotations,
-      first_annotation_token: null,
-      last_annotation_token:  null,
-    })),
+    () => (instanceSummaries ?? [])
+      .map((is) => ({
+        token:                  is.instance_token,
+        category_token:         '',
+        category_name:          is.category_name,
+        nbr_annotations:        is.nbr_annotations,
+        first_annotation_token: null,
+        last_annotation_token:  null,
+      }))
+      .sort((a, b) =>
+        compareCategoryOrder(a.category_name, b.category_name) || a.token.localeCompare(b.token)
+      ),
     [instanceSummaries],
   )
 

@@ -14,6 +14,7 @@ import { useInstances, useInstanceAnnotations } from '@/api/instances'
 import { useSampleAnnotations } from '@/api/samples'
 import { useCategories } from '@/api/categories'
 import { useCalibratedSensors } from '@/api/sensors'
+import { compareCategoryOrder } from '@/lib/categoryOrder'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import type { CalibratedSensor } from '@/types/sensor'
@@ -78,9 +79,12 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
     }
   }
 
-  // カテゴリリスト
+  // カテゴリリスト（settings.yml annotation.category_order の順に表示）
   const { data: categoriesData } = useCategories()
-  const categories = categoriesData ?? []
+  const categories = useMemo(
+    () => [...(categoriesData ?? [])].sort((a, b) => compareCategoryOrder(a.name, b.name)),
+    [categoriesData],
+  )
 
   // インスタンスリスト
   const { data: instancesData } = useInstances({
@@ -88,7 +92,13 @@ export default function InstancePage({ activeTab, onTabChange }: InstancePagePro
     categoryName: selectedCategoryName ?? undefined,
     limit: 200,
   })
-  const instances = instancesData?.items ?? []
+  // settings.yml annotation.category_order の順に表示（同一カテゴリ内は token 順）
+  const instances = useMemo(
+    () => [...(instancesData?.items ?? [])].sort((a, b) =>
+      compareCategoryOrder(a.category_name, b.category_name) || a.token.localeCompare(b.token)
+    ),
+    [instancesData],
+  )
 
   // 選択インスタンスのアノテーション（timestamp 昇順）
   const { data: annotationsRaw } = useInstanceAnnotations(currentInstanceToken)

@@ -78,11 +78,12 @@ class SampleData(Base):
     sample_token:            Mapped[str] = mapped_column(
         ForeignKey("samples.token", ondelete="CASCADE"), nullable=False
     )
+    # RESTRICT FK の参照チェック（親削除時のトリガ）を index scan にするため index=True
     calibrated_sensor_token: Mapped[str] = mapped_column(
-        ForeignKey("calibrated_sensors.token", ondelete="RESTRICT"), nullable=False
+        ForeignKey("calibrated_sensors.token", ondelete="RESTRICT"), nullable=False, index=True
     )
     ego_pose_token:          Mapped[str] = mapped_column(
-        ForeignKey("ego_poses.token", ondelete="RESTRICT"), nullable=False
+        ForeignKey("ego_poses.token", ondelete="RESTRICT"), nullable=False, index=True
     )
     # データファイル参照
     filename:     Mapped[str]  = mapped_column(String, nullable=False)
@@ -93,11 +94,12 @@ class SampleData(Base):
     width:  Mapped[int | None] = mapped_column(nullable=True)
     height: Mapped[int | None] = mapped_column(nullable=True)
     # 隣接フレーム参照：参照先が消えても行は残す
+    # SET NULL トリガ（行削除ごとの WHERE prev/next=$1）を index scan にするため index=True
     prev: Mapped[str | None] = mapped_column(
-        ForeignKey("sample_data.token", ondelete="SET NULL"), nullable=True
+        ForeignKey("sample_data.token", ondelete="SET NULL"), nullable=True, index=True
     )
     next: Mapped[str | None] = mapped_column(
-        ForeignKey("sample_data.token", ondelete="SET NULL"), nullable=True
+        ForeignKey("sample_data.token", ondelete="SET NULL"), nullable=True, index=True
     )
     # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
     is_user_created: Mapped[bool] = mapped_column(

@@ -12,10 +12,12 @@ import { ApiError } from '@/api/client'
 import { useCategories } from '@/api/categories'
 import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
-import { useSamples, useSampleInstances, useSampleAnnotations } from '@/api/samples'
+import { useSamples, useSampleInstances, useSampleAnnotations, useSampleSensorData } from '@/api/samples'
 import { useInstanceAnnotations } from '@/api/instances'
 import { useCalibratedSensors } from '@/api/sensors'
 import { resolveDefaultSize } from '@/lib/bboxDefaults'
+import { rankCamerasByScore, sortCameraChannels, pickDefaultCameraChannel } from '@/lib/cameraSelection'
+import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import { useEditStore } from '@/store/editStore'
@@ -365,6 +367,83 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // キーボードショートカット
   useEditKeyboardShortcuts({ egoPose: editingEgoPose })
 
+  // ── Sensor フィルタ ─────────────────────────────────────────────────────
+  const [selectedSensorChannel, setSelectedSensorChannel] = useState<string | null>(null)
+  const { data: viewSampleDataMap } = useSampleSensorData(viewSampleToken)
+
+  // 表示サンプルで利用可能なカメラチャンネル（camera_intrinsic を持つセンサーのみ、標準順）
+  const cameraChannels = useMemo(() => {
+    const channels = Object.entries(viewSampleDataMap ?? {})
+      .filter(([, brief]) => calibSensorMap[brief.calibrated_sensor_token]?.camera_intrinsic != null)
+      .map(([channel]) => channel)
+    return sortCameraChannels(channels)
+  }, [viewSampleDataMap, calibSensorMap])
+
+  const viewEgoPose = useMemo(
+    () => getSampleEgoPose(viewSampleDataMap, egoPoses ?? [], viewSampleToken),
+    [viewSampleDataMap, egoPoses, viewSampleToken],
+  )
+
+  // Sensor フィルタは Sample が選択されているときのみ有効
+  const sensorEnabled = hasSampleFilter || (hasInstanceFilter && listSelectedSampleToken !== null)
+
+  // デフォルト選択（派生 state）: 未選択、またはサンプル切替で現チャンネルが消えた場合
+  if (
+    cameraChannels.length > 0 &&
+    (selectedSensorChannel === null || !cameraChannels.includes(selectedSensorChannel))
+  ) {
+    setSelectedSensorChannel(pickDefaultCameraChannel(cameraChannels))
+  }
+
+  // アノテーション選択変更 → 最良カメラを自動選択（派生 state、rankCamerasByScore を再利用）
+  // データ未ロードで計算できなかった場合もロード完了後の再レンダーで適用されるよう、
+  // 「適用済み annotation token」を持ち重複適用を防ぐ
+  const [appliedBestCameraAnn, setAppliedBestCameraAnn] = useState<string | null>(null)
+  const selectedAnnToken = selectedAnnotation?.token ?? null
+  if (selectedAnnToken === null) {
+    if (appliedBestCameraAnn !== null) setAppliedBestCameraAnn(null)
+  } else if (
+    appliedBestCameraAnn !== selectedAnnToken &&
+    viewEgoPose &&
+    cameraChannels.length > 0
+  ) {
+    const ranked = rankCamerasByScore(
+      selectedAnnotation!.translation,
+      viewEgoPose,
+      Object.values(calibSensorMap),
+    )
+    const best = ranked.find((cs) => cameraChannels.includes(cs.channel))
+    if (best) {
+      setSelectedSensorChannel(best.channel)
+      setAppliedBestCameraAnn(selectedAnnToken)
+    }
+  }
+
+  // 編集・追加モード時: BBox の移動（translation 変化）に追従して最良カメラへ自動切替
+  // （派生 state。編集中に手動で Sensor を変えても、次に BBox を動かすまでは維持される）
+  const editingTranslationKey = isEditing && currentAnnotation
+    ? currentAnnotation.translation.join(',')
+    : null
+  const [appliedEditTranslation, setAppliedEditTranslation] = useState<string | null>(null)
+  if (editingTranslationKey === null) {
+    if (appliedEditTranslation !== null) setAppliedEditTranslation(null)
+  } else if (
+    appliedEditTranslation !== editingTranslationKey &&
+    viewEgoPose &&
+    cameraChannels.length > 0
+  ) {
+    const ranked = rankCamerasByScore(
+      currentAnnotation!.translation,
+      viewEgoPose,
+      Object.values(calibSensorMap),
+    )
+    const best = ranked.find((cs) => cameraChannels.includes(cs.channel))
+    if (best) {
+      setSelectedSensorChannel(best.channel)
+      setAppliedEditTranslation(editingTranslationKey)
+    }
+  }
+
   // add モード時の prev/next 候補
   const { addModePrev, addModeNext } = useMemo(() => {
     if (editMode !== 'add' || !editSession) return { addModePrev: null, addModeNext: null }
@@ -484,6 +563,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                 selectedInstanceToken={effectiveInstanceToken}
                 onInstanceChange={setSelectedInstanceToken}
                 instanceTokenLocked={instanceTokenLocked}
+                cameraChannels={cameraChannels}
+                selectedSensorChannel={selectedSensorChannel}
+                onSensorChange={setSelectedSensorChannel}
+                sensorDisabled={!sensorEnabled}
               />
             </div>
           }
@@ -771,6 +854,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       <AnnotationViewer
         sampleToken={viewSampleToken}
         instanceToken={viewInstanceToken}
+        cameraChannel={selectedSensorChannel}
         location={currentMapLocation}
         calibSensorMap={calibSensorMap}
         sceneEgoPoses={egoPoses ?? []}

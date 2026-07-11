@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { computeCameraScore, rankCamerasByScore } from '@/lib/cameraSelection'
+import {
+    computeCameraScore,
+    rankCamerasByScore,
+    CAMERA_CHANNEL_ORDER,
+    sortCameraChannels,
+    pickDefaultCameraChannel,
+} from '@/lib/cameraSelection'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 
 const baseEgo: EgoPosePoint = {
@@ -78,5 +84,41 @@ describe('rankCamerasByScore', () => {
             { ...makeCamera('LIDAR_TOP', [1, 0, 0, 0]), camera_intrinsic: null },
         ]
         expect(rankCamerasByScore([0, 0, 10], baseEgo, cams)).toEqual([])
+    })
+})
+
+describe('sortCameraChannels', () => {
+    it('nuScenes 標準6カメラを規定順に整列する', () => {
+        const shuffled = [
+            'CAM_BACK', 'CAM_FRONT', 'CAM_BACK_RIGHT',
+            'CAM_FRONT_LEFT', 'CAM_BACK_LEFT', 'CAM_FRONT_RIGHT',
+        ]
+        expect(sortCameraChannels(shuffled)).toEqual(CAMERA_CHANNEL_ORDER)
+    })
+
+    it('標準外チャンネルは末尾にアルファベット順で並ぶ', () => {
+        expect(sortCameraChannels(['CAM_ZOOM', 'CAM_FRONT', 'CAM_AUX'])).toEqual([
+            'CAM_FRONT', 'CAM_AUX', 'CAM_ZOOM',
+        ])
+    })
+
+    it('元配列を破壊しない', () => {
+        const input = ['CAM_BACK', 'CAM_FRONT']
+        sortCameraChannels(input)
+        expect(input).toEqual(['CAM_BACK', 'CAM_FRONT'])
+    })
+})
+
+describe('pickDefaultCameraChannel', () => {
+    it('CAM_FRONT があれば CAM_FRONT を返す', () => {
+        expect(pickDefaultCameraChannel(['CAM_BACK', 'CAM_FRONT', 'CAM_BACK_LEFT'])).toBe('CAM_FRONT')
+    })
+
+    it('CAM_FRONT がなければ標準順の先頭を返す', () => {
+        expect(pickDefaultCameraChannel(['CAM_BACK', 'CAM_FRONT_RIGHT'])).toBe('CAM_FRONT_RIGHT')
+    })
+
+    it('空配列なら null を返す', () => {
+        expect(pickDefaultCameraChannel([])).toBeNull()
     })
 })

@@ -26,6 +26,12 @@ interface AnnotationFilterProps {
   selectedInstanceToken: string | null
   onInstanceChange:     (token: string | null) => void
   instanceTokenLocked:  boolean
+
+  // Sensor フィルタ（中央ペインのカメラ画像チャンネル）
+  cameraChannels:        string[]
+  selectedSensorChannel: string | null
+  onSensorChange:        (channel: string) => void
+  sensorDisabled:        boolean
 }
 
 const ALL = '__all__'
@@ -43,6 +49,10 @@ export default function AnnotationFilter({
   selectedInstanceToken,
   onInstanceChange,
   instanceTokenLocked,
+  cameraChannels,
+  selectedSensorChannel,
+  onSensorChange,
+  sensorDisabled,
 }: AnnotationFilterProps) {
   return (
     <div className="space-y-2">
@@ -136,6 +146,30 @@ export default function AnnotationFilter({
             </SelectContent>
           </Select>
         )}
+      </div>
+
+      {/* Sensor（中央ペインのカメラ画像チャンネル。Sample 選択時のみ有効） */}
+      <div>
+        <div className="flex items-center gap-1 mb-1">
+          <p className="text-gray-300 text-xs font-medium">Sensor</p>
+        </div>
+        <Select
+          value={selectedSensorChannel ?? ''}
+          onValueChange={onSensorChange}
+          disabled={sensorDisabled}
+        >
+          <SelectTrigger
+            className="h-8 text-xs border-gray-500 text-white"
+            style={{ backgroundColor: sensorDisabled ? '#4a4a4a' : '#374151' }}
+          >
+            <SelectValue placeholder="Select a sensor" />
+          </SelectTrigger>
+          <SelectContent>
+            {cameraChannels.map((ch) => (
+              <SelectItem key={ch} value={ch} className="text-xs">{ch}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   )

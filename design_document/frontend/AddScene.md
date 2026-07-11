@@ -136,10 +136,10 @@ class SceneImportResult(BaseModel):
     - 1. リクエスト中のscene_tokenがscenesテーブルに存在するかを確認。存在しなければ 404を返す。また当該sceneの`is_user_created=True`かをサーバー側でも再確認し、`is_user_created=false`なら403 Forbiddenで拒否レスポンス
     - 2. （以降のStep2, Step3はまとめて`async with session.begin():`に包み、途中失敗なら全ロールバック）scenesテーブルの当該tokenのレコードを削除。CASCADE経路で紐づいたsamples, sample_data, sample_annotation, およびannotation_editsが全て削除される。ただし一部テーブルのレコードははこの時点では削除されないので、Step3で明示削除
     - 3. Step2で削除されなかった以下のテーブルのレコードを削除
-        - ego_pose: 残った他sample_dataから参照されておらず、かつis_user_createdがfalseのレコードを削除
-        - calibrated_sensor: 残った他sample_dataから参照されておらず、かつis_user_createdがfalseのレコードを削除
-        - logs: 残った他sceneから参照されておらず、かつis_user_createdがfalseのレコードを削除
-        - instance_edits: 残ったannotation_editsから参照されていないレコードを削除（）
+        - ego_pose: 残った他sample_dataから参照されておらず、かつ`is_user_created`がtrueのレコードを削除
+        - calibrated_sensor: 残った他sample_dataから参照されておらず、かつ`is_user_created`がtrueのレコードを削除
+        - logs: 残った他sceneから参照されておらず、かつ`is_user_created`がtrueのレコードを削除
+        - instance_edits: 残ったannotation_editsから参照されていないレコードを削除（instance_editsには`is_user_created`列は存在しないので判定条件に含めない）
     - 4. 削除したレコード数を集計して以下形式のレスポンスを返す。
 
 ```python

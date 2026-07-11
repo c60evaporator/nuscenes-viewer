@@ -6,8 +6,10 @@ from app.dependencies import get_db
 from app.repositories.scene import SceneRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.scene import SceneResponse, SampleResponse
+from app.schemas.scene_delete import SceneDeleteResult
 from app.schemas.scene_import import SceneImportResult
 from app.schemas.sensor import SampleEgoPoseResponse
+from app.services.scene_delete_service import delete_scene as delete_scene_service
 from app.services.scene_import_service import import_scenes_from_json
 
 router = APIRouter(prefix="/scenes", tags=["scenes"])
@@ -55,6 +57,16 @@ async def list_scenes(
         offset=offset,
         items=[SceneConverter.to_response(s) for s in scenes],
     )
+
+
+@router.delete("/{token}", response_model=SceneDeleteResult)
+async def delete_scene(token: str, db: AsyncSession = Depends(get_db)):
+    """ユーザ追加 scene を依存レコードごと削除する（1 トランザクション）.
+
+    - 404: scene が存在しない
+    - 403: is_user_created=false（初回インポート scene は削除不可）
+    """
+    return await delete_scene_service(db, token)
 
 
 @router.get("/{token}", response_model=SceneResponse)

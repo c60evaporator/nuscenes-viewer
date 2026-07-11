@@ -12,6 +12,10 @@
 ### スキーマの修正
 
 - scenes / ego_poses / calibrated_sensors / logs / samples / sample_dataテーブルに`is_user_created`列を追加（削除判定に使用。samples / sample_dataテーブルはCASCADE自動削除されるため削除判定にこの列は使用しないが、ユーザ追加したレコードかを区別するために念の為追加しておく）
+- Delete処理を高速化するため、以下にインデックスを貼る（scene削除時の手動削除対象レコード検索に関連したカラム）
+    - scenesテーブルのlog_token
+    - samplesテーブルのprev, next
+    - sample_dataテーブルのprev, next, calibrated_sensor_token, ego_pose_token
 
 ### Create
 

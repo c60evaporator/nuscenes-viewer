@@ -139,13 +139,27 @@ export default function AddSceneModal({
               <p className="text-xs text-gray-500 mb-2">
                 Please select a folder containing JSON files (scene / sample / sample_data / ego_pose / log / calibrated_sensor.json).
               </p>
+              <div className="flex items-center gap-2 mb-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs"
+                  disabled={submitting || !refReady}
+                  onClick={() => inputRef.current?.click()}
+                >
+                  Select Folder
+                </Button>
+                <span className="text-xs text-gray-500">
+                  {perFile ? `${perFile.length} files selected` : 'No folder selected'}
+                </span>
+              </div>
               <input
                 ref={inputRef}
                 type="file"
                 multiple
                 onChange={handleFolderSelect}
                 disabled={submitting || !refReady}
-                className="text-xs mb-3 block"
+                className="hidden"
                 // webkitdirectory は React の型に無いため属性を明示注入
                 {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
               />
@@ -232,15 +246,15 @@ function ImportSummary({ result }: { result: SceneImportResult }) {
   const range =
     names.length === 0 ? '' :
     names.length === 1 ? names[0] :
-    `${names[0]} 〜 ${names[names.length - 1]}`
+    `${names[0]} – ${names[names.length - 1]}`
   return (
     <div className="font-mono text-xs">
-      <p className="text-green-700 font-semibold mb-1">✅ インポート完了</p>
+      <p className="text-green-700 font-semibold mb-1">✅ Import complete</p>
       <p className="mb-2">
-        追加された Scene: {result.imported_counts['scenes'] ?? names.length} 件
+        Added scenes: {result.imported_counts['scenes'] ?? names.length}
         {range && <><br />{'  '}{range}</>}
       </p>
-      <p className="text-gray-500 mb-1">内訳:</p>
+      <p className="text-gray-500 mb-1">Breakdown:</p>
       <ul className="space-y-0.5">
         {COUNT_ORDER.filter(([key]) => key in result.imported_counts).map(([key, label]) => (
           <li key={key}>

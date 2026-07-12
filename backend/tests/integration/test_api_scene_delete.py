@@ -4,27 +4,16 @@
 （test_api_scene_import のヘルパーを再利用）または db_session への直接 INSERT で行う。
 エンドポイント内の commit は外側トランザクションの rollback（fixture teardown）で巻き戻される。
 """
-import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.annotation import Category
 from app.models.annotation_edit import AnnotationEdit, InstanceEdit
-from app.models.map import MapMeta
 from app.models.scene import Log, Scene
-from app.models.sensor import CalibratedSensor, EgoPose, Sensor
+from app.models.sensor import CalibratedSensor, EgoPose
 from tests.integration.test_api_scene_import import _make_payload, _to_files
 
 _P = "test-scndel"
-
-
-@pytest.fixture
-async def ref_data(db_session: AsyncSession) -> dict[str, str]:
-    """DB に実在する location / sensor_token を取得."""
-    location = (await db_session.execute(select(MapMeta.location).limit(1))).scalar_one()
-    sensor_token = (await db_session.execute(select(Sensor.token).limit(1))).scalar_one()
-    return {"location": location, "sensor_token": sensor_token}
 
 
 async def _import(client: AsyncClient, payload: dict) -> None:
@@ -113,8 +102,7 @@ class TestSceneDeleteSuccess:
         scene_token  = payload["scene.json"][0]["token"]
         sample_token = payload["sample.json"][0]["token"]
 
-        category_token = (await db_session.execute(select(Category.token).limit(1))).scalar_one()
-        inst_edit = InstanceEdit(token=f"{_P}-instedit-1", category_token=category_token)
+        inst_edit = InstanceEdit(token=f"{_P}-instedit-1", category_token=ref_data["category_token"])
         db_session.add(inst_edit)
         await db_session.flush()
         db_session.add(AnnotationEdit(

@@ -5,13 +5,7 @@ conftest の client / db_session を利用する。エンドポイント内の c
 """
 import json
 
-import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.map import MapMeta
-from app.models.sensor import Sensor
 
 _P = "test-scnimp"   # 既存 DB の 32-hex token と衝突しない prefix
 
@@ -77,14 +71,6 @@ def _to_files(payload: dict[str, list[dict]]) -> dict[str, tuple[str, bytes, str
         key_map[name]: (name, json.dumps(rows).encode(), "application/json")
         for name, rows in payload.items()
     }
-
-
-@pytest.fixture
-async def ref_data(db_session: AsyncSession) -> dict[str, str]:
-    """DB に実在する location / sensor_token を取得."""
-    location = (await db_session.execute(select(MapMeta.location).limit(1))).scalar_one()
-    sensor_token = (await db_session.execute(select(Sensor.token).limit(1))).scalar_one()
-    return {"location": location, "sensor_token": sensor_token}
 
 
 class TestSceneImportSuccess:

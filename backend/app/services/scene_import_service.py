@@ -122,21 +122,21 @@ async def import_scenes_from_json(
 
     valid_locations   = await repo.get_map_locations()
     valid_sensor_toks = await repo.get_sensor_tokens()
-    existing_log_toks = await repo.get_existing_tokens(Log, [l.token for l in logs])
+    existing_log_toks = await repo.get_existing_tokens(Log, [log.token for log in logs])
     existing_cs_toks  = await repo.get_existing_tokens(CalibratedSensor, [c.token for c in css])
 
     scene_toks  = {s.token for s in scenes}
     sample_toks = {s.token for s in samples}
     sd_toks     = {s.token for s in sds}
     ep_toks     = {e.token for e in eps}
-    log_toks    = {l.token for l in logs}
+    log_toks    = {log.token for log in logs}
     cs_toks     = {c.token for c in css}
 
     # 2-a. log.location ∈ map_meta
-    for l in logs:
-        if l.location not in valid_locations:
-            errors.add("log_location", file="log.json", token=l.token,
-                       message=f"未知の location: {l.location}")
+    for log in logs:
+        if log.location not in valid_locations:
+            errors.add("log_location", file="log.json", token=log.token,
+                       message=f"未知の location: {log.location}")
 
     # 2-b. calibrated_sensor.sensor_token ∈ sensors テーブル
     for c in css:
@@ -195,7 +195,7 @@ async def import_scenes_from_json(
         _raise_422(errors)
 
     # ── 3./4. 投入 & 集計 ────────────────────────────────────────────────────
-    new_log_count = len([l for l in logs if l.token not in existing_log_toks])
+    new_log_count = len([log for log in logs if log.token not in existing_log_toks])
     new_cs_count  = len([c for c in css if c.token not in existing_cs_toks])
 
     counts = {

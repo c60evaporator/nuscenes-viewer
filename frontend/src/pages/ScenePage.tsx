@@ -27,9 +27,10 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
   const [selectedLogToken, setSelectedLogToken] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [addSceneOpen, setAddSceneOpen] = useState(false)
-  // Import 成功後、新 scene 名を保持 → 再フェッチ後に token 解決してスクロール＆選択
+  // Import 成功後、新 scene 名を保持 → 再フェッチ後に token 解決してスクロール＆選択。
+  // 解決後もクリアせず保持する（scrollToToken は解決済み token で安定するため、
+  // SceneList 側のスクロールは一度きりになる）。
   const [pendingScrollName, setPendingScrollName] = useState<string | null>(null)
-  const [scrollToToken, setScrollToToken] = useState<string | null>(null)
 
   const currentMapLocation = useViewerStore((s) => s.currentMapLocation)
   const currentSceneToken  = useViewerStore((s) => s.currentSceneToken)
@@ -74,16 +75,19 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
     [filteredScenes, currentSceneToken],
   )
 
-  // Import 後: 再フェッチされた一覧から新 scene の token を解決し、選択＆スクロール
+  // Import 後: 再フェッチされた一覧に新 scene が現れたら token を解決（派生値）。
+  // 解決できるまでは null。SceneList はこれをトリガーにスクロールする。
+  const scrollToToken = useMemo(() => {
+    if (!pendingScrollName) return null
+    return filteredScenes.find((s) => s.name === pendingScrollName)?.token ?? null
+  }, [pendingScrollName, filteredScenes])
+
+  // token が解決したら import された scene を選択する。
+  // scrollToToken は解決済み token で安定するため、この effect は一度きり発火する。
+  // （setScene は Zustand の外部ストア更新であり、React state の setState-in-effect には当たらない）
   useEffect(() => {
-    if (!pendingScrollName) return
-    const added = filteredScenes.find((s) => s.name === pendingScrollName)
-    if (added) {
-      setScene(added.token)
-      setScrollToToken(added.token)
-      setPendingScrollName(null)
-    }
-  }, [pendingScrollName, filteredScenes, setScene])
+    if (scrollToToken) setScene(scrollToToken)
+  }, [scrollToToken, setScene])
 
   const deleteScene = useDeleteScene()
 

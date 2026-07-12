@@ -15,7 +15,7 @@ export default function SceneList({ scenes, currentSceneToken, onSelect, scrollT
     if (!scrollToToken) return
     const el = itemRefs.current.get(scrollToToken)
     if (el) el.scrollIntoView({ block: 'center' })
-  }, [scrollToToken, scenes])
+  }, [scrollToToken])
 
   if (scenes.length === 0) {
     return (

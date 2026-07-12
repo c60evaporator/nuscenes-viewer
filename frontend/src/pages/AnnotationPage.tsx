@@ -15,8 +15,10 @@ import { useLogsByLocation } from '@/api/logs'
 import { useSamples, useSampleInstances, useSampleAnnotations, useSampleSensorData } from '@/api/samples'
 import { useInstanceAnnotations } from '@/api/instances'
 import { useCalibratedSensors } from '@/api/sensors'
+import { usePointCloud } from '@/api/sensorData'
 import { computeEgoBasedDefault, computeInstanceBasedDefault, resolveDefaultSize } from '@/lib/bboxDefaults'
 import type { BBoxDefault } from '@/lib/bboxDefaults'
+import { estimateGroundZGlobal } from '@/lib/groundHeight'
 import { rankCamerasByScore, sortCameraChannels, pickDefaultCameraChannel } from '@/lib/cameraSelection'
 import { compareCategoryOrder } from '@/lib/categoryOrder'
 import { getSampleEgoPose } from '@/lib/egoPoseUtils'
@@ -416,6 +418,11 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     [viewSampleDataMap, egoPoses, viewSampleToken],
   )
 
+  // 表示サンプルの LIDAR_TOP 点群（地面高さ検出用）
+  // AnnotationThreeView が同一 queryKey で取得済みのためキャッシュヒットする
+  const viewLidarBrief = viewSampleDataMap?.['LIDAR_TOP']
+  const { data: viewLidarPointCloud } = usePointCloud(viewLidarBrief?.token ?? null)
+
   // Sensor フィルタは Sample が選択されているときのみ有効
   const sensorEnabled = hasSampleFilter || (hasInstanceFilter && listSelectedSampleToken !== null)
 
@@ -532,7 +539,17 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
 
     const egoPose = egoPoses?.find((p) => p.sample_token === targetSampleToken)
     if (egoPose) {
-      const { translation, rotation } = computeEgoBasedDefault(egoPose, fallbackSize)
+      // 地面高さ検出: 対象サンプルの LIDAR_TOP 点群が手元にある場合のみ有効
+      // （点群フレームと一致する lidarBrief.ego_pose をセンサー変換に使う）
+      const lidarCalib = viewLidarBrief
+        ? calibSensorMap[viewLidarBrief.calibrated_sensor_token]
+        : undefined
+      const getGroundZ =
+        targetSampleToken === viewSampleToken && viewLidarBrief && viewLidarPointCloud && lidarCalib
+          ? (x: number, y: number) =>
+              estimateGroundZGlobal(viewLidarPointCloud.points, [x, y], viewLidarBrief.ego_pose, lidarCalib)
+          : undefined
+      const { translation, rotation } = computeEgoBasedDefault(egoPose, fallbackSize, getGroundZ)
       return { translation, size: [...fallbackSize], rotation }
     }
     return { translation: [0, 0, fallbackSize[2] / 2], size: [...fallbackSize], rotation: [1, 0, 0, 0] }

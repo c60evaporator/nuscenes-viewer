@@ -22,16 +22,6 @@ export interface BBoxDefault {
 }
 
 /**
- * 指定 (x, y) における地面高さ（グローバル座標系 z）を返す。
- * 暫定で 0 固定。将来 Annotation.md「地面高さ検出アルゴリズム」節の
- * LiDAR 点群ベース検出に差し替える。
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function getDefaultGroundZ(_x: number, _y: number): number {
-  return 0
-}
-
-/**
  * クォータニオン [w, x, y, z] から yaw 成分のみを抽出し、
  * z軸回転クォータニオン [cos(yaw/2), 0, 0, sin(yaw/2)] を返す
  */
@@ -49,15 +39,21 @@ function extractYaw(q: number[]): number {
 /**
  * 同一 Instance のアノテーションがない場合のデフォルト値。
  * ego の yaw 方向に default_forward_distance 前方、底面が地面高さに一致する位置に置く。
+ *
+ * @param getGroundZ 指定 (x, y)（グローバル座標系）の地面高さを返す関数
+ *                   （lib/groundHeight.ts の点群ベース検出を想定）。
+ *                   未指定（点群なし等）の場合は egoZ を地面高さとして使う
  */
 export function computeEgoBasedDefault(
-  egoPose: { translation: number[]; rotation: number[] },
-  size:    number[],
+  egoPose:     { translation: number[]; rotation: number[] },
+  size:        number[],
+  getGroundZ?: (x: number, y: number) => number,
 ): { translation: number[]; rotation: number[] } {
   const yaw = extractYaw(egoPose.rotation)
   const x = egoPose.translation[0] + ANNOTATION.DEFAULT_FORWARD_DISTANCE * Math.cos(yaw)
   const y = egoPose.translation[1] + ANNOTATION.DEFAULT_FORWARD_DISTANCE * Math.sin(yaw)
-  const z = getDefaultGroundZ(x, y) + size[2] / 2
+  const groundZ = getGroundZ ? getGroundZ(x, y) : egoPose.translation[2]
+  const z = groundZ + size[2] / 2
   return {
     translation: [x, y, z],
     rotation:    [Math.cos(yaw / 2), 0, 0, Math.sin(yaw / 2)],

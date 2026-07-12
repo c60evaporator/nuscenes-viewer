@@ -158,6 +158,8 @@ rotation = [cos(yaw/2), 0, 0, sin(yaw/2)]
 
 ##### 地面高さ検出アルゴリズム
 
+続いて、以下の地面高さ補完アルゴリズムを実装し、先ほどの「同一Instanceのアノテーションがない場合」のtranslationの計算で求めたx,yを入力として地面高を求め、sizeを考慮して地面の高さとバウンディングボックスの底面の高さが一致するようにしてください。また地面高さ検出アルゴリズムは将来的にx,yを3D Object Detectionで予測するケースでも活用したいので、独立した関数として保持するようにしてください。処理内容は`notebooks/ground_height_detection.ipynb`も参考にしてください
+
 `frontend/config/setting.yml`の`annotation.ground_height_detection`内のパラメータ`min_z`,`max_z`,`search_radii`,`bin_size`,`refine_half_width`,`min_points`,`max_deviation`を使用。
 
 1. LiDARの取り付け高さ`lidar_height`を、`api/v1/calibrated-sensors/{calibrated_sensor_token}`エンドポイントの`translation[2]`から取得

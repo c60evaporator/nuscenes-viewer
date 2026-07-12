@@ -3,7 +3,6 @@ import {
   computeEgoBasedDefault,
   computeInstanceBasedDefault,
   extractYawQuaternion,
-  getDefaultGroundZ,
 } from '@/lib/bboxDefaults'
 import { eulerDegToQuaternion } from '@/lib/coordinateUtils'
 import { ANNOTATION } from '@/config/settings'
@@ -115,18 +114,30 @@ describe('computeInstanceBasedDefault', () => {
 })
 
 describe('computeEgoBasedDefault', () => {
-  it('ego の yaw 方向前方 default_forward_distance に配置、底面が地面高さ(0)に一致', () => {
+  it('ego の yaw 方向前方 default_forward_distance に配置、底面が地面高さに一致', () => {
     // yaw = 90°（+y 方向を向く ego）
     const egoPose = {
       translation: [100, 200, 1.8],
       rotation:    [Math.cos(Math.PI / 4), 0, 0, Math.sin(Math.PI / 4)],
     }
-    const { translation, rotation } = computeEgoBasedDefault(egoPose, [2, 4, 2])
+    // getGroundZ 指定時: 底面 = 検出した地面高さ
+    const getGroundZ = (x: number, y: number) => {
+      expect(x).toBeCloseTo(100)
+      expect(y).toBeCloseTo(200 + ANNOTATION.DEFAULT_FORWARD_DISTANCE)
+      return 0.5
+    }
+    const { translation, rotation } = computeEgoBasedDefault(egoPose, [2, 4, 2], getGroundZ)
     expect(translation[0]).toBeCloseTo(100)
     expect(translation[1]).toBeCloseTo(200 + ANNOTATION.DEFAULT_FORWARD_DISTANCE)
-    expect(translation[2]).toBeCloseTo(getDefaultGroundZ(100, 205) + 1)  // 地面高さ0 + height/2
+    expect(translation[2]).toBeCloseTo(0.5 + 1)  // 地面高さ + height/2
     expect(rotation[0]).toBeCloseTo(Math.cos(Math.PI / 4))
     expect(rotation[3]).toBeCloseTo(Math.sin(Math.PI / 4))
+  })
+
+  it('getGroundZ 未指定時は egoZ を地面高さとして使う', () => {
+    const egoPose = { translation: [0, 0, 1.8], rotation: [1, 0, 0, 0] }
+    const { translation } = computeEgoBasedDefault(egoPose, [2, 4, 2])
+    expect(translation[2]).toBeCloseTo(1.8 + 1)
   })
 })
 
@@ -138,11 +149,5 @@ describe('extractYawQuaternion', () => {
     expect(yawQ[1]).toBeCloseTo(0)
     expect(yawQ[2]).toBeCloseTo(0)
     expect(yawQ[3]).toBeCloseTo(Math.sin(Math.PI / 4))
-  })
-})
-
-describe('getDefaultGroundZ', () => {
-  it('暫定実装として常に 0 を返す', () => {
-    expect(getDefaultGroundZ(123.4, -567.8)).toBe(0)
   })
 })

@@ -56,8 +56,8 @@ annotation:
   ground_height_detection:
     lower_margin: 1.0  # 地面高さ検出用の点群の下側しきい値（-LiDAR高さ-lower_marginよりもzが大きい点群が対象に） (m)
     upper_margin: 1.0  # 地面高さ検出用の点群の上側しきい値（-LiDAR高さ+upper_marginよりもzが小さい点群が対象に） (m)
-    search_radii: [3.0, 5.0, 7.0]  # 地面高さ検出用の点群のtargetXYからの検索半径 (m)。bin_ratio_thresh, min_points, max_deviationの条件を満たす最小半径が採用される
+    search_radii: [2.0, 4.0, 6.0]  # 地面高さ検出用の点群のtargetXYからの検索半径 (m)。bin_ratio_thresh, min_points, max_deviationの条件を満たす最小半径が採用される
     bin_size: 0.1  # ヒストグラムビン幅 (m)
-    refine_half_width: 0.15  # ヒストグラムビンの中央値を求める際の精密化範囲 (m)
+    refine_half_width: 0.2  # ヒストグラムビンの中央値を求める際の精密化範囲 (m)
     min_points: 20  # 有効とみなす最小点群数
     max_deviation: 1.0  # priorからの最大許容乖離 (m)

@@ -1,6 +1,33 @@
 import { globalToSensor } from './coordinateUtils'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 
+/** nuScenes 標準6カメラの表示順（未知チャンネルは末尾にアルファベット順で続ける） */
+export const CAMERA_CHANNEL_ORDER = [
+    'CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
+    'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT',
+]
+
+/** カメラチャンネルを標準順に整列する（標準外は末尾にアルファベット順） */
+export function sortCameraChannels(channels: string[]): string[] {
+    return [...channels].sort((a, b) => {
+        const ia = CAMERA_CHANNEL_ORDER.indexOf(a)
+        const ib = CAMERA_CHANNEL_ORDER.indexOf(b)
+        if (ia !== -1 && ib !== -1) return ia - ib
+        if (ia !== -1) return -1
+        if (ib !== -1) return 1
+        return a.localeCompare(b)
+    })
+}
+
+/**
+ * アノテーション未選択時のデフォルトカメラチャンネル
+ * CAM_FRONT を優先（Sample&Map 画面のデフォルトと整合）、なければ標準順の先頭
+ */
+export function pickDefaultCameraChannel(channels: string[]): string | null {
+    if (channels.includes('CAM_FRONT')) return 'CAM_FRONT'
+    return sortCameraChannels(channels)[0] ?? null
+}
+
 /**
  * カメラ光軸 (z軸) と annotation中心位置のコサイン類似度
  * バックエンド _camera_score と等価

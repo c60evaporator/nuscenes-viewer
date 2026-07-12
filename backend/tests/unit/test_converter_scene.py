@@ -20,6 +20,7 @@ def _make_scene(
     nbr_samples: int = 5,
     first_sample_token: str = "sample-unit-001",
     last_sample_token: str = "sample-unit-005",
+    is_user_created: bool = False,
 ) -> Scene:
     return Scene(
         token=token,
@@ -29,6 +30,7 @@ def _make_scene(
         nbr_samples=nbr_samples,
         first_sample_token=first_sample_token,
         last_sample_token=last_sample_token,
+        is_user_created=is_user_created,
     )
 
 
@@ -48,6 +50,7 @@ def test_scene_all_fields_mapped():
         nbr_samples=3,
         first_sample_token="first",
         last_sample_token="last",
+        is_user_created=True,
     )
     result = SceneConverter.to_response(scene)
     assert result.token == "tok-s"
@@ -57,6 +60,7 @@ def test_scene_all_fields_mapped():
     assert result.nbr_samples == 3
     assert result.first_sample_token == "first"
     assert result.last_sample_token == "last"
+    assert result.is_user_created is True
 
 
 @pytest.mark.parametrize("description,expected", [

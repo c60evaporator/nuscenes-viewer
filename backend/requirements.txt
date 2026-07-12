@@ -9,6 +9,7 @@ psycopg2-binary
 asyncpg
 alembic
 fastapi
+python-multipart
 uvicorn
 pydantic-settings
 python-dotenv

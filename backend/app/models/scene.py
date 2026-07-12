@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Integer, BigInteger, ForeignKey, Text
+from sqlalchemy import String, Integer, BigInteger, Boolean, ForeignKey, Text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base
 
@@ -17,6 +17,10 @@ class Log(Base):
     vehicle:      Mapped[str] = mapped_column(String, nullable=False)
     date_captured: Mapped[str] = mapped_column(String, nullable=False)
     location:     Mapped[str] = mapped_column(String, nullable=False)  # 'boston-seaport' etc.
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
+    )
     # Relationships
     scenes: Mapped[list["Scene"]] = relationship(
         back_populates="log",
@@ -30,14 +34,19 @@ class Scene(Base):
     __tablename__ = "scenes"
     # Columns
     token:       Mapped[str] = mapped_column(String, primary_key=True)
+    # RESTRICT FK の参照チェックと log フィルタ検索のため index=True
     log_token:   Mapped[str] = mapped_column(
-        ForeignKey("logs.token", ondelete="RESTRICT"), nullable=False
+        ForeignKey("logs.token", ondelete="RESTRICT"), nullable=False, index=True
     )
     name:        Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     nbr_samples: Mapped[int] = mapped_column(Integer, nullable=False)
     first_sample_token: Mapped[str] = mapped_column(String, nullable=False)
     last_sample_token:  Mapped[str] = mapped_column(String, nullable=False)
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
+    )
     # Relationships
     log:     Mapped["Log"]          = relationship(back_populates="scenes")
     samples: Mapped[list["Sample"]] = relationship(
@@ -57,11 +66,16 @@ class Sample(Base):
     )
     timestamp:   Mapped[int] = mapped_column(BigInteger, nullable=False)  # UNIX usec
     # 隣接フレーム参照：参照先が消えても行は残す
+    # SET NULL トリガ（行削除ごとの WHERE prev/next=$1）を index scan にするため index=True
     prev: Mapped[str | None] = mapped_column(
-        ForeignKey("samples.token", ondelete="SET NULL"), nullable=True
+        ForeignKey("samples.token", ondelete="SET NULL"), nullable=True, index=True
     )
     next: Mapped[str | None] = mapped_column(
-        ForeignKey("samples.token", ondelete="SET NULL"), nullable=True
+        ForeignKey("samples.token", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # 初回インポート=false / ユーザ追加=true（scene追加・削除機能で使用）
+    is_user_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default='false'
     )
     # Relationships
     scene:       Mapped["Scene"]                  = relationship(back_populates="samples")

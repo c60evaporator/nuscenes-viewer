@@ -16,9 +16,14 @@ export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
+  // FormData 送信時は Content-Type を付けない（ブラウザが multipart boundary を付与）
+  const isFormData = options?.body instanceof FormData
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...options?.headers,
+    },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))

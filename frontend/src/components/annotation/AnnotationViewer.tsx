@@ -1,12 +1,9 @@
-import { useMemo } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import MapCanvas from '@/components/common/MapCanvas'
 import PointCloudCanvas from '@/components/common/PointCloudCanvas'
 import CameraImageCanvas from '@/components/common/CameraImageCanvas'
 import AnnotationThreeView from '@/components/annotation/AnnotationThreeView'
 import { useSampleSensorData, useSampleAnnotations } from '@/api/samples'
-import { useEditStore } from '@/store/editStore'
-import { rankCamerasByScore } from '@/lib/cameraSelection'
 import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 import type { Annotation } from '@/types/annotation'
@@ -17,6 +14,7 @@ const V_SEP = 'w-1 bg-[#374151] hover:bg-blue-400 cursor-col-resize transition-c
 interface AnnotationViewerProps {
   sampleToken:   string | null
   instanceToken: string | null
+  cameraChannel: string | null   // 表示するカメラチャンネル（左ペイン Sensor フィルタで制御）
   location:      string | null
   calibSensorMap: Record<string, CalibratedSensor>
   sceneEgoPoses: EgoPosePoint[]
@@ -36,6 +34,7 @@ function Placeholder({ text }: { text: string }) {
 export default function AnnotationViewer({
   sampleToken,
   instanceToken,
+  cameraChannel,
   location,
   calibSensorMap,
   sceneEgoPoses,
@@ -51,17 +50,6 @@ export default function AnnotationViewer({
     ? [...(sampleAnnotationsRaw ?? []), workingAnnotation]
     : (sampleAnnotationsRaw ?? [])
 
-  const currentAnnotation = useEditStore((s) => s.getCurrentAnnotation())
-
-  // 編集中BBox優先、なければ instanceToken 経由でリストから探す
-  const targetAnnotation = useMemo(() => {
-    if (currentAnnotation) return currentAnnotation
-    if (instanceToken) {
-      return (sampleAnnotationsRaw ?? []).find((a) => a.instance_token === instanceToken) ?? null
-    }
-    return null
-  }, [currentAnnotation, instanceToken, sampleAnnotationsRaw])
-
   const currentEgoPose = getSampleEgoPose(sampleDataMap, sceneEgoPoses, sampleToken)
 
   // LiDAR
@@ -74,20 +62,8 @@ export default function AnnotationViewer({
     rotation:    lidarCalib.rotation,
   } : undefined
 
-  // フロント計算によるカメラランキング
-  const rankedCameras = useMemo(() => {
-    if (!targetAnnotation || !currentEgoPose) return []
-    return rankCamerasByScore(
-      targetAnnotation.translation,
-      currentEgoPose,
-      Object.values(calibSensorMap),
-    )
-  }, [targetAnnotation, currentEgoPose, calibSensorMap])
-
-  const bestCameraSensor = rankedCameras[0]
-
-  // Camera (1st best)
-  const cameraBrief   = bestCameraSensor ? sampleDataMap?.[bestCameraSensor.channel] : undefined
+  // Camera（左ペイン Sensor フィルタで選択されたチャンネルを表示）
+  const cameraBrief   = cameraChannel ? sampleDataMap?.[cameraChannel] : undefined
   const cameraCalib   = cameraBrief?.calibrated_sensor_token
     ? calibSensorMap[cameraBrief.calibrated_sensor_token]
     : undefined
@@ -115,9 +91,9 @@ export default function AnnotationViewer({
           <Panel defaultSize={50}>
             <div className="w-full h-full relative overflow-hidden bg-gray-900">
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(0,0,0,0.55)', padding: '1px 4px', fontSize: 9, color: '#aaa', pointerEvents: 'none' }}>
-                {bestCameraSensor?.channel ?? 'CAMERA'}
+                {cameraChannel ?? 'CAMERA'}
               </div>
-              {bestCameraSensor && cameraBrief && cameraCalib ? (
+              {cameraBrief && cameraCalib ? (
                 <CameraImageCanvas
                   sampleDataToken={cameraBrief.token}
                   calibratedSensor={cameraCalib}
@@ -129,7 +105,7 @@ export default function AnnotationViewer({
                   className="w-full h-full"
                 />
               ) : (
-                <Placeholder text="Please select an instance" />
+                <Placeholder text="No camera image" />
               )}
             </div>
           </Panel>

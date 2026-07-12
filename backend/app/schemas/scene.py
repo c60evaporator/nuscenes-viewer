@@ -21,6 +21,7 @@ class SceneResponse(BaseModel):
     nbr_samples: int
     first_sample_token: str
     last_sample_token: str
+    is_user_created: bool
 
 
 class SampleResponse(BaseModel):

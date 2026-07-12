@@ -1,6 +1,7 @@
-import { useQuery, useQueries } from '@tanstack/react-query'
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from './client'
 import type { Scene, Sample, SceneListResponse } from '../types/scene'
+import type { SceneDeleteResult } from '../types/sceneDelete'
 import type { EgoPosePoint } from '../types/sensor'
 
 export function useScenes(params?: { limit?: number; offset?: number }) {
@@ -33,6 +34,18 @@ export function useSceneEgoPoses(token: string | null) {
     queryKey: ['scene-ego-poses', token],
     queryFn:  () => apiFetch<EgoPosePoint[]>(`/scenes/${token}/ego-poses`),
     enabled:  !!token,
+  })
+}
+
+/** ユーザ追加 scene を関連レコードごと削除する（DELETE /scenes/{token}） */
+export function useDeleteScene() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (token: string) =>
+      apiFetch<SceneDeleteResult>(`/scenes/${token}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenes'] })
+    },
   })
 }
 

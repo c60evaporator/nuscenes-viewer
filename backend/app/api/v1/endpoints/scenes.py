@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converters.scene import SceneConverter
@@ -6,9 +6,40 @@ from app.dependencies import get_db
 from app.repositories.scene import SceneRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.scene import SceneResponse, SampleResponse
+from app.schemas.scene_delete import SceneDeleteResult
+from app.schemas.scene_import import SceneImportResult
 from app.schemas.sensor import SampleEgoPoseResponse
+from app.services.scene_delete_service import delete_scene as delete_scene_service
+from app.services.scene_import_service import import_scenes_from_json
 
 router = APIRouter(prefix="/scenes", tags=["scenes"])
+
+
+@router.post("/import", response_model=SceneImportResult)
+async def import_scenes(
+    scenes_file:            UploadFile = File(...),
+    samples_file:           UploadFile = File(...),
+    sample_data_file:       UploadFile = File(...),
+    ego_pose_file:          UploadFile = File(...),
+    log_file:               UploadFile = File(...),
+    calibrated_sensor_file: UploadFile = File(...),
+    dry_run: bool = Form(False),
+    db: AsyncSession = Depends(get_db),
+):
+    """nuScenes 形式の 6 JSON から scene 一式を追加する（1 リクエスト・1 トランザクション）.
+
+    dry_run=True のときはバリデーションのみ実施し、投入予定件数を返す。
+    """
+    return await import_scenes_from_json(
+        db,
+        scenes_json=await scenes_file.read(),
+        samples_json=await samples_file.read(),
+        sample_data_json=await sample_data_file.read(),
+        ego_pose_json=await ego_pose_file.read(),
+        log_json=await log_file.read(),
+        calibrated_sensor_json=await calibrated_sensor_file.read(),
+        dry_run=dry_run,
+    )
 
 
 @router.get("", response_model=PaginatedResponse[SceneResponse])
@@ -26,6 +57,16 @@ async def list_scenes(
         offset=offset,
         items=[SceneConverter.to_response(s) for s in scenes],
     )
+
+
+@router.delete("/{token}", response_model=SceneDeleteResult)
+async def delete_scene(token: str, db: AsyncSession = Depends(get_db)):
+    """ユーザ追加 scene を依存レコードごと削除する（1 トランザクション）.
+
+    - 404: scene が存在しない
+    - 403: is_user_created=false（初回インポート scene は削除不可）
+    """
+    return await delete_scene_service(db, token)
 
 
 @router.get("/{token}", response_model=SceneResponse)

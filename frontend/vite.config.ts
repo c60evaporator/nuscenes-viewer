@@ -18,7 +18,6 @@ export default defineConfig({
       '/api': {
         target: 'http://api:8000',
         changeOrigin: true,
-        followRedirects: true,
       },
     },
   },

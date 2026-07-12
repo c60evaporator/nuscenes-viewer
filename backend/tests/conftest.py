@@ -124,6 +124,32 @@ async def client(db_session: AsyncSession):
 
 
 @pytest.fixture
+async def ref_data(db_session: AsyncSession) -> dict[str, str]:
+    """scene import / delete テスト用の参照データ（location / sensor_token / category_token）。
+
+    空 DB（CI: alembic upgrade head のみでデータ seed なし）でも自己完結するよう、
+    MapMeta / Sensor / Category を独自トークンで seed してから返す。実データがある
+    環境（ローカル）とも衝突しない固有値を使う。
+    db_session のロールバックにより、テスト終了後に全レコードが消える。
+    """
+    meta = MapMeta(
+        token="map-refdata-001",
+        location="test-refdata-seaport",
+        version="1.3",
+        canvas_edge=[2000.0, 2000.0],
+    )
+    sensor = Sensor(token="sensor-refdata-001", channel="CAM_FRONT", modality="camera")
+    category = Category(token="cat-refdata-001", name="vehicle.car", description=None)
+    db_session.add_all([meta, sensor, category])
+    await db_session.flush()
+    return {
+        "location": meta.location,
+        "sensor_token": sensor.token,
+        "category_token": category.token,
+    }
+
+
+@pytest.fixture
 async def log_and_scene(db_session: AsyncSession) -> Scene:
     """テスト用の Log / Scene / Sample×3 / EgoPose×3 / SampleData×3。
 

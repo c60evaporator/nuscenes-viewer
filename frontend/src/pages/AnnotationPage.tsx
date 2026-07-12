@@ -12,10 +12,16 @@ import { ApiError } from '@/api/client'
 import { useCategories } from '@/api/categories'
 import { useScenes, useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
-import { useSamples, useSampleInstances, useSampleAnnotations } from '@/api/samples'
+import { useSamples, useSampleInstances, useSampleAnnotations, useSampleSensorData } from '@/api/samples'
 import { useInstanceAnnotations } from '@/api/instances'
 import { useCalibratedSensors } from '@/api/sensors'
-import { resolveDefaultSize } from '@/lib/bboxDefaults'
+import { usePointCloud } from '@/api/sensorData'
+import { computeEgoBasedDefault, computeInstanceBasedDefault, resolveDefaultSize } from '@/lib/bboxDefaults'
+import type { BBoxDefault } from '@/lib/bboxDefaults'
+import { estimateGroundZGlobal } from '@/lib/groundHeight'
+import { rankCamerasByScore, sortCameraChannels, pickDefaultCameraChannel } from '@/lib/cameraSelection'
+import { compareCategoryOrder } from '@/lib/categoryOrder'
+import { getSampleEgoPose } from '@/lib/egoPoseUtils'
 import { useViewerStore } from '@/store/viewerStore'
 import { useNavigationStore } from '@/store/navigationStore'
 import { useEditStore } from '@/store/editStore'
@@ -44,6 +50,8 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const startEditSession  = useEditStore((s) => s.startEditSession)
   const startAddSession   = useEditStore((s) => s.startAddSession)
   const endSession        = useEditStore((s) => s.endSession)
+  const updateSessionLive = useEditStore((s) => s.updateSessionLive)
+  const commitChange      = useEditStore((s) => s.commitChange)
 
   // フィルタ state
   const [selectedSceneToken,    setSelectedSceneToken]    = useState<string | null>(lockedSceneToken ?? null)
@@ -171,6 +179,34 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   const { data: nextSampleAnnotationsForAdd } = useSampleAnnotations(
     editMode === 'add' && !effectiveInstanceToken ? nextSampleTokenForSampleAdd : null
   )
+
+  // add モード（Sampleフィルタ）で既存 instance を選択したとき、
+  // その instance のアノテーション履歴から優先度1〜5でデフォルト値を再計算して適用する
+  const addModeInstanceToken =
+    editMode === 'add' && editSession?.isInstanceSelectable
+      ? (currentAnnotation?.instance_token || null)
+      : null
+  const { data: addModeInstanceAnns } = useInstanceAnnotations(addModeInstanceToken)
+  const addModeFixedSampleToken = editSession?.fixedSampleToken ?? null
+  const appliedAddDefaultInstanceRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (addModeInstanceToken === null) {
+      appliedAddDefaultInstanceRef.current = null
+      return
+    }
+    if (appliedAddDefaultInstanceRef.current === addModeInstanceToken) return
+    if (!addModeInstanceAnns || addModeInstanceAnns.length === 0) return
+    const t0 = samples.find((s) => s.token === addModeFixedSampleToken)?.timestamp
+    if (t0 === undefined) return
+    const d = computeInstanceBasedDefault(addModeInstanceAnns, t0)
+    if (!d) return
+    updateSessionLive({ translation: d.translation, size: d.size, rotation: d.rotation })
+    commitChange()  // Undo で instance 選択前の値に戻せるよう履歴に積む
+    appliedAddDefaultInstanceRef.current = addModeInstanceToken
+  }, [
+    addModeInstanceToken, addModeInstanceAnns, addModeFixedSampleToken, samples,
+    updateSessionLive, commitChange,
+  ])
 
   // Sample アノテーション（Sample フィルタが有効な場合に取得、右ペイン表示用）
   const { data: sampleAnnotations } = useSampleAnnotations(effectiveSampleToken)
@@ -365,6 +401,88 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   // キーボードショートカット
   useEditKeyboardShortcuts({ egoPose: editingEgoPose })
 
+  // ── Sensor フィルタ ─────────────────────────────────────────────────────
+  const [selectedSensorChannel, setSelectedSensorChannel] = useState<string | null>(null)
+  const { data: viewSampleDataMap } = useSampleSensorData(viewSampleToken)
+
+  // 表示サンプルで利用可能なカメラチャンネル（camera_intrinsic を持つセンサーのみ、標準順）
+  const cameraChannels = useMemo(() => {
+    const channels = Object.entries(viewSampleDataMap ?? {})
+      .filter(([, brief]) => calibSensorMap[brief.calibrated_sensor_token]?.camera_intrinsic != null)
+      .map(([channel]) => channel)
+    return sortCameraChannels(channels)
+  }, [viewSampleDataMap, calibSensorMap])
+
+  const viewEgoPose = useMemo(
+    () => getSampleEgoPose(viewSampleDataMap, egoPoses ?? [], viewSampleToken),
+    [viewSampleDataMap, egoPoses, viewSampleToken],
+  )
+
+  // 表示サンプルの LIDAR_TOP 点群（地面高さ検出用）
+  // AnnotationThreeView が同一 queryKey で取得済みのためキャッシュヒットする
+  const viewLidarBrief = viewSampleDataMap?.['LIDAR_TOP']
+  const { data: viewLidarPointCloud } = usePointCloud(viewLidarBrief?.token ?? null)
+
+  // Sensor フィルタは Sample が選択されているときのみ有効
+  const sensorEnabled = hasSampleFilter || (hasInstanceFilter && listSelectedSampleToken !== null)
+
+  // デフォルト選択（派生 state）: 未選択、またはサンプル切替で現チャンネルが消えた場合
+  if (
+    cameraChannels.length > 0 &&
+    (selectedSensorChannel === null || !cameraChannels.includes(selectedSensorChannel))
+  ) {
+    setSelectedSensorChannel(pickDefaultCameraChannel(cameraChannels))
+  }
+
+  // アノテーション選択変更 → 最良カメラを自動選択（派生 state、rankCamerasByScore を再利用）
+  // データ未ロードで計算できなかった場合もロード完了後の再レンダーで適用されるよう、
+  // 「適用済み annotation token」を持ち重複適用を防ぐ
+  const [appliedBestCameraAnn, setAppliedBestCameraAnn] = useState<string | null>(null)
+  const selectedAnnToken = selectedAnnotation?.token ?? null
+  if (selectedAnnToken === null) {
+    if (appliedBestCameraAnn !== null) setAppliedBestCameraAnn(null)
+  } else if (
+    appliedBestCameraAnn !== selectedAnnToken &&
+    viewEgoPose &&
+    cameraChannels.length > 0
+  ) {
+    const ranked = rankCamerasByScore(
+      selectedAnnotation!.translation,
+      viewEgoPose,
+      Object.values(calibSensorMap),
+    )
+    const best = ranked.find((cs) => cameraChannels.includes(cs.channel))
+    if (best) {
+      setSelectedSensorChannel(best.channel)
+      setAppliedBestCameraAnn(selectedAnnToken)
+    }
+  }
+
+  // 編集・追加モード時: BBox の移動（translation 変化）に追従して最良カメラへ自動切替
+  // （派生 state。編集中に手動で Sensor を変えても、次に BBox を動かすまでは維持される）
+  const editingTranslationKey = isEditing && currentAnnotation
+    ? currentAnnotation.translation.join(',')
+    : null
+  const [appliedEditTranslation, setAppliedEditTranslation] = useState<string | null>(null)
+  if (editingTranslationKey === null) {
+    if (appliedEditTranslation !== null) setAppliedEditTranslation(null)
+  } else if (
+    appliedEditTranslation !== editingTranslationKey &&
+    viewEgoPose &&
+    cameraChannels.length > 0
+  ) {
+    const ranked = rankCamerasByScore(
+      currentAnnotation!.translation,
+      viewEgoPose,
+      Object.values(calibSensorMap),
+    )
+    const best = ranked.find((cs) => cameraChannels.includes(cs.channel))
+    if (best) {
+      setSelectedSensorChannel(best.channel)
+      setAppliedEditTranslation(editingTranslationKey)
+    }
+  }
+
   // add モード時の prev/next 候補
   const { addModePrev, addModeNext } = useMemo(() => {
     if (editMode !== 'add' || !editSession) return { addModePrev: null, addModeNext: null }
@@ -409,14 +527,46 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
     prevSampleAnnotationsForAdd, nextSampleAnnotationsForAdd, skipAnchor,
   ])
 
-  // Skip 用: 対象サンプルの ego pose 位置に translation を合わせた template を生成
+  // Add BBox 系共通: 対象サンプルのデフォルト translation/size/rotation を求める
+  // 同一 instance のアノテーションがあれば優先度1〜5（内挿・外挿・コピー）、
+  // なければ ego の yaw 方向前方に fallbackSize で配置（地面高さは暫定0固定）
+  const computeAddDefaults = (targetSampleToken: string, fallbackSize: number[]): BBoxDefault => {
+    const t0 = samples.find((s) => s.token === targetSampleToken)?.timestamp
+    const instDefault = t0 !== undefined
+      ? computeInstanceBasedDefault(instanceAnnotationsRaw ?? [], t0)
+      : null
+    if (instDefault) return instDefault
+
+    const egoPose = egoPoses?.find((p) => p.sample_token === targetSampleToken)
+    if (egoPose) {
+      // 地面高さ検出: 対象サンプルの LIDAR_TOP 点群が手元にある場合のみ有効
+      // （点群フレームと一致する lidarBrief.ego_pose をセンサー変換に使う）
+      const lidarCalib = viewLidarBrief
+        ? calibSensorMap[viewLidarBrief.calibrated_sensor_token]
+        : undefined
+      const getGroundZ =
+        targetSampleToken === viewSampleToken && viewLidarBrief && viewLidarPointCloud && lidarCalib
+          ? (x: number, y: number) =>
+              estimateGroundZGlobal(viewLidarPointCloud.points, [x, y], viewLidarBrief.ego_pose, lidarCalib)
+          : undefined
+      const { translation, rotation } = computeEgoBasedDefault(egoPose, fallbackSize, getGroundZ)
+      return { translation, size: [...fallbackSize], rotation }
+    }
+    return { translation: [0, 0, fallbackSize[2] / 2], size: [...fallbackSize], rotation: [1, 0, 0, 0] }
+  }
+
+  // Skip 用: 対象サンプルのデフォルト値を適用した template を生成
   const makeSkipTemplate = (targetSampleToken: string): Annotation => {
     const draft = editSession!.draft
-    const ep = egoPoses?.find((p) => p.sample_token === targetSampleToken)
-    const translation = ep
-      ? [ep.translation[0], ep.translation[1], ep.translation[2] + draft.size[2] / 2]
-      : draft.translation
-    return { ...draft, token: '', sample_token: targetSampleToken, translation }
+    const d = computeAddDefaults(targetSampleToken, draft.size)
+    return {
+      ...draft,
+      token:        '',
+      sample_token: targetSampleToken,
+      translation:  d.translation,
+      size:         d.size,
+      rotation:     d.rotation,
+    }
   }
 
   const handleSkipToNext = () => {
@@ -451,15 +601,20 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
   }
 
   // Case 3 用: InstanceSummary → Instance 型マッピング
+  // settings.yml annotation.category_order の順に表示（同一カテゴリ内は token 順）
   const instanceListItems = useMemo<Instance[]>(
-    () => (instanceSummaries ?? []).map((is) => ({
-      token:                  is.instance_token,
-      category_token:         '',
-      category_name:          is.category_name,
-      nbr_annotations:        is.nbr_annotations,
-      first_annotation_token: null,
-      last_annotation_token:  null,
-    })),
+    () => (instanceSummaries ?? [])
+      .map((is) => ({
+        token:                  is.instance_token,
+        category_token:         '',
+        category_name:          is.category_name,
+        nbr_annotations:        is.nbr_annotations,
+        first_annotation_token: null,
+        last_annotation_token:  null,
+      }))
+      .sort((a, b) =>
+        compareCategoryOrder(a.category_name, b.category_name) || a.token.localeCompare(b.token)
+      ),
     [instanceSummaries],
   )
 
@@ -484,6 +639,10 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                 selectedInstanceToken={effectiveInstanceToken}
                 onInstanceChange={setSelectedInstanceToken}
                 instanceTokenLocked={instanceTokenLocked}
+                cameraChannels={cameraChannels}
+                selectedSensorChannel={selectedSensorChannel}
+                onSensorChange={setSelectedSensorChannel}
+                sensorDisabled={!sensorEnabled}
               />
             </div>
           }
@@ -577,18 +736,14 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                     minWidth:   '80px',
                   }}
                   onClick={() => {
-                    const egoPose = egoPoses?.find((p) => p.sample_token === effectiveSampleToken)
-                    const size = [1.8, 4.6, 1.5]
-                    const translation = egoPose
-                      ? [egoPose.translation[0], egoPose.translation[1], egoPose.translation[2] + size[2] / 2]
-                      : [0, 0, size[2] / 2]
+                    const d = computeAddDefaults(effectiveSampleToken ?? '', [1.8, 4.6, 1.5])
                     const template: Annotation = {
                       token:            '',
                       instance_token:   '',
                       sample_token:     effectiveSampleToken ?? '',
-                      translation,
-                      rotation:         [1, 0, 0, 0],
-                      size,
+                      translation:      d.translation,
+                      rotation:         d.rotation,
+                      size:             d.size,
                       prev:             null,
                       next:             null,
                       num_lidar_pts:    0,
@@ -619,20 +774,17 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   style={{ background: '#4A90D9', cursor: 'pointer', minWidth: '80px' }}
                   onClick={() => {
                     const targetToken = prevSampleToken!
-                    const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
-                    const size: [number, number, number] =
+                    const fallbackSize: [number, number, number] =
                       (targetInstanceCategoryName ? resolveDefaultSize(targetInstanceCategoryName) : null)
                       ?? [1.8, 4.6, 1.5]
-                    const translation = egoPose
-                      ? [egoPose.translation[0], egoPose.translation[1], egoPose.translation[2] + size[2] / 2]
-                      : [0, 0, size[2] / 2]
+                    const d = computeAddDefaults(targetToken, fallbackSize)
                     const template: Annotation = {
                       token:            '',
                       instance_token:   effectiveInstanceToken ?? '',
                       sample_token:     targetToken,
-                      translation,
-                      rotation:         [1, 0, 0, 0],
-                      size,
+                      translation:      d.translation,
+                      rotation:         d.rotation,
+                      size:             d.size,
                       prev:             null,
                       next:             null,
                       num_lidar_pts:    0,
@@ -661,20 +813,17 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
                   style={{ background: '#4A90D9', cursor: 'pointer', minWidth: '80px' }}
                   onClick={() => {
                     const targetToken = nextSampleToken!
-                    const egoPose = egoPoses?.find((p) => p.sample_token === targetToken)
-                    const size: [number, number, number] =
+                    const fallbackSize: [number, number, number] =
                       (targetInstanceCategoryName ? resolveDefaultSize(targetInstanceCategoryName) : null)
                       ?? [1.8, 4.6, 1.5]
-                    const translation = egoPose
-                      ? [egoPose.translation[0], egoPose.translation[1], egoPose.translation[2] + size[2] / 2]
-                      : [0, 0, size[2] / 2]
+                    const d = computeAddDefaults(targetToken, fallbackSize)
                     const template: Annotation = {
                       token:            '',
                       instance_token:   effectiveInstanceToken ?? '',
                       sample_token:     targetToken,
-                      translation,
-                      rotation:         [1, 0, 0, 0],
-                      size,
+                      translation:      d.translation,
+                      rotation:         d.rotation,
+                      size:             d.size,
                       prev:             null,
                       next:             null,
                       num_lidar_pts:    0,
@@ -771,6 +920,7 @@ export default function AnnotationPage({ activeTab, onTabChange }: AnnotationPag
       <AnnotationViewer
         sampleToken={viewSampleToken}
         instanceToken={viewInstanceToken}
+        cameraChannel={selectedSensorChannel}
         location={currentMapLocation}
         calibSensorMap={calibSensorMap}
         sceneEgoPoses={egoPoses ?? []}

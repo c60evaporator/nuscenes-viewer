@@ -48,3 +48,16 @@ annotation:
     vehicle.bus: [2.5, 12.0, 3.5]  # バスのデフォルトのBBoxサイズ (幅, 長さ, 高さ) 単位はメートル
     vehicle.truck: [2.5, 8.0, 3.5]  # トラックのデフォルトのBBoxサイズ (幅, 長さ, 高さ) 単位はメートル
     vehicle.trailer: [2.5, 12.0, 3.5]  # トレーラーのデフォルトのBBoxサイズ (幅, 長さ, 高さ) 単位はメートル
+  # translation外挿線形補完のタイムスタンプの最大許容差 (秒)。この値を超えると、外挿補間は行われず、最も近いフレームの値が使用される
+  translation_extrapolation_max: 2.0
+  # Add BBoxデフォルト位置のegoからの前方距離 (m)
+  default_forward_distance: 5.0
+  # 地面高さ検出用パラメータ
+  ground_height_detection:
+    lower_margin: 1.0  # 地面高さ検出用の点群の下側しきい値（-LiDAR高さ-lower_marginよりもzが大きい点群が対象に） (m)
+    upper_margin: 1.0  # 地面高さ検出用の点群の上側しきい値（-LiDAR高さ+upper_marginよりもzが小さい点群が対象に） (m)
+    search_radii: [3.0, 5.0, 7.0]  # 地面高さ検出用の点群のtargetXYからの検索半径 (m)。bin_ratio_thresh, min_points, max_deviationの条件を満たす最小半径が採用される
+    bin_size: 0.1  # ヒストグラムビン幅 (m)
+    refine_half_width: 0.15  # ヒストグラムビンの中央値を求める際の精密化範囲 (m)
+    min_points: 20  # 有効とみなす最小点群数
+    max_deviation: 1.0  # priorからの最大許容乖離 (m)

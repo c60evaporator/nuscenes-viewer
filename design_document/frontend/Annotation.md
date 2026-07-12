@@ -158,20 +158,20 @@ rotation = [cos(yaw/2), 0, 0, sin(yaw/2)]
 
 ##### 地面高さ検出アルゴリズム
 
-続いて、以下の地面高さ補完アルゴリズムを実装し、先ほどの「同一Instanceのアノテーションがない場合」のtranslationの計算で求めたx,yを入力として地面高を求め、sizeを考慮して地面の高さとバウンディングボックスの底面の高さが一致するようにしてください。また地面高さ検出アルゴリズムは将来的にx,yを3D Object Detectionで予測するケースでも活用したいので、独立した関数として保持するようにしてください。処理内容は`notebooks/ground_height_detection.ipynb`も参考にしてください
+LiDAR点群の集中した高さ領域をヒストグラムで求めることで、指定したグローバル座標`x,y`における地面高さを推定する。`frontend/config/setting.yml`の`annotation.ground_height_detection`内のパラメータ`lower_margin`,`upper_margin`,`search_radii`,`bin_size`,`refine_half_width`,`min_points`,`max_deviation`を使用。
 
-`frontend/config/setting.yml`の`annotation.ground_height_detection`内のパラメータ`min_z`,`max_z`,`search_radii`,`bin_size`,`refine_half_width`,`min_points`,`max_deviation`を使用。
+※センサー座標系とグローバル座標系には傾き（LiDAR取り付け回転＋egoのピッチ/ロール）があるため、z方向の変換にスカラー加算（`ground_z + sensor_height + ego_z`）を使うと、傾きに比例した誤差がtargetのegoからの距離に応じて増大する。よってz変換には必ずego pose（LIDAR_TOPのego_pose）とcalibrated sensorによる厳密な剛体変換（`globalToSensor`/`sensorToGlobal`）を使う。
 
-1. LiDARの取り付け高さ`lidar_height`を、`api/v1/calibrated-sensors/{calibrated_sensor_token}`エンドポイントの`translation[2]`から取得
-2. LIDAR_TOPのpointcloudのうち、zが`[-lidar_height - lower_margin, -lidar_height + max_z]`の範囲内の点だけを対象にする
+1. 地面高さを求めたいグローバル座標`(x, y, ego_z)`（egoと同じ高さの地面点）をセンサー座標系に厳密変換し、そのx,yを`target_xy`、zを`prior_z`とする（ego直下では`prior_z ≈ -LiDAR取り付け高さ`。傾き補正済みのpriorとなる）
+2. LIDAR_TOPのpointcloudのうち、zが`[prior_z - lower_margin, prior_z + upper_margin]`の範囲内の点だけを対象にする
 3. `search_radii`に記載した半径を小さい順に走査し、以下の処理を実行して`min_points`, `max_deviation`の条件を満たしたらその時点での`ground_z_global`を地面高さとして返す（最大の半径でも条件を満たさなければ`ego_z`を返す）
   - 対照点群のヒストグラムをビンサイズ`bin_size`で作成
   - 最も高さが高いビンを選択
   - ビン中心±`refine_half_width`の点の中央値の範囲に入る点群を抽出
   - 抽出した点群数が`min_points`よりも少なければ今の半径での処理を打ち切り、次の半径に移る
   - 抽出した点群の中央値をとる
-  - この中央値と`-lidar_height`との差分が`max_deviation`よりも大きければ今の半径での処理を打ち切り、次の半径に移る
-  - この中央値にsensor_heightとego_zを加算して、グローバル座標系に変換したものを`ground_z_global`とする
+  - この中央値と`prior_z`との差分が`max_deviation`よりも大きければ今の半径での処理を打ち切り、次の半径に移る
+  - センサー座標系の点`(target_xy, 中央値)`を厳密な剛体変換でグローバル座標系に変換し、そのz値を`ground_z_global`とする
 
 #### 編集モード、追加モード中の操作
 

@@ -1,21 +1,26 @@
 /**
  * LiDAR 点群からの地面高さ検出
  *
- * notebooks/ground_height_detection.ipynb の Python 検証実装と同一ロジック。
+ * ヒストグラム＋中央値のロジックは notebooks/ground_height_detection.ipynb の
+ * Python 検証実装と同一。ただしセンサー座標系⇔グローバル座標系の変換は、
+ * notebook のスカラー加算（ground_z + sensor_height + ego_z）だと座標系間の傾き
+ * （LiDAR 取り付け回転＋ego のピッチ/ロール）による誤差が target の距離に比例して
+ * 乗るため、globalToSensor / sensorToGlobal による厳密な剛体変換を使う。
+ *
  * Add BBox のデフォルト z 決定に使うほか、将来 3D Object Detection の予測 (x, y) に
  * 対する地面高さ推定にも使える独立モジュールとして保持する（UI・フック非依存）。
  */
 import { ANNOTATION } from '@/config/settings'
-import { globalToSensor } from './coordinateUtils'
+import { globalToSensor, sensorToGlobal } from './coordinateUtils'
 
 export interface GroundHeightParams {
-  lowerMargin:     number    // -LiDAR高さより下に許容する範囲 (m)
-  upperMargin:     number    // -LiDAR高さより上に許容する範囲 (m)
+  lowerMargin:     number    // prior より下に許容する範囲 (m)
+  upperMargin:     number    // prior より上に許容する範囲 (m)
   searchRadii:     number[]  // targetXY からの検索半径 (m)。小さい順に走査
   binSize:         number    // ヒストグラムビン幅 (m)
   refineHalfWidth: number    // ビン中心から中央値算出に使う半幅 (m)
   minPoints:       number    // 有効とみなす最小点数
-  maxDeviation:    number    // prior (-LiDAR高さ) からの最大許容乖離 (m)
+  maxDeviation:    number    // prior からの最大許容乖離 (m)
 }
 
 /** settings.yml annotation.ground_height_detection のデフォルトパラメータ */
@@ -30,23 +35,23 @@ export const DEFAULT_GROUND_HEIGHT_PARAMS: GroundHeightParams = {
 }
 
 /**
- * 指定位置周辺の地面高さ（グローバル座標系 z）を推定する。
+ * 指定位置周辺の地面高さ（センサー座標系 z）を推定する。
  *
- * @param points       LiDAR センサー座標系の点群 [x, y, z, ...]
- * @param targetXY     地面高さを求めたい水平位置（センサー座標系）
- * @param sensorHeight LiDAR の取り付け高さ = calibrated_sensor.translation[2] (m)
- * @param egoZ         自車の高さ = ego_pose.translation[2] (m)
- * @returns グローバル座標系の地面高さ。全半径で条件を満たさなければ egoZ を返す
+ * @param points   LiDAR センサー座標系の点群 [x, y, z, ...]
+ * @param targetXY 地面高さを求めたい水平位置（センサー座標系）
+ * @param priorZ   その位置で予測される地面のセンサー座標 z。
+ *                 zフィルタ窓 [priorZ - lowerMargin, priorZ + upperMargin] の中心および
+ *                 maxDeviation 判定の基準に使う（ego 直下では -LiDAR取り付け高さ にほぼ一致）
+ * @returns センサー座標系の地面 z。全半径で条件を満たさなければ null
  */
 export function estimateGroundZ(
-  points:       number[][],
-  targetXY:     [number, number],
-  sensorHeight: number,
-  egoZ:         number,
-  params:       GroundHeightParams = DEFAULT_GROUND_HEIGHT_PARAMS,
-): number {
-  const zMin = -sensorHeight - params.lowerMargin
-  const zMax = -sensorHeight + params.upperMargin
+  points:   number[][],
+  targetXY: [number, number],
+  priorZ:   number,
+  params:   GroundHeightParams = DEFAULT_GROUND_HEIGHT_PARAMS,
+): number | null {
+  const zMin = priorZ - params.lowerMargin
+  const zMax = priorZ + params.upperMargin
   const [tx, ty] = targetXY
 
   // 事前 z フィルタ（全半径で共通）と targetXY からの2D距離²
@@ -61,7 +66,9 @@ export function estimateGroundZ(
     dist2.push(dx * dx + dy * dy)
   }
 
-  const binCount = Math.ceil((zMax - zMin) / params.binSize)
+  // (zMax - zMin) / binSize が浮動小数点誤差で僅かに整数を超えたときに
+  // 余分なビンを作らないよう epsilon を引いてから切り上げる
+  const binCount = Math.max(1, Math.ceil((zMax - zMin) / params.binSize - 1e-9))
 
   for (const radius of params.searchRadii) {
     const r2 = radius * radius
@@ -88,24 +95,27 @@ export function estimateGroundZ(
 
     const groundZ = median(refined)
 
-    // prior (-sensorHeight) からの乖離妥当性チェック
-    if (Math.abs(groundZ - -sensorHeight) > params.maxDeviation) continue
+    // prior からの乖離妥当性チェック
+    if (Math.abs(groundZ - priorZ) > params.maxDeviation) continue
 
-    // センサー座標系 → グローバル座標系
-    return groundZ + sensorHeight + egoZ
+    return groundZ
   }
 
-  return egoZ
+  return null
 }
 
 /**
  * グローバル座標系の (x, y) に対する地面高さ推定。
- * targetXY を LiDAR センサー座標系に変換して estimateGroundZ を呼ぶ。
+ *
+ * グローバル (x, y, egoZ)（= ego と同じ高さの地面点）を globalToSensor で厳密変換し、
+ * その z を prior としてセンサー座標系で検出。検出値は sensorToGlobal で厳密に
+ * グローバル座標へ戻すため、座標系間に傾きがあっても target の距離に依らず正確。
  *
  * @param points           LiDAR センサー座標系の点群 [x, y, z, ...]
  * @param targetGlobalXY   地面高さを求めたい水平位置（グローバル座標系）
  * @param egoPose          点群フレームの ego pose（LIDAR_TOP の ego_pose を推奨）
  * @param lidarCalibSensor LIDAR_TOP の calibrated sensor
+ * @returns グローバル座標系の地面高さ。検出できなければ egoZ を返す
  */
 export function estimateGroundZGlobal(
   points:           number[][],
@@ -114,18 +124,20 @@ export function estimateGroundZGlobal(
   lidarCalibSensor: { translation: number[]; rotation: number[] },
   params:           GroundHeightParams = DEFAULT_GROUND_HEIGHT_PARAMS,
 ): number {
+  const egoZ = egoPose.translation[2]
   const sensorPt = globalToSensor(
-    [targetGlobalXY[0], targetGlobalXY[1], egoPose.translation[2]],
+    [targetGlobalXY[0], targetGlobalXY[1], egoZ],
     egoPose,
     lidarCalibSensor,
   )
-  return estimateGroundZ(
+  const zSensor = estimateGroundZ(
     points,
     [sensorPt[0], sensorPt[1]],
-    lidarCalibSensor.translation[2],
-    egoPose.translation[2],
+    sensorPt[2],  // 傾き補正済み prior
     params,
   )
+  if (zSensor === null) return egoZ
+  return sensorToGlobal([sensorPt[0], sensorPt[1], zSensor], egoPose, lidarCalibSensor)[2]
 }
 
 /** 中央値（偶数個は中央2点の平均、np.median 準拠） */

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { drawEgoPoses, drawBBox2D, sensorToBevPixel, bevPixelToSensor } from '@/lib/canvasUtils'
+import { drawEgoPoses, drawBBox2D, sensorToBevPixel, bevPixelToSensor, hitTestEgoPoseGroups } from '@/lib/canvasUtils'
 import type { BevViewParams } from '@/lib/canvasUtils'
+import { egoPoseToPixel } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
 
 // Minimal CanvasRenderingContext2D mock
@@ -86,6 +87,48 @@ describe('drawEgoPoses', () => {
     const radii = arcCalls.map((c) => c[2])
     expect(radii[1]).toBeGreaterThan(radii[0])
     expect(radii[1]).toBeGreaterThan(radii[2])
+  })
+})
+
+describe('hitTestEgoPoseGroups', () => {
+  const DISP: [number, number] = [1000, 1000]
+  const LOC = 'singapore-onenorth'
+
+  // メートル座標 → canvas ピクセル（テスト内でクリック位置を組み立てる用）
+  const toPixel = (x: number, y: number): [number, number] =>
+    egoPoseToPixel([x, y, 0], LOC, DISP)
+
+  it('ヒット半径内の点があればそのグループの index を返す', () => {
+    const groups = [
+      [makePose(100, 100), makePose(110, 100)],
+      [makePose(500, 500), makePose(510, 500)],
+    ]
+    const [px, py] = toPixel(500, 500)
+    expect(hitTestEgoPoseGroups(groups, [px + 2, py + 2], DISP, LOC, 5)).toBe(1)
+  })
+
+  it('複数グループが半径内にある場合は最近傍の点を持つグループが勝つ', () => {
+    const groups = [
+      [makePose(100, 100)],
+      [makePose(101, 100)],  // ピクセルで約0.6px右
+    ]
+    const [px0, py0] = toPixel(100, 100)
+    const [px1]      = toPixel(101, 100)
+    // 両方が半径内に入るクリック位置（group 1 の点のすぐ近く）
+    expect(hitTestEgoPoseGroups(groups, [px1 + 0.1, py0], DISP, LOC, 10)).toBe(1)
+    // group 0 の点のすぐ近く
+    expect(hitTestEgoPoseGroups(groups, [px0 - 0.1, py0], DISP, LOC, 10)).toBe(0)
+  })
+
+  it('半径内に点がなければ null を返す', () => {
+    const groups = [[makePose(100, 100)]]
+    const [px, py] = toPixel(100, 100)
+    expect(hitTestEgoPoseGroups(groups, [px + 100, py], DISP, LOC, 5)).toBeNull()
+  })
+
+  it('空グループのみ・グループなしでは null を返す', () => {
+    expect(hitTestEgoPoseGroups([], [0, 0], DISP, LOC, 5)).toBeNull()
+    expect(hitTestEgoPoseGroups([[], []], [0, 0], DISP, LOC, 5)).toBeNull()
   })
 })
 

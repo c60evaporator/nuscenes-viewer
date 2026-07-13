@@ -140,6 +140,38 @@ export function drawEgoPosesBackground(
   ctx.restore()
 }
 
+/**
+ * canvas ピクセル座標に最も近い Waypoint を持つグループの index を返す。
+ * hitRadiusPx（canvas px）以内に点がなければ null。
+ * 複数グループが半径内にある場合は最近傍の点を持つグループが勝つ。
+ */
+export function hitTestEgoPoseGroups(
+  poseGroups:  EgoPosePoint[][],
+  canvasXY:    [number, number],
+  displaySize: [number, number],
+  location:    string,
+  hitRadiusPx: number,
+): number | null {
+  const [cx, cy] = canvasXY
+  let bestDist2 = hitRadiusPx * hitRadiusPx
+  let bestIndex: number | null = null
+
+  poseGroups.forEach((poses, groupIndex) => {
+    for (const pose of poses) {
+      const [px, py] = egoPoseToPixel(pose.translation, location, displaySize)
+      const dx = px - cx
+      const dy = py - cy
+      const dist2 = dx * dx + dy * dy
+      if (dist2 <= bestDist2) {
+        bestDist2 = dist2
+        bestIndex = groupIndex
+      }
+    }
+  })
+
+  return bestIndex
+}
+
 // ── BBox 2D 描画 ─────────────────────────────────────────────────────────────
 
 /**

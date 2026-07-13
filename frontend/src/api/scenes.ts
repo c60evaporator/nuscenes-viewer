@@ -49,7 +49,13 @@ export function useDeleteScene() {
   })
 }
 
-/** 複数シーンの Ego-poses を並列取得し、シーンごとのグループ配列で返す */
+/** シーントークン付きの Ego-pose グループ */
+export interface SceneEgoPoseGroup {
+  token: string
+  poses: EgoPosePoint[]
+}
+
+/** 複数シーンの Ego-poses を並列取得し、シーントークン付きグループ配列で返す */
 export function useAllScenesEgoPoses(sceneTokens: string[]) {
   const results = useQueries({
     queries: sceneTokens.map((token) => ({
@@ -58,9 +64,10 @@ export function useAllScenesEgoPoses(sceneTokens: string[]) {
       staleTime: Infinity,
     })),
   })
+  // useQueries は入力順を保証するので、filter 前に token とペア化して対応を保つ
   const groups = results
-    .map((r) => r.data)
-    .filter((d): d is EgoPosePoint[] => d !== undefined)
+    .map((r, i) => ({ token: sceneTokens[i], poses: r.data }))
+    .filter((g): g is SceneEgoPoseGroup => g.poses !== undefined)
   const isLoading = results.some((r) => r.isLoading)
   return { data: groups, isLoading }
 }

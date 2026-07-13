@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useLayoutEffect } from 'react'
 import { useBasemap } from '@/api/maps'
-import { drawEgoPoses, drawEgoPosesBackground } from '@/lib/canvasUtils'
+import { drawEgoPoses, drawEgoPosesBackground, hitTestEgoPoseGroups } from '@/lib/canvasUtils'
 import { egoPoseToPixel } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
 
@@ -12,6 +12,7 @@ interface MapCanvasProps {
   showStartEnd?:  boolean                  // Start/End ラベル（デフォルト true）
   centerPoint?:   [number, number] | null  // センタリングしたいメートル座標 [x, y]
   backgroundEgoPoseGroups?: EgoPosePoint[][] // 背景として薄く表示するシーングループ
+  onBackgroundGroupClick?: (groupIndex: number) => void // 背景グループの Waypoint クリック時（省略時は非インタラクティブ）
   fitToMap?: boolean                       // true → 初期ズームを地図全体表示に固定
   className?:     string
 }
@@ -24,15 +25,18 @@ export default function MapCanvas({
   showStartEnd  = true,
   centerPoint,
   backgroundEgoPoseGroups,
+  onBackgroundGroupClick,
   fitToMap      = false,
   className,
 }: MapCanvasProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
+  const mouseDownPosRef = useRef({ x: 0, y: 0 })
   const [zoom, setZoom]               = useState(1)
   const [offset, setOffset]           = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging]   = useState(false)
+  const [isHoveringGroup, setIsHoveringGroup] = useState(false)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
   const { data: bitmap } = useBasemap(location)
   const [pendingReset, setPendingReset] = useState(false)
@@ -176,17 +180,54 @@ export default function MapCanvas({
     }
   }
 
+  // マウスイベント位置の背景グループヒットテスト（onBackgroundGroupClick 指定時のみ）
+  const hitTestAtEvent = (e: React.MouseEvent): number | null => {
+    if (!onBackgroundGroupClick || !backgroundEgoPoseGroups || !bitmap) return null
+    const rect = e.currentTarget.getBoundingClientRect()
+    const canvasX = (e.clientX - rect.left - offset.x) / zoom
+    const canvasY = (e.clientY - rect.top  - offset.y) / zoom
+    // 画面上で約8pxのクリック許容（背景ドット半径 1.5 * sizeScale より少し大きめを下限に）
+    const sizeScale   = bitmap.width / 3000
+    const hitRadiusPx = Math.max(8 / zoom, 2 * sizeScale)
+    return hitTestEgoPoseGroups(
+      backgroundEgoPoseGroups,
+      [canvasX, canvasY],
+      [bitmap.width, bitmap.height],
+      location,
+      hitRadiusPx,
+    )
+  }
+
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true)
-    dragStartRef.current = { x: e.clientX - offset.x, y: e.clientY - offset.y }
+    dragStartRef.current    = { x: e.clientX - offset.x, y: e.clientY - offset.y }
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY }
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return
+    if (!isDragging) {
+      if (onBackgroundGroupClick) setIsHoveringGroup(hitTestAtEvent(e) !== null)
+      return
+    }
     setOffset({ x: e.clientX - dragStartRef.current.x, y: e.clientY - dragStartRef.current.y })
   }
 
-  const handleMouseUp = () => setIsDragging(false)
+  const handleMouseUp = (e: React.MouseEvent) => {
+    const wasDragging = isDragging
+    setIsDragging(false)
+    if (!wasDragging || !onBackgroundGroupClick) return
+    // 移動量が小さければクリックとみなす（ドラッグでは選択を発火させない）
+    const dx = e.clientX - mouseDownPosRef.current.x
+    const dy = e.clientY - mouseDownPosRef.current.y
+    if (dx * dx + dy * dy >= 25) return
+    const groupIndex = hitTestAtEvent(e)
+    if (groupIndex !== null) onBackgroundGroupClick(groupIndex)
+  }
+
+  const handleMouseLeave = () => {
+    setIsDragging(false)
+    setIsHoveringGroup(false)
+  }
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
@@ -223,11 +264,11 @@ export default function MapCanvas({
 
       <div
         ref={containerRef}
-        style={{ overflow: 'hidden', width: '100%', height: '100%', cursor: isDragging ? 'grabbing' : 'grab' }}
+        style={{ overflow: 'hidden', width: '100%', height: '100%', cursor: isDragging ? 'grabbing' : isHoveringGroup ? 'pointer' : 'grab' }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
       >
         <canvas

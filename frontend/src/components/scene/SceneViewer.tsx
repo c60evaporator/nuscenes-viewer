@@ -5,9 +5,10 @@ interface SceneViewerProps {
   sceneToken:      string | null
   location:        string | null
   allSceneTokens?: string[]   // 同一ロケーション内の全シーントークン（背景表示用）
+  onSceneClick?:   (sceneToken: string) => void  // 背景 Waypoint クリックでシーン選択
 }
 
-export default function SceneViewer({ sceneToken, location, allSceneTokens }: SceneViewerProps) {
+export default function SceneViewer({ sceneToken, location, allSceneTokens, onSceneClick }: SceneViewerProps) {
   const { data: egoPoses } = useSceneEgoPoses(sceneToken)
   const { data: bgGroups } = useAllScenesEgoPoses(allSceneTokens ?? [])
 
@@ -26,7 +27,12 @@ export default function SceneViewer({ sceneToken, location, allSceneTokens }: Sc
       showStartEnd={true}
       centerPoint={null}
       fitToMap={true}
-      backgroundEgoPoseGroups={bgGroups}
+      backgroundEgoPoseGroups={bgGroups.map((g) => g.poses)}
+      onBackgroundGroupClick={
+        onSceneClick
+          ? (i) => { if (bgGroups[i]) onSceneClick(bgGroups[i].token) }
+          : undefined
+      }
       className="flex-1 w-full h-full"
     />
   )

@@ -1,5 +1,6 @@
 import MapCanvas from '@/components/common/MapCanvas'
 import { useSceneEgoPoses, useAllScenesEgoPoses } from '@/api/scenes'
+import { WAYPOINTS } from '@/config/settings'
 
 interface SceneViewerProps {
   sceneToken:      string | null
@@ -28,6 +29,7 @@ export default function SceneViewer({ sceneToken, location, allSceneTokens, onSc
       centerPoint={null}
       fitToMap={true}
       backgroundEgoPoseGroups={bgGroups.map((g) => g.poses)}
+      waypointSizePx={WAYPOINTS.SCENE_WAYPOINT_SIZE}
       onBackgroundGroupClick={
         onSceneClick
           ? (i) => { if (bgGroups[i]) onSceneClick(bgGroups[i].token) }

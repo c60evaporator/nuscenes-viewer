@@ -3,6 +3,7 @@
  * コンポーネント内に描画ロジックを書かず、この関数群を経由する
  */
 import type { EgoPosePoint } from '../types/sensor'
+import { WAYPOINTS } from '@/config/settings'
 import { egoPoseToPixel } from './coordinateUtils'
 
 // ── Ego Pose 描画 ────────────────────────────────────────────────────────────
@@ -14,6 +15,7 @@ export function drawEgoPoses(
   displaySize: [number, number],
   location:    string,
   showStartEnd: boolean = true,
+  dotRadiusPx: number   = WAYPOINTS.SAMPLE_WAYPOINT_SIZE,  // 通常点の半径px（幅3000px基準）。強調点は2倍、Start/Endは1.5倍
 ): void {
   if (poses.length === 0) return
 
@@ -23,9 +25,9 @@ export function drawEgoPoses(
   // basemapが大きいほどサイズを拡大補正（基準: 幅3000px想定）
   const sizeScale = displaySize[0] / 3000
 
-  const dotRadius    = Math.round(4  * sizeScale)
-  const currentRadius= Math.round(8  * sizeScale)
-  const endRadius    = Math.round(6  * sizeScale)
+  const dotRadius    = Math.round(dotRadiusPx       * sizeScale)
+  const currentRadius= Math.round(dotRadiusPx * 2   * sizeScale)
+  const endRadius    = Math.round(dotRadiusPx * 1.5 * sizeScale)
   const fontSize     = Math.round(28 * sizeScale)
   const lineWidth    = Math.max(2 * sizeScale, 1)
   const labelPadX    = Math.round(8  * sizeScale)
@@ -105,12 +107,13 @@ export function drawEgoPosesBackground(
   poseGroups:  EgoPosePoint[][],
   displaySize: [number, number],
   location:    string,
+  dotRadiusPx: number = WAYPOINTS.SCENE_WAYPOINT_SIZE,  // 点の半径px（幅3000px基準）
 ): void {
   if (poseGroups.length === 0) return
 
   const sizeScale = displaySize[0] / 3000
   const lineWidth = Math.max(1.5 * sizeScale, 0.5)
-  const dotRadius = Math.max(1.5 * sizeScale, 1)
+  const dotRadius = Math.max(dotRadiusPx * sizeScale, 1)
 
   ctx.save()
   poseGroups.forEach((poses) => {
@@ -118,7 +121,7 @@ export function drawEgoPosesBackground(
     const toPixel = (t: number[]): [number, number] => egoPoseToPixel(t, location, displaySize)
 
     ctx.beginPath()
-    ctx.strokeStyle = 'rgba(100, 160, 255, 0.2)'
+    ctx.strokeStyle = 'rgba(100, 160, 255, 0.4)'
     ctx.lineWidth   = lineWidth
     ctx.lineJoin    = 'round'
     ctx.lineCap     = 'round'
@@ -133,7 +136,7 @@ export function drawEgoPosesBackground(
       const [px, py] = toPixel(pose.translation)
       ctx.beginPath()
       ctx.arc(px, py, dotRadius, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(100, 160, 255, 0.25)'
+      ctx.fillStyle = 'rgba(100, 160, 255, 0.55)'
       ctx.fill()
     })
   })

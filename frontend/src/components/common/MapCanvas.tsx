@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useLayoutEffect } from 'react'
 import { useBasemap } from '@/api/maps'
+import { WAYPOINTS } from '@/config/settings'
 import { drawEgoPoses, drawEgoPosesBackground, hitTestEgoPoseGroups } from '@/lib/canvasUtils'
 import { egoPoseToPixel } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
@@ -13,6 +14,7 @@ interface MapCanvasProps {
   centerPoint?:   [number, number] | null  // センタリングしたいメートル座標 [x, y]
   backgroundEgoPoseGroups?: EgoPosePoint[][] // 背景として薄く表示するシーングループ
   onBackgroundGroupClick?: (groupIndex: number) => void // 背景グループの Waypoint クリック時（省略時は非インタラクティブ）
+  waypointSizePx?: number                  // 前景 Waypoint の点半径px（幅3000px基準。デフォルト: sample_waypoint_size）
   fitToMap?: boolean                       // true → 初期ズームを地図全体表示に固定
   className?:     string
 }
@@ -26,6 +28,7 @@ export default function MapCanvas({
   centerPoint,
   backgroundEgoPoseGroups,
   onBackgroundGroupClick,
+  waypointSizePx = WAYPOINTS.SAMPLE_WAYPOINT_SIZE,
   fitToMap      = false,
   className,
 }: MapCanvasProps) {
@@ -96,8 +99,8 @@ export default function MapCanvas({
 
     if (egoPoses.length === 0) return
 
-    drawEgoPoses(ctx, egoPoses, currentIndex, displaySize, location, showStartEnd)
-  }, [bitmap, egoPoses, currentIndex, showStartEnd, location, backgroundEgoPoseGroups])
+    drawEgoPoses(ctx, egoPoses, currentIndex, displaySize, location, showStartEnd, waypointSizePx)
+  }, [bitmap, egoPoses, currentIndex, showStartEnd, location, backgroundEgoPoseGroups, waypointSizePx])
 
   // cropToContent: ego poses の範囲にズームし、重心をコンテナ中央にセンタリング（派生 state）
   const cropDepsKey = cropToContent
@@ -186,9 +189,9 @@ export default function MapCanvas({
     const rect = e.currentTarget.getBoundingClientRect()
     const canvasX = (e.clientX - rect.left - offset.x) / zoom
     const canvasY = (e.clientY - rect.top  - offset.y) / zoom
-    // 画面上で約8pxのクリック許容（背景ドット半径 1.5 * sizeScale より少し大きめを下限に）
+    // 画面上で約8pxのクリック許容（背景ドット半径より少し大きめを下限に）
     const sizeScale   = bitmap.width / 3000
-    const hitRadiusPx = Math.max(8 / zoom, 2 * sizeScale)
+    const hitRadiusPx = Math.max(8 / zoom, (WAYPOINTS.SCENE_WAYPOINT_SIZE + 1) * sizeScale)
     return hitTestEgoPoseGroups(
       backgroundEgoPoseGroups,
       [canvasX, canvasY],

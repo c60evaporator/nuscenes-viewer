@@ -19,6 +19,10 @@ interface SettingsYml {
       max_deviation: number
     }
   }
+  waypoints: {
+    scene_waypoint_size: number
+    sample_waypoint_size: number
+  }
 }
 
 const s = rawSettings as unknown as SettingsYml
@@ -34,6 +38,11 @@ export const ANNOTATION = {
   TRANSLATION_EXTRAPOLATION_MAX: s.annotation.translation_extrapolation_max,
   DEFAULT_FORWARD_DISTANCE:      s.annotation.default_forward_distance,
   GROUND_HEIGHT_DETECTION:       s.annotation.ground_height_detection,
+} as const
+
+export const WAYPOINTS = {
+  SCENE_WAYPOINT_SIZE:  s.waypoints.scene_waypoint_size,
+  SAMPLE_WAYPOINT_SIZE: s.waypoints.sample_waypoint_size,
 } as const
 
 export const LAYER_DISPLAY_ORDER = s.layer_display_order as string[]

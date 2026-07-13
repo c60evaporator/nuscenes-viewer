@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { drawEgoPoses, drawBBox2D, sensorToBevPixel, bevPixelToSensor, hitTestEgoPoseGroups } from '@/lib/canvasUtils'
+import { drawEgoPoses, drawEgoPosesBackground, drawBBox2D, sensorToBevPixel, bevPixelToSensor, hitTestEgoPoseGroups } from '@/lib/canvasUtils'
 import type { BevViewParams } from '@/lib/canvasUtils'
 import { egoPoseToPixel } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
@@ -87,6 +87,52 @@ describe('drawEgoPoses', () => {
     const radii = arcCalls.map((c) => c[2])
     expect(radii[1]).toBeGreaterThan(radii[0])
     expect(radii[1]).toBeGreaterThan(radii[2])
+  })
+
+  it('dotRadiusPx 指定で通常点:強調点:Start/End が 1:2:1.5 でスケールする', () => {
+    // displaySize 幅3000px → sizeScale = 1 で radiusPx がそのまま半径になる
+    const disp3000: [number, number] = [3000, 3000]
+    const poses = [makePose(0, 0), makePose(5, 5), makePose(10, 10), makePose(15, 15)]
+    drawEgoPoses(ctx, poses, 1, disp3000, LOC, false, 12)
+    const radii = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[2])
+    expect(radii[0]).toBe(18)  // Start（1.5倍）
+    expect(radii[1]).toBe(24)  // currentIndex=1（2倍）
+    expect(radii[2]).toBe(12)  // 通常点
+    expect(radii[3]).toBe(18)  // End（1.5倍）
+  })
+})
+
+describe('drawEgoPosesBackground', () => {
+  let ctx: CanvasRenderingContext2D
+
+  beforeEach(() => { ctx = makeCtx() })
+
+  const DISP: [number, number] = [3000, 3000]  // sizeScale = 1
+  const LOC = 'singapore-onenorth'
+
+  it('does nothing when groups are empty', () => {
+    drawEgoPosesBackground(ctx, [], DISP, LOC)
+    expect(ctx.beginPath).not.toHaveBeenCalled()
+  })
+
+  it('各グループの各点に arc を描画する', () => {
+    const groups = [
+      [makePose(0, 0), makePose(5, 5)],
+      [makePose(10, 10)],
+    ]
+    drawEgoPosesBackground(ctx, groups, DISP, LOC)
+    expect(ctx.arc).toHaveBeenCalledTimes(3)
+  })
+
+  it('dotRadiusPx が点の半径に反映される', () => {
+    drawEgoPosesBackground(ctx, [[makePose(0, 0)]], DISP, LOC, 5)
+    const arcCalls = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls
+    expect(arcCalls[0][2]).toBe(5)
+  })
+
+  it('点の色は濃い青 rgba(100, 160, 255, 0.55)', () => {
+    drawEgoPosesBackground(ctx, [[makePose(0, 0)]], DISP, LOC)
+    expect(ctx.fillStyle).toBe('rgba(100, 160, 255, 0.55)')
   })
 })
 

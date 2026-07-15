@@ -2,7 +2,7 @@ import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/rea
 import { apiFetch } from './client'
 import type { Scene, Sample, SceneListResponse } from '../types/scene'
 import type { SceneDeleteResult } from '../types/sceneDelete'
-import type { EgoPosePoint } from '../types/sensor'
+import type { EgoPosePoint, SceneSampleSensorData } from '../types/sensor'
 
 export function useScenes(params?: { limit?: number; offset?: number }) {
   const limit  = params?.limit  ?? 50
@@ -35,6 +35,19 @@ export function useSceneEgoPoses(token: string | null) {
     queryFn:  () => apiFetch<EgoPosePoint[]>(`/scenes/${token}/ego-poses`),
     enabled:  !!token,
   })
+}
+
+/** scene 内全 sample のセンサーデータマップを一括取得する queryOptions（動画生成用） */
+export function sceneSensorDataQueryOptions(token: string, channels: string[]) {
+  const channelsCsv = [...channels].sort().join(',')
+  return {
+    queryKey: ['scene-sensor-data', token, channelsCsv] as const,
+    queryFn: () =>
+      apiFetch<SceneSampleSensorData[]>(
+        `/scenes/${token}/sensor-data?channels=${encodeURIComponent(channelsCsv)}`,
+      ),
+    staleTime: Infinity,
+  }
 }
 
 /** ユーザ追加 scene を関連レコードごと削除する（DELETE /scenes/{token}） */

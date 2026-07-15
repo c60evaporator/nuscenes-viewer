@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { drawEgoPoses, drawEgoPosesBackground, drawBBox2D, sensorToBevPixel, bevPixelToSensor, hitTestEgoPoseGroups } from '@/lib/canvasUtils'
+import { drawEgoPoses, drawEgoPosesBackground, drawBBox2D, drawCameraBBoxes, sensorToBevPixel, bevPixelToSensor, hitTestEgoPoseGroups } from '@/lib/canvasUtils'
 import type { BevViewParams } from '@/lib/canvasUtils'
 import { egoPoseToPixel } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
+import type { Annotation } from '@/types/annotation'
 
 // Minimal CanvasRenderingContext2D mock
 function makeCtx() {
@@ -218,6 +219,76 @@ describe('drawBBox2D', () => {
   it('does not draw label when not provided', () => {
     drawBBox2D(ctx, makeCorners(), '#fff')
     expect(ctx.fillText).not.toHaveBeenCalled()
+  })
+})
+
+describe('drawCameraBBoxes', () => {
+  let ctx: CanvasRenderingContext2D
+
+  beforeEach(() => { ctx = makeCtx() })
+
+  // カメラ正面 (ego から x+ 方向 10m 先) に置いた BBox が投影されるセットアップ
+  const egoPose = { translation: [0, 0, 0], rotation: [1, 0, 0, 0] }
+  // カメラ光軸を ego x+ に向ける回転（ego → camera: z が前方になるよう -90°/+90° 合成）
+  const calibSensor = {
+    translation: [0, 0, 1.5],
+    rotation: [0.5, -0.5, 0.5, -0.5],
+  }
+  const intrinsic = [
+    [1000, 0, 800],
+    [0, 1000, 450],
+    [0, 0, 1],
+  ]
+
+  const makeAnnotation = (token: string, x: number): Annotation => ({
+    token,
+    sample_token:     'sample-1',
+    instance_token:   `inst-${token}`,
+    translation:      [x, 0, 1],
+    rotation:         [1, 0, 0, 0],
+    size:             [2, 4, 1.5],
+    prev:             null,
+    next:             null,
+    num_lidar_pts:    0,
+    num_radar_pts:    0,
+    visibility_token: null,
+    category_token:   'cat-1',
+    attributes:       [],
+    visibility:       null,
+  } as unknown as Annotation)
+
+  it('カメラ前方の BBox 1件につき rect を1件返す', () => {
+    const rects = drawCameraBBoxes(
+      ctx, [makeAnnotation('ann-1', 10)], egoPose, calibSensor, intrinsic, 1, 1,
+    )
+    expect(rects).toHaveLength(1)
+    expect(rects[0].token).toBe('ann-1')
+    expect(rects[0].maxX).toBeGreaterThan(rects[0].minX)
+    expect(rects[0].maxY).toBeGreaterThan(rects[0].minY)
+  })
+
+  it('カメラ後方の BBox は描画されず rect も返らない', () => {
+    const rects = drawCameraBBoxes(
+      ctx, [makeAnnotation('ann-behind', -10)], egoPose, calibSensor, intrinsic, 1, 1,
+    )
+    expect(rects).toHaveLength(0)
+    expect(ctx.beginPath).not.toHaveBeenCalled()
+  })
+
+  it('colorFor が strokeStyle に反映される', () => {
+    drawCameraBBoxes(
+      ctx, [makeAnnotation('ann-1', 10)], egoPose, calibSensor, intrinsic, 1, 1,
+      { colorFor: () => '#FF8C00' },
+    )
+    expect(ctx.strokeStyle).toBe('#FF8C00')
+  })
+
+  it('opts 省略時はエラーなく描画され globalAlpha を変更しない', () => {
+    const rects = drawCameraBBoxes(
+      ctx, [makeAnnotation('ann-1', 10), makeAnnotation('ann-2', 15)],
+      egoPose, calibSensor, intrinsic, 0.5, 0.5,
+    )
+    expect(rects).toHaveLength(2)
   })
 })
 

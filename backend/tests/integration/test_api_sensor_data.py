@@ -440,3 +440,55 @@ async def test_best_camera_wrong_sample_returns_404(
         f"?sample_token={unrelated_sample}"
     )
     assert resp.status_code == 404
+
+
+# ── GET /api/v1/sensor-data/{token}/image?max_size=N ─────────────────────────
+
+async def test_image_max_size_downscales(
+    client: AsyncClient, real_camera_sample_data_token: str
+):
+    """max_size 指定時に長辺が max_size 以下へ縮小されること。"""
+    PIL = pytest.importorskip("PIL.Image")
+    resp = await client.get(
+        f"/api/v1/sensor-data/{real_camera_sample_data_token}/image?max_size=320"
+    )
+    assert resp.status_code == 200
+    img = PIL.open(BytesIO(resp.content))
+    assert max(img.width, img.height) <= 320
+
+
+async def test_image_max_size_keeps_aspect_ratio(
+    client: AsyncClient, real_camera_sample_data_token: str
+):
+    """縮小時にアスペクト比が維持されること。"""
+    PIL = pytest.importorskip("PIL.Image")
+    orig = await client.get(f"/api/v1/sensor-data/{real_camera_sample_data_token}/image")
+    small = await client.get(
+        f"/api/v1/sensor-data/{real_camera_sample_data_token}/image?max_size=320"
+    )
+    orig_img = PIL.open(BytesIO(orig.content))
+    small_img = PIL.open(BytesIO(small.content))
+    orig_ratio = orig_img.width / orig_img.height
+    small_ratio = small_img.width / small_img.height
+    assert abs(orig_ratio - small_ratio) < 0.05
+
+
+async def test_image_max_size_larger_than_original_returns_original(
+    client: AsyncClient, real_camera_sample_data_token: str
+):
+    """max_size が元サイズ以上なら元 bytes がそのまま返ること。"""
+    orig = await client.get(f"/api/v1/sensor-data/{real_camera_sample_data_token}/image")
+    same = await client.get(
+        f"/api/v1/sensor-data/{real_camera_sample_data_token}/image?max_size=4096"
+    )
+    assert same.content == orig.content
+
+
+async def test_image_max_size_out_of_range_returns_422(
+    client: AsyncClient, real_camera_sample_data_token: str
+):
+    for bad in (10, 8000):
+        resp = await client.get(
+            f"/api/v1/sensor-data/{real_camera_sample_data_token}/image?max_size={bad}"
+        )
+        assert resp.status_code == 422, f"max_size={bad} should be rejected"

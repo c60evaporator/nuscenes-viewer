@@ -237,3 +237,58 @@ async def test_get_scene_samples_empty_when_no_samples(client: AsyncClient, scen
     resp = await client.get(f"/api/v1/scenes/{_SCENE2_TOKEN}/samples")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GET /api/v1/scenes/{token}/sensor-data
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def test_scene_sensor_data_returns_all_samples(client: AsyncClient, log_and_scene):
+    """scene 内全 sample が timestamp 昇順で返り、各 sample に LIDAR_TOP の brief が含まれること。"""
+    from tests.conftest import _LGCAT_SAMPLE_TOKENS, _LGCAT_SCENE_TOKEN, _LGCAT_SD_TOKENS
+
+    resp = await client.get(f"/api/v1/scenes/{_LGCAT_SCENE_TOKEN}/sensor-data")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [e["sample_token"] for e in body] == _LGCAT_SAMPLE_TOKENS
+    timestamps = [e["timestamp"] for e in body]
+    assert timestamps == sorted(timestamps)
+    for i, entry in enumerate(body):
+        brief = entry["channels"]["LIDAR_TOP"]
+        assert brief["token"] == _LGCAT_SD_TOKENS[i]
+        for field in ("token", "filename", "fileformat", "calibrated_sensor_token", "ego_pose"):
+            assert field in brief, f"Missing field: {field}"
+        assert "translation" in brief["ego_pose"]
+        assert "rotation" in brief["ego_pose"]
+
+
+async def test_scene_sensor_data_channels_filter_match(client: AsyncClient, log_and_scene):
+    """channels フィルタに一致するチャンネルのみ返ること。"""
+    from tests.conftest import _LGCAT_SCENE_TOKEN
+
+    resp = await client.get(
+        f"/api/v1/scenes/{_LGCAT_SCENE_TOKEN}/sensor-data?channels=LIDAR_TOP,CAM_FRONT"
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 3
+    for entry in body:
+        assert set(entry["channels"].keys()) == {"LIDAR_TOP"}
+
+
+async def test_scene_sensor_data_channels_filter_no_match(client: AsyncClient, log_and_scene):
+    """一致チャンネルなしの場合も sample ごとのエントリは返り、channels は空になること。"""
+    from tests.conftest import _LGCAT_SCENE_TOKEN
+
+    resp = await client.get(
+        f"/api/v1/scenes/{_LGCAT_SCENE_TOKEN}/sensor-data?channels=CAM_FRONT"
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 3
+    assert all(entry["channels"] == {} for entry in body)
+
+
+async def test_scene_sensor_data_not_found_returns_404(client: AsyncClient):
+    resp = await client.get("/api/v1/scenes/scene-does-not-exist-000/sensor-data")
+    assert resp.status_code == 404

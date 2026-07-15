@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useLayoutEffect } from 'react'
 import { useSensorImage } from '@/api/sensorData'
-import { project3DTo2D, bboxCornersToGlobal, projectMapCoordsToCamera } from '@/lib/coordinateUtils'
-import { drawBBox2D, drawArrow2D, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint, drawProjectedArrow, drawProjectedLabel } from '@/lib/canvasUtils'
-import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
+import { project3DTo2D, projectMapCoordsToCamera } from '@/lib/coordinateUtils'
+import { drawCameraBBoxes, drawProjectedPolygon, drawProjectedLine, drawProjectedPoint, drawProjectedArrow, drawProjectedLabel } from '@/lib/canvasUtils'
+import type { CameraBBoxRect } from '@/lib/canvasUtils'
 import { LAYER_COLORS } from '@/layers/MapAnnotationLayers'
 import { MAP_PROJECTION, ANNOTATION } from '@/config/settings'
 import type { Annotation } from '@/types/annotation'
@@ -214,16 +214,6 @@ function drawMapFeatureOnCanvas(
   }
 }
 
-// ── BBox の画面上 2D 矩形境界（クリック判定用）────────────────────────────────
-
-interface BBoxRect {
-  token: string
-  minX:  number
-  minY:  number
-  maxX:  number
-  maxY:  number
-}
-
 export default function CameraImageCanvas({
   sampleDataToken,
   calibratedSensor,
@@ -246,7 +236,7 @@ export default function CameraImageCanvas({
     offsetX:  number; offsetY:  number
     scaleX:   number; scaleY:   number
   } | null>(null)
-  const bboxRectsRef          = useRef<BBoxRect[]>([])
+  const bboxRectsRef          = useRef<CameraBBoxRect[]>([])
   const projectedFeaturesRef  = useRef<ProjectedFeatureHit[]>([])
   const drawBBoxesRef         = useRef<(() => void) | null>(null)
   const bitmapRef             = useRef<ImageBitmap | null>(null)
@@ -313,60 +303,22 @@ export default function CameraImageCanvas({
     }
 
     const intrinsic = calibratedSensor.camera_intrinsic
-    const newBBoxRects: BBoxRect[] = []
 
-    for (const ann of annotations) {
-      const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
-
-      const corners2D: [number, number][] = []
-      for (const corner of globalCorners) {
-        const px = project3DTo2D(corner, intrinsic, egoPose, calibArray)
-        if (px !== null) {
-          corners2D.push([px[0] * scaleX, px[1] * scaleY])
-        }
-      }
-
-      if (corners2D.length < 4) continue
-
-      while (corners2D.length < 8) corners2D.push(corners2D[corners2D.length - 1])
-
-      const allX = corners2D.map((c) => c[0])
-      const allY = corners2D.map((c) => c[1])
-      newBBoxRects.push({
-        token: ann.token,
-        minX:  Math.min(...allX),
-        minY:  Math.min(...allY),
-        maxX:  Math.max(...allX),
-        maxY:  Math.max(...allY),
-      })
-
-      const isEditingAnn = ann.instance_token === editingInstanceToken
-      const color = isEditingAnn
-        ? '#FF8C00'
-        : ann.instance_token === highlightInstanceToken
-          ? '#FFFF00'
-          : '#4ADE80'
-      if (isEditingAnn) ctx.globalAlpha = ANNOTATION.EDITING_ORIGINAL_OPACITY
-      drawBBox2D(ctx, corners2D, color)
-
-      // 矢印描画
-      const arrowExtra = Math.min(1.0, ann.size[1] * 0.3)
-      const arrowStartGlobal = getBBoxFrontCenter(ann.translation, ann.rotation, ann.size)
-      const arrowEndGlobal   = getBBoxArrowTip(ann.translation, ann.rotation, ann.size, arrowExtra)
-      const arrowStartPx = project3DTo2D(arrowStartGlobal, intrinsic, egoPose, calibArray)
-      const arrowEndPx   = project3DTo2D(arrowEndGlobal,   intrinsic, egoPose, calibArray)
-      if (arrowStartPx !== null && arrowEndPx !== null) {
-          drawArrow2D(
-              ctx,
-              [arrowStartPx[0] * scaleX, arrowStartPx[1] * scaleY],
-              [arrowEndPx[0]   * scaleX, arrowEndPx[1]   * scaleY],
-              color, 2, 10, 10,
-          )
-      }
-      if (isEditingAnn) ctx.globalAlpha = 1.0
-    }
-
-    bboxRectsRef.current = newBBoxRects
+    bboxRectsRef.current = drawCameraBBoxes(
+      ctx, annotations, egoPose, calibArray, intrinsic, scaleX, scaleY,
+      {
+        colorFor: (ann) =>
+          ann.instance_token === editingInstanceToken
+            ? '#FF8C00'
+            : ann.instance_token === highlightInstanceToken
+              ? '#FFFF00'
+              : '#4ADE80',
+        alphaFor: (ann) =>
+          ann.instance_token === editingInstanceToken
+            ? ANNOTATION.EDITING_ORIGINAL_OPACITY
+            : 1.0,
+      },
+    )
 
     // ── Map フィーチャーをカメラ画像上に投影描画 ──────────────────────────────
     const newProjectedFeatures: ProjectedFeatureHit[] = []

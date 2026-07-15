@@ -61,12 +61,21 @@ export interface SensorDataBrief {
   filename:                string
   fileformat:              string
   calibrated_sensor_token: string
+  width:                   number | null  // 元画像の幅px（カメラのみ）
+  height:                  number | null  // 元画像の高さpx（カメラのみ）
   ego_pose:                { translation: number[]; rotation: number[] }
 }
 
 // GET /api/v1/samples/{token}/sensor-data レスポンス全体
 // キー: チャンネル名（'CAM_FRONT', 'LIDAR_TOP' など）
 export type SensorDataMap = Record<string, SensorDataBrief>
+
+// GET /api/v1/scenes/{token}/sensor-data レスポンスの各エントリ（SceneSampleSensorDataResponse に対応）
+export interface SceneSampleSensorData {
+  sample_token: string
+  timestamp:    number
+  channels:     SensorDataMap
+}
 
 // GET /api/v1/sensor-data/{token}/pointcloud レスポンス
 export interface PointCloud {

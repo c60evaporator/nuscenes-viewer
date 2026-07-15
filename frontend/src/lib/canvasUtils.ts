@@ -3,8 +3,10 @@
  * コンポーネント内に描画ロジックを書かず、この関数群を経由する
  */
 import type { EgoPosePoint } from '../types/sensor'
+import type { Annotation } from '../types/annotation'
 import { WAYPOINTS } from '@/config/settings'
-import { egoPoseToPixel } from './coordinateUtils'
+import { egoPoseToPixel, project3DTo2D, bboxCornersToGlobal } from './coordinateUtils'
+import { getBBoxFrontCenter, getBBoxArrowTip } from './bboxArrowGeometry'
 
 // ── Ego Pose 描画 ────────────────────────────────────────────────────────────
 
@@ -230,6 +232,97 @@ export function drawBBox2D(
   }
 
   ctx.restore()
+}
+
+// ── カメラ画像上の BBox 描画 ──────────────────────────────────────────────────
+
+/** BBox の画面上 2D 矩形境界（クリック判定用） */
+export interface CameraBBoxRect {
+  token: string
+  minX:  number
+  minY:  number
+  maxX:  number
+  maxY:  number
+}
+
+/**
+ * アノテーション群をカメラ画像座標に 3D→2D 投影して BBox + 向き矢印を描画する
+ * （CameraImageCanvas と動画フレーム生成で共用）
+ *
+ * @param ctx         描画先の 2D コンテキスト
+ * @param annotations 描画対象のアノテーション
+ * @param egoPose     カメラ SampleData 自身の ego pose
+ * @param calibSensor カメラの CalibratedSensor（translation / rotation）
+ * @param intrinsic   カメラ内部パラメータ 3x3
+ * @param scaleX      元画像座標 → 描画先座標の xスケール
+ * @param scaleY      元画像座標 → 描画先座標の yスケール
+ * @param opts        colorFor: アノテーション別の線色（デフォルト #4ADE80）
+ *                    alphaFor: アノテーション別の不透明度（デフォルト 1.0）
+ * @returns           描画した BBox の 2D 矩形境界リスト（クリック判定用）
+ */
+export function drawCameraBBoxes(
+  ctx:         CanvasRenderingContext2D,
+  annotations: Annotation[],
+  egoPose:     { translation: number[]; rotation: number[] },
+  calibSensor: { translation: number[]; rotation: number[] },
+  intrinsic:   number[][],
+  scaleX:      number,
+  scaleY:      number,
+  opts?: {
+    colorFor?: (ann: Annotation) => string
+    alphaFor?: (ann: Annotation) => number
+  },
+): CameraBBoxRect[] {
+  const rects: CameraBBoxRect[] = []
+
+  for (const ann of annotations) {
+    const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
+
+    const corners2D: [number, number][] = []
+    for (const corner of globalCorners) {
+      const px = project3DTo2D(corner, intrinsic, egoPose, calibSensor)
+      if (px !== null) {
+        corners2D.push([px[0] * scaleX, px[1] * scaleY])
+      }
+    }
+
+    if (corners2D.length < 4) continue
+
+    while (corners2D.length < 8) corners2D.push(corners2D[corners2D.length - 1])
+
+    const allX = corners2D.map((c) => c[0])
+    const allY = corners2D.map((c) => c[1])
+    rects.push({
+      token: ann.token,
+      minX:  Math.min(...allX),
+      minY:  Math.min(...allY),
+      maxX:  Math.max(...allX),
+      maxY:  Math.max(...allY),
+    })
+
+    const color = opts?.colorFor?.(ann) ?? '#4ADE80'
+    const alpha = opts?.alphaFor?.(ann) ?? 1.0
+    if (alpha !== 1.0) ctx.globalAlpha = alpha
+    drawBBox2D(ctx, corners2D, color)
+
+    // 矢印描画
+    const arrowExtra = Math.min(1.0, ann.size[1] * 0.3)
+    const arrowStartGlobal = getBBoxFrontCenter(ann.translation, ann.rotation, ann.size)
+    const arrowEndGlobal   = getBBoxArrowTip(ann.translation, ann.rotation, ann.size, arrowExtra)
+    const arrowStartPx = project3DTo2D(arrowStartGlobal, intrinsic, egoPose, calibSensor)
+    const arrowEndPx   = project3DTo2D(arrowEndGlobal,   intrinsic, egoPose, calibSensor)
+    if (arrowStartPx !== null && arrowEndPx !== null) {
+      drawArrow2D(
+        ctx,
+        [arrowStartPx[0] * scaleX, arrowStartPx[1] * scaleY],
+        [arrowEndPx[0]   * scaleX, arrowEndPx[1]   * scaleY],
+        color, 2, 10, 10,
+      )
+    }
+    if (alpha !== 1.0) ctx.globalAlpha = 1.0
+  }
+
+  return rects
 }
 
 // ── 点群 BEV 描画 ─────────────────────────────────────────────────────────────

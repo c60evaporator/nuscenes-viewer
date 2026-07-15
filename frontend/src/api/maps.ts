@@ -3,18 +3,25 @@ import { apiFetch } from './client'
 import type { MapMeta, MapLayer, GeoJSONFeatureCollection } from '../types/map'
 import type { PaginatedResponse } from '../types/common'
 
-export function useBasemap(location: string | null) {
-  return useQuery({
-    queryKey: ['basemap', location],
+/** ベースマップ画像の queryOptions（useBasemap と動画生成プリフェッチでキー共有） */
+export function basemapQueryOptions(location: string) {
+  return {
+    queryKey: ['basemap', location] as const,
     queryFn: async () => {
       const res = await fetch(`/api/v1/maps/${location}/basemap`)
       if (!res.ok) throw new Error('basemap fetch failed')
       const blob = await res.blob()
       return createImageBitmap(blob)
     },
-    enabled:   !!location,
     staleTime: Infinity,
     gcTime:    Infinity,
+  }
+}
+
+export function useBasemap(location: string | null) {
+  return useQuery({
+    ...basemapQueryOptions(location ?? ''),
+    enabled: !!location,
   })
 }
 

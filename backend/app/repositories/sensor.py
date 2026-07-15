@@ -2,6 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.scene import Sample
 from app.models.sensor import CalibratedSensor, EgoPose, SampleData, Sensor
 
 
@@ -97,6 +98,36 @@ class SensorRepository:
             )
             .order_by(SampleData.timestamp)
         )
+        return list(result.scalars().all())
+
+    async def get_sample_data_by_scene(
+        self, scene_token: str, channels: list[str] | None = None
+    ) -> list[SampleData]:
+        """scene 内全 sample のキーフレーム SampleData を返す（channels 指定時は絞り込み）。"""
+        sample_tokens_subq = (
+            select(Sample.token)
+            .where(Sample.scene_token == scene_token)
+            .scalar_subquery()
+        )
+        q = (
+            select(SampleData)
+            .join(CalibratedSensor, SampleData.calibrated_sensor_token == CalibratedSensor.token)
+            .join(Sensor, CalibratedSensor.sensor_token == Sensor.token)
+            .options(
+                selectinload(SampleData.calibrated_sensor).selectinload(
+                    CalibratedSensor.sensor
+                ),
+                selectinload(SampleData.ego_pose),
+            )
+            .where(
+                SampleData.sample_token.in_(sample_tokens_subq),
+                SampleData.is_key_frame.is_(True),
+            )
+            .order_by(SampleData.timestamp)
+        )
+        if channels:
+            q = q.where(Sensor.channel.in_(channels))
+        result = await self.db.execute(q)
         return list(result.scalars().all())
 
     async def get_sample_data_by_token(self, token: str) -> SampleData | None:

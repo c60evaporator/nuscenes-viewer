@@ -8,6 +8,7 @@ import SampleList from '@/components/sample/SampleList'
 import SampleSlider from '@/components/sample/SampleSlider'
 import SampleInfo from '@/components/sample/SampleInfo'
 import SensorGrid from '@/components/sample/SensorGrid'
+import CreateMovieModal from '@/components/sample/CreateMovieModal'
 import { useScenes } from '@/api/scenes'
 import { useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
@@ -37,6 +38,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
   )
   const [highlightInstanceToken, setHighlightInstanceToken] = useState<string | null>(null)
   const [currentSampleIndex, setCurrentSampleIndex] = useState(0)
+  const [movieOpen, setMovieOpen] = useState(false)
 
   const handleBBoxClick = (annToken: string) => {
     const ann = (annotations ?? []).find((a) => a.token === annToken)
@@ -133,25 +135,35 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
     [sensorDataMap, egoPoses, currentSampleToken],
   )
 
-  // Annotations ボタン
-  const annotationsButton = (
-    <Button
-      className="w-full text-white text-xs"
-      style={{ backgroundColor: '#4A90D9' }}
-      disabled={!currentSampleToken}
-      onClick={() => {
-        if (!currentSampleToken) return
-        setInstance(highlightInstanceToken)
-        // TODO: 将来的には別ウィンドウ対応。現在は同一ウィンドウで遷移
-        lock('sample', {
-          sceneToken:  selectedSceneToken ?? undefined,
-          sampleToken: currentSampleToken,
-        })
-        onTabChange('annotation')
-      }}
-    >
-      Annotations
-    </Button>
+  // 右ペイン下部のアクションボタン群
+  const actionButtons = (
+    <div className="flex flex-col gap-2">
+      <Button
+        className="w-full text-white text-xs"
+        style={{ backgroundColor: '#4A90D9' }}
+        disabled={!currentSampleToken}
+        onClick={() => {
+          if (!currentSampleToken) return
+          setInstance(highlightInstanceToken)
+          // TODO: 将来的には別ウィンドウ対応。現在は同一ウィンドウで遷移
+          lock('sample', {
+            sceneToken:  selectedSceneToken ?? undefined,
+            sampleToken: currentSampleToken,
+          })
+          onTabChange('annotation')
+        }}
+      >
+        Annotations
+      </Button>
+      <Button
+        className="w-full text-white text-xs"
+        style={{ backgroundColor: '#4A90D9' }}
+        disabled={!selectedSceneToken || samples.length === 0}
+        onClick={() => setMovieOpen(true)}
+      >
+        Create Movie
+      </Button>
+    </div>
   )
 
   return (
@@ -184,7 +196,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
         </LeftPane>
       }
       right={
-        <RightPane actions={annotationsButton}>
+        <RightPane actions={actionButtons}>
           <SampleInfo
             sample={selectedSample}
             instances={instances ?? []}
@@ -207,6 +219,18 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
         onBBoxClick={handleBBoxClick}
         highlightInstanceToken={highlightInstanceToken ?? undefined}
       />
+      {selectedSceneToken && (
+        <CreateMovieModal
+          open={movieOpen}
+          onOpenChange={setMovieOpen}
+          sceneToken={selectedSceneToken}
+          sceneName={locationScenes.find((s) => s.token === selectedSceneToken)?.name ?? null}
+          samples={samples}
+          calibSensorMap={calibSensorMap}
+          egoPoses={egoPoses ?? []}
+          location={currentMapLocation}
+        />
+      )}
     </MainLayout>
   )
 }

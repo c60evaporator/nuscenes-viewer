@@ -2,11 +2,11 @@
  * 動画エンコーダ抽象化
  *
  * 現在は MediaRecorder + canvas.captureStream 実装のみ。
- * フレーム精度が必要になった場合は、同じ MovieEncoder インターフェースで
+ * フレーム精度が必要になった場合は、同じ FrameEncoder インターフェースで
  * WebCodecs (VideoEncoder + muxer) 実装に差し替える（frameDrawn() を即時解決にするだけ）。
  */
 
-export interface MovieEncoder {
+export interface FrameEncoder {
   /** 録画を開始する。canvas はレイアウトサイズに設定済みであること */
   start(canvas: HTMLCanvasElement, fps: number): void
   /** フレームを 1 枚描画し終えた後に呼ぶ。次フレームを描画可能になるまで待機する */
@@ -35,7 +35,7 @@ export function pickSupportedWebmMimeType(): string | null {
   return null
 }
 
-export function createMediaRecorderEncoder(): MovieEncoder {
+export function createMediaRecorderEncoder(): FrameEncoder {
   let recorder: MediaRecorder | null = null
   let track:    CanvasCaptureMediaStreamTrack | null = null
   let chunks:   Blob[] = []

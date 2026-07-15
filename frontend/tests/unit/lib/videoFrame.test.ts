@@ -1,25 +1,25 @@
 import { describe, it, expect } from 'vitest'
 import {
-  computeMovieLayout,
-  MOVIE_CELL_W,
-  MOVIE_CELL_H,
-  MOVIE_CHANNEL_ORDER,
-} from '@/lib/movieFrame'
+  computeVideoLayout,
+  VIDEO_CELL_W,
+  VIDEO_CELL_H,
+  VIDEO_CHANNEL_ORDER,
+} from '@/lib/videoFrame'
 
-describe('computeMovieLayout', () => {
+describe('computeVideoLayout', () => {
   it('9チャンネル選択で 3x3 (1920x1080) になる', () => {
-    const layout = computeMovieLayout([...MOVIE_CHANNEL_ORDER])
+    const layout = computeVideoLayout([...VIDEO_CHANNEL_ORDER])
     expect(layout.cols).toBe(3)
     expect(layout.rows).toBe(3)
-    expect(layout.width).toBe(3 * MOVIE_CELL_W)   // 1920
-    expect(layout.height).toBe(3 * MOVIE_CELL_H)  // 1080
+    expect(layout.width).toBe(3 * VIDEO_CELL_W)   // 1920
+    expect(layout.height).toBe(3 * VIDEO_CELL_H)  // 1080
     expect(layout.cells).toHaveLength(9)
   })
 
-  it('チャンネルは MOVIE_CHANNEL_ORDER 順に配置され EGO_POSE が左上に来る', () => {
+  it('チャンネルは VIDEO_CHANNEL_ORDER 順に配置され EGO_POSE が左上に来る', () => {
     // 入力順をシャッフルしても配置順は固定
     const shuffled = ['CAM_BACK', 'EGO_POSE', 'RADAR_FRONT', 'LIDAR_TOP']
-    const layout = computeMovieLayout(shuffled)
+    const layout = computeVideoLayout(shuffled)
     expect(layout.cells.map((c) => c.channel)).toEqual([
       'EGO_POSE', 'LIDAR_TOP', 'RADAR_FRONT', 'CAM_BACK',
     ])
@@ -31,30 +31,30 @@ describe('computeMovieLayout', () => {
       'CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
       'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT',
     ]
-    const layout = computeMovieLayout(cams)
+    const layout = computeVideoLayout(cams)
     expect(layout.cols).toBe(3)
     expect(layout.rows).toBe(2)
     // 1行目が FRONT 系、2行目が BACK 系
     expect(layout.cells.slice(0, 3).map((c) => c.channel)).toEqual([
       'CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
     ])
-    expect(layout.cells.slice(3).every((c) => c.y === MOVIE_CELL_H)).toBe(true)
+    expect(layout.cells.slice(3).every((c) => c.y === VIDEO_CELL_H)).toBe(true)
   })
 
   it('1チャンネル選択でセル1個分のサイズになる', () => {
-    const layout = computeMovieLayout(['CAM_FRONT'])
-    expect(layout.width).toBe(MOVIE_CELL_W)
-    expect(layout.height).toBe(MOVIE_CELL_H)
+    const layout = computeVideoLayout(['CAM_FRONT'])
+    expect(layout.width).toBe(VIDEO_CELL_W)
+    expect(layout.height).toBe(VIDEO_CELL_H)
     expect(layout.cells).toHaveLength(1)
   })
 
   it('未知のチャンネルは既知チャンネルの後ろに追加される', () => {
-    const layout = computeMovieLayout(['CAM_EXTRA_99', 'LIDAR_TOP'])
+    const layout = computeVideoLayout(['CAM_EXTRA_99', 'LIDAR_TOP'])
     expect(layout.cells.map((c) => c.channel)).toEqual(['LIDAR_TOP', 'CAM_EXTRA_99'])
   })
 
   it('セル同士が重ならない', () => {
-    const layout = computeMovieLayout([...MOVIE_CHANNEL_ORDER])
+    const layout = computeVideoLayout([...VIDEO_CHANNEL_ORDER])
     for (let i = 0; i < layout.cells.length; i++) {
       for (let j = i + 1; j < layout.cells.length; j++) {
         const a = layout.cells[i]
@@ -68,7 +68,7 @@ describe('computeMovieLayout', () => {
   })
 
   it('空配列で空レイアウトを返す', () => {
-    const layout = computeMovieLayout([])
+    const layout = computeVideoLayout([])
     expect(layout.width).toBe(0)
     expect(layout.height).toBe(0)
     expect(layout.cells).toHaveLength(0)

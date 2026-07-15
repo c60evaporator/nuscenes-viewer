@@ -63,5 +63,5 @@ annotation:
     max_deviation: 1.0  # priorからの最大許容乖離 (m)
 
 waypoints:
-  scene_waypoint_size: 8.0   # Scene画面のwaypointの表示サイズ（点の半径px、地図画像幅3000px基準。Start/Endは1.5倍）
+  scene_waypoint_size: 6.0   # Scene画面のwaypointの表示サイズ（点の半径px、地図画像幅3000px基準。Start/Endは1.5倍）
   sample_waypoint_size: 4.0  # Sample画面、Instance画面、Annotation画面のwaypointの表示サイズ（点の半径px、地図画像幅3000px基準）

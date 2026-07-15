@@ -3,28 +3,28 @@
  *
  * 1. prefetch フェーズ: シーン一括 sensor-data + 全フレームの画像・点群・annotations を
  *    TanStack Query fetchQuery（並列数 6）で先読みしローカル Map に保持する
- * 2. recording フェーズ: MediaRecorder（movieEncoder）で 1 フレームずつ
- *    drawMovieFrame（movieFrame）を描画・キャプチャして WebM Blob を生成する
+ * 2. recording フェーズ: MediaRecorder（videoEncoder）で 1 フレームずつ
+ *    drawVideoFrame（videoFrame）を描画・キャプチャして WebM Blob を生成する
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { sceneSensorDataQueryOptions } from '@/api/scenes'
-import { movieSensorImageQueryOptions, pointCloudQueryOptions } from '@/api/sensorData'
+import { videoSensorImageQueryOptions, pointCloudQueryOptions } from '@/api/sensorData'
 import { sampleAnnotationsQueryOptions } from '@/api/samples'
 import { basemapQueryOptions } from '@/api/maps'
 import {
-  computeMovieLayout,
-  drawMovieFrame,
+  computeVideoLayout,
+  drawVideoFrame,
   type ChannelFrameData,
-  type MovieFrameContext,
-  type MovieFrameData,
-} from '@/lib/movieFrame'
-import { createMediaRecorderEncoder, pickSupportedWebmMimeType } from '@/lib/movieEncoder'
+  type VideoFrameContext,
+  type VideoFrameData,
+} from '@/lib/videoFrame'
+import { createMediaRecorderEncoder, pickSupportedWebmMimeType } from '@/lib/videoEncoder'
 import type { Annotation } from '@/types/annotation'
 import type { CalibratedSensor, EgoPosePoint, PointCloud, SensorDataMap } from '@/types/sensor'
 import type { Sample } from '@/types/scene'
 
-export interface MovieBuildInput {
+export interface VideoBuildInput {
   sceneToken:     string
   samples:        Sample[]       // timestamp 昇順
   channels:       string[]       // 選択センサー（EGO_POSE 含む）
@@ -35,7 +35,7 @@ export interface MovieBuildInput {
   location:       string | null
 }
 
-export interface MovieBuildState {
+export interface VideoBuildState {
   phase:     'idle' | 'prefetch' | 'recording' | 'done' | 'error'
   completed: number
   total:     number
@@ -44,7 +44,7 @@ export interface MovieBuildState {
   error:     string | null
 }
 
-const INITIAL_STATE: MovieBuildState = {
+const INITIAL_STATE: VideoBuildState = {
   phase: 'idle', completed: 0, total: 0, videoUrl: null, mimeType: null, error: null,
 }
 
@@ -66,9 +66,9 @@ async function runPool(
   )
 }
 
-export function useMovieBuilder(canvasRef: RefObject<HTMLCanvasElement | null>) {
+export function useVideoBuilder(canvasRef: RefObject<HTMLCanvasElement | null>) {
   const queryClient = useQueryClient()
-  const [state, setState] = useState<MovieBuildState>(INITIAL_STATE)
+  const [state, setState] = useState<VideoBuildState>(INITIAL_STATE)
   const cancelledRef = useRef(false)
   const encoderRef   = useRef<ReturnType<typeof createMediaRecorderEncoder> | null>(null)
   const bitmapsRef   = useRef<ImageBitmap[]>([])   // 録画後に close する縮小画像
@@ -82,7 +82,7 @@ export function useMovieBuilder(canvasRef: RefObject<HTMLCanvasElement | null>) 
     }
     for (const bmp of bitmapsRef.current) bmp.close()
     bitmapsRef.current = []
-    queryClient.removeQueries({ queryKey: ['sensor-image-movie'] })
+    queryClient.removeQueries({ queryKey: ['sensor-image-video'] })
   }, [queryClient])
 
   const reset = useCallback(() => {
@@ -109,7 +109,7 @@ export function useMovieBuilder(canvasRef: RefObject<HTMLCanvasElement | null>) 
     }
   }, [releaseResources])
 
-  const start = useCallback(async (input: MovieBuildInput) => {
+  const start = useCallback(async (input: VideoBuildInput) => {
     if (runningRef.current) return
     runningRef.current = true
     cancelledRef.current = false
@@ -180,7 +180,7 @@ export function useMovieBuilder(canvasRef: RefObject<HTMLCanvasElement | null>) 
             tasks.push(async () => {
               try {
                 const bmp = await queryClient.fetchQuery(
-                  movieSensorImageQueryOptions(brief.token, maxImageSize),
+                  videoSensorImageQueryOptions(brief.token, maxImageSize),
                 )
                 imagesByToken.set(brief.token, bmp)
                 bitmapsRef.current.push(bmp)
@@ -237,7 +237,7 @@ export function useMovieBuilder(canvasRef: RefObject<HTMLCanvasElement | null>) 
         return
       }
 
-      const layout = computeMovieLayout(channels)
+      const layout = computeVideoLayout(channels)
       canvas.width  = layout.width
       canvas.height = layout.height
       const ctx = canvas.getContext('2d')
@@ -246,7 +246,7 @@ export function useMovieBuilder(canvasRef: RefObject<HTMLCanvasElement | null>) 
         return
       }
 
-      const mfc: MovieFrameContext = { layout, calibSensorMap, egoPoses, basemap, location }
+      const mfc: VideoFrameContext = { layout, calibSensorMap, egoPoses, basemap, location }
 
       const encoder = createMediaRecorderEncoder()
       encoderRef.current = encoder
@@ -296,14 +296,14 @@ export function useMovieBuilder(canvasRef: RefObject<HTMLCanvasElement | null>) 
           }
         }
 
-        const frame: MovieFrameData = {
+        const frame: VideoFrameData = {
           sampleIndex: egoPoses.findIndex((p) => p.sample_token === sample.token),
           annotations: annotationsBySample.get(sample.token) ?? [],
           egoPose:     frameEgoPose,
           channels:    channelData,
         }
 
-        drawMovieFrame(ctx, frame, mfc)
+        drawVideoFrame(ctx, frame, mfc)
         await encoder.frameDrawn()
         setState((s) => ({ ...s, completed: i + 1 }))
       }

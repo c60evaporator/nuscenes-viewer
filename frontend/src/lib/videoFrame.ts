@@ -30,17 +30,17 @@ import { WAYPOINTS } from '@/config/settings'
 // ── レイアウト ────────────────────────────────────────────────────────────────
 
 /** セルサイズ（16:9、nuScenes カメラ 1600x900 と同比率） */
-export const MOVIE_CELL_W = 640
-export const MOVIE_CELL_H = 360
+export const VIDEO_CELL_W = 640
+export const VIDEO_CELL_H = 360
 
 /** SensorGrid の DEFAULT_GRID_CONFIG の flatten 順（グリッド配置順の基準） */
-export const MOVIE_CHANNEL_ORDER = [
+export const VIDEO_CHANNEL_ORDER = [
   'EGO_POSE', 'LIDAR_TOP', 'RADAR_FRONT',
   'CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
   'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT',
 ] as const
 
-export interface MovieLayoutCell {
+export interface VideoLayoutCell {
   channel: string
   x: number
   y: number
@@ -48,20 +48,20 @@ export interface MovieLayoutCell {
   h: number
 }
 
-export interface MovieLayout {
+export interface VideoLayout {
   width:  number
   height: number
   cols:   number
   rows:   number
-  cells:  MovieLayoutCell[]
+  cells:  VideoLayoutCell[]
 }
 
 /**
- * 選択チャンネルを MOVIE_CHANNEL_ORDER 順に cols=ceil(√n) のグリッドへ配置する。
+ * 選択チャンネルを VIDEO_CHANNEL_ORDER 順に cols=ceil(√n) のグリッドへ配置する。
  * 例: 9チャンネル → 3x3 (1920x1080)、6チャンネル → 3x2
  */
-export function computeMovieLayout(channels: string[]): MovieLayout {
-  const order   = MOVIE_CHANNEL_ORDER as readonly string[]
+export function computeVideoLayout(channels: string[]): VideoLayout {
+  const order   = VIDEO_CHANNEL_ORDER as readonly string[]
   const ordered = [
     ...order.filter((c) => channels.includes(c)),
     ...channels.filter((c) => !order.includes(c)),
@@ -73,12 +73,12 @@ export function computeMovieLayout(channels: string[]): MovieLayout {
   const rows = Math.ceil(n / cols)
   const cells = ordered.map((channel, i) => ({
     channel,
-    x: (i % cols) * MOVIE_CELL_W,
-    y: Math.floor(i / cols) * MOVIE_CELL_H,
-    w: MOVIE_CELL_W,
-    h: MOVIE_CELL_H,
+    x: (i % cols) * VIDEO_CELL_W,
+    y: Math.floor(i / cols) * VIDEO_CELL_H,
+    w: VIDEO_CELL_W,
+    h: VIDEO_CELL_H,
   }))
-  return { width: cols * MOVIE_CELL_W, height: rows * MOVIE_CELL_H, cols, rows, cells }
+  return { width: cols * VIDEO_CELL_W, height: rows * VIDEO_CELL_H, cols, rows, cells }
 }
 
 // ── フレームデータ ────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ export interface ChannelFrameData {
 }
 
 /** 1フレーム（=1 Sample）分のデータ */
-export interface MovieFrameData {
+export interface VideoFrameData {
   sampleIndex: number                  // EGO_POSE セルのハイライト用
   annotations: Annotation[]
   /** サンプル基準の ego pose（LIDAR_TOP 優先、SensorCell の getSampleEgoPose と同じ規約） */
@@ -102,8 +102,8 @@ export interface MovieFrameData {
 }
 
 /** シーン全体で共通のコンテキスト */
-export interface MovieFrameContext {
-  layout:         MovieLayout
+export interface VideoFrameContext {
+  layout:         VideoLayout
   calibSensorMap: Record<string, CalibratedSensor>
   egoPoses:       EgoPosePoint[]
   basemap:        ImageBitmap | null
@@ -115,10 +115,10 @@ export interface MovieFrameContext {
 const BEV_AXES_LIMIT_M = 40  // PointCloudCanvas の axesLimitMeters と同値
 
 /** 1フレームを黒背景 + セルグリッドで描画する */
-export function drawMovieFrame(
+export function drawVideoFrame(
   ctx:   CanvasRenderingContext2D,
-  frame: MovieFrameData,
-  mfc:   MovieFrameContext,
+  frame: VideoFrameData,
+  mfc:   VideoFrameContext,
 ): void {
   const { layout } = mfc
   ctx.fillStyle = '#111'
@@ -142,7 +142,7 @@ export function drawMovieFrame(
 function drawChannelLabel(ctx: CanvasRenderingContext2D, channel: string): void {
   ctx.save()
   ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
-  ctx.fillRect(0, 0, MOVIE_CELL_W, 14)
+  ctx.fillRect(0, 0, VIDEO_CELL_W, 14)
   ctx.font      = '10px sans-serif'
   ctx.fillStyle = '#aaa'
   ctx.textAlign = 'left'
@@ -150,7 +150,7 @@ function drawChannelLabel(ctx: CanvasRenderingContext2D, channel: string): void 
   ctx.restore()
 }
 
-function drawPlaceholder(ctx: CanvasRenderingContext2D, cell: MovieLayoutCell, text: string): void {
+function drawPlaceholder(ctx: CanvasRenderingContext2D, cell: VideoLayoutCell, text: string): void {
   ctx.save()
   ctx.font      = '12px sans-serif'
   ctx.fillStyle = '#666'
@@ -162,9 +162,9 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D, cell: MovieLayoutCell, t
 /** SensorCell の dispatch と同じ規則でセル内容を描画する */
 function drawCell(
   ctx:   CanvasRenderingContext2D,
-  cell:  MovieLayoutCell,
-  frame: MovieFrameData,
-  mfc:   MovieFrameContext,
+  cell:  VideoLayoutCell,
+  frame: VideoFrameData,
+  mfc:   VideoFrameContext,
 ): void {
   const { channel } = cell
 
@@ -204,10 +204,10 @@ function drawCell(
 
 function drawCameraCell(
   ctx:   CanvasRenderingContext2D,
-  cell:  MovieLayoutCell,
+  cell:  VideoLayoutCell,
   data:  ChannelFrameData,
-  frame: MovieFrameData,
-  mfc:   MovieFrameContext,
+  frame: VideoFrameData,
+  mfc:   VideoFrameContext,
 ): void {
   const image = data.image!
   const brief = data.brief!
@@ -248,10 +248,10 @@ function drawCameraCell(
  */
 function drawBevCell(
   ctx:     CanvasRenderingContext2D,
-  cell:    MovieLayoutCell,
+  cell:    VideoLayoutCell,
   data:    ChannelFrameData,
-  frame:   MovieFrameData,
-  mfc:     MovieFrameContext,
+  frame:   VideoFrameData,
+  mfc:     VideoFrameContext,
   isRadar: boolean,
 ): void {
   const size = Math.min(cell.w, cell.h)
@@ -365,9 +365,9 @@ function drawBevCell(
  */
 function drawEgoPoseCell(
   ctx:         CanvasRenderingContext2D,
-  cell:        MovieLayoutCell,
+  cell:        VideoLayoutCell,
   sampleIndex: number,
-  mfc:         MovieFrameContext,
+  mfc:         VideoFrameContext,
 ): void {
   const bitmap   = mfc.basemap!
   const location = mfc.location!

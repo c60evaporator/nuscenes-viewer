@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { pickSupportedWebmMimeType } from '@/lib/movieEncoder'
+import { pickSupportedWebmMimeType } from '@/lib/videoEncoder'
 
 afterEach(() => {
   vi.unstubAllGlobals()

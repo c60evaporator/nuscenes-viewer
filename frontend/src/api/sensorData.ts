@@ -38,9 +38,9 @@ export function useSensorImage(token: string | null) {
  * 動画生成用の縮小画像 queryOptions。
  * 表示用フル解像度キャッシュ（['sensor-image', token]）とはキーを分離し、gcTime を短めにする
  */
-export function movieSensorImageQueryOptions(token: string, maxSize: number) {
+export function videoSensorImageQueryOptions(token: string, maxSize: number) {
   return {
-    queryKey:  ['sensor-image-movie', token, maxSize] as const,
+    queryKey:  ['sensor-image-video', token, maxSize] as const,
     queryFn:   () => fetchSensorImageBitmap(token, maxSize),
     staleTime: Infinity,
     gcTime:    5 * 60 * 1000,

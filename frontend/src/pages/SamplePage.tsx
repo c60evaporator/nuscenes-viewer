@@ -8,7 +8,7 @@ import SampleList from '@/components/sample/SampleList'
 import SampleSlider from '@/components/sample/SampleSlider'
 import SampleInfo from '@/components/sample/SampleInfo'
 import SensorGrid from '@/components/sample/SensorGrid'
-import CreateMovieModal from '@/components/sample/CreateMovieModal'
+import CreateVideoModal from '@/components/sample/CreateVideoModal'
 import { useScenes } from '@/api/scenes'
 import { useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
@@ -38,7 +38,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
   )
   const [highlightInstanceToken, setHighlightInstanceToken] = useState<string | null>(null)
   const [currentSampleIndex, setCurrentSampleIndex] = useState(0)
-  const [movieOpen, setMovieOpen] = useState(false)
+  const [videoOpen, setVideoOpen] = useState(false)
 
   const handleBBoxClick = (annToken: string) => {
     const ann = (annotations ?? []).find((a) => a.token === annToken)
@@ -137,33 +137,23 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
 
   // 右ペイン下部のアクションボタン群
   const actionButtons = (
-    <div className="flex flex-col gap-2">
-      <Button
-        className="w-full text-white text-xs"
-        style={{ backgroundColor: '#4A90D9' }}
-        disabled={!currentSampleToken}
-        onClick={() => {
-          if (!currentSampleToken) return
-          setInstance(highlightInstanceToken)
-          // TODO: 将来的には別ウィンドウ対応。現在は同一ウィンドウで遷移
-          lock('sample', {
-            sceneToken:  selectedSceneToken ?? undefined,
-            sampleToken: currentSampleToken,
-          })
-          onTabChange('annotation')
-        }}
-      >
-        Annotations
-      </Button>
-      <Button
-        className="w-full text-white text-xs"
-        style={{ backgroundColor: '#4A90D9' }}
-        disabled={!selectedSceneToken || samples.length === 0}
-        onClick={() => setMovieOpen(true)}
-      >
-        Create Movie
-      </Button>
-    </div>
+    <Button
+      className="w-full text-white text-xs"
+      style={{ backgroundColor: '#4A90D9' }}
+      disabled={!currentSampleToken}
+      onClick={() => {
+        if (!currentSampleToken) return
+        setInstance(highlightInstanceToken)
+        // TODO: 将来的には別ウィンドウ対応。現在は同一ウィンドウで遷移
+        lock('sample', {
+          sceneToken:  selectedSceneToken ?? undefined,
+          sampleToken: currentSampleToken,
+        })
+        onTabChange('annotation')
+      }}
+    >
+      Annotations
+    </Button>
   )
 
   return (
@@ -181,11 +171,23 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
             />
           }
           footer={
-            <SampleSlider
-              samples={samples}
-              selectedIndex={currentSampleIndex}
-              onIndexChange={handleSliderChange}
-            />
+            <>
+              <SampleSlider
+                samples={samples}
+                selectedIndex={currentSampleIndex}
+                onIndexChange={handleSliderChange}
+              />
+              <div className="p-3 pt-0">
+                <Button
+                  className="w-full text-white text-xs"
+                  style={{ backgroundColor: '#4A90D9' }}
+                  disabled={!selectedSceneToken || samples.length === 0}
+                  onClick={() => setVideoOpen(true)}
+                >
+                  Create Video
+                </Button>
+              </div>
+            </>
           }
         >
           <SampleList
@@ -220,9 +222,9 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
         highlightInstanceToken={highlightInstanceToken ?? undefined}
       />
       {selectedSceneToken && (
-        <CreateMovieModal
-          open={movieOpen}
-          onOpenChange={setMovieOpen}
+        <CreateVideoModal
+          open={videoOpen}
+          onOpenChange={setVideoOpen}
           sceneToken={selectedSceneToken}
           sceneName={locationScenes.find((s) => s.token === selectedSceneToken)?.name ?? null}
           samples={samples}

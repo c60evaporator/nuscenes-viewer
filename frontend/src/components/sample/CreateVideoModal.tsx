@@ -16,12 +16,12 @@ import {
 } from '@/components/ui/select'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { useMovieBuilder } from '@/hooks/useMovieBuilder'
-import { MOVIE_CHANNEL_ORDER } from '@/lib/movieFrame'
+import { useVideoBuilder } from '@/hooks/useVideoBuilder'
+import { VIDEO_CHANNEL_ORDER } from '@/lib/videoFrame'
 import type { CalibratedSensor, EgoPosePoint } from '@/types/sensor'
 import type { Sample } from '@/types/scene'
 
-interface CreateMovieModalProps {
+interface CreateVideoModalProps {
   open:           boolean
   onOpenChange:   (open: boolean) => void
   sceneToken:     string
@@ -38,7 +38,7 @@ const FPS_OPTIONS = [
   { value: '10', label: '10 Hz' },
 ]
 
-export default function CreateMovieModal({
+export default function CreateVideoModal({
   open,
   onOpenChange,
   sceneToken,
@@ -47,12 +47,12 @@ export default function CreateMovieModal({
   calibSensorMap,
   egoPoses,
   location,
-}: CreateMovieModalProps) {
+}: CreateVideoModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const { state, start, cancel, reset } = useMovieBuilder(canvasRef)
+  const { state, start, cancel, reset } = useVideoBuilder(canvasRef)
 
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(
-    () => new Set(MOVIE_CHANNEL_ORDER),
+    () => new Set(VIDEO_CHANNEL_ORDER),
   )
   const [fps, setFps] = useState('2')
 
@@ -92,7 +92,7 @@ export default function CreateMovieModal({
     if (!state.videoUrl) return
     const a = document.createElement('a')
     a.href     = state.videoUrl
-    a.download = `movie_${sceneName ?? sceneToken}_${fps}hz.webm`
+    a.download = `video_${sceneName ?? sceneToken}_${fps}hz.webm`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -106,7 +106,7 @@ export default function CreateMovieModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Movie</DialogTitle>
+          <DialogTitle>Create Video</DialogTitle>
           <DialogDescription>
             シーン{sceneName ? `「${sceneName}」` : ''}の全 {samples.length} サンプルを動画化します
           </DialogDescription>
@@ -116,7 +116,7 @@ export default function CreateMovieModal({
         <div>
           <div className="text-sm font-medium mb-2">Sensors</div>
           <div className="grid grid-cols-3 gap-2">
-            {MOVIE_CHANNEL_ORDER.map((channel) => (
+            {VIDEO_CHANNEL_ORDER.map((channel) => (
               <label
                 key={channel}
                 className="flex items-center gap-2 text-xs cursor-pointer select-none"
@@ -227,7 +227,7 @@ export default function CreateMovieModal({
               disabled={isRunning || selectedChannels.size === 0 || samples.length === 0}
               onClick={handleStart}
             >
-              Create Movie
+              Create Video
             </Button>
           )}
         </div>

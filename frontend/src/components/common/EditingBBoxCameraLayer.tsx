@@ -1,16 +1,18 @@
-import { Stage, Layer, Line, Arrow } from 'react-konva'
+import { Stage, Layer, Group, Line, Arrow } from 'react-konva'
 import { useEditStore } from '@/store/editStore'
 import { bboxCornersToGlobal, project3DTo2D } from '@/lib/coordinateUtils'
 import { getBBoxFrontCenter, getBBoxArrowTip } from '@/lib/bboxArrowGeometry'
 import type { CalibratedSensor } from '@/types/sensor'
 
 interface Props {
-    displayW: number
-    displayH: number
-    offsetX:  number
-    offsetY:  number
-    scaleX:   number
-    scaleY:   number
+    displayW:   number
+    displayH:   number
+    offsetX:    number
+    offsetY:    number
+    scaleX:     number
+    scaleY:     number
+    containerW: number
+    containerH: number
     calibratedSensor: CalibratedSensor
     egoPose:  { translation: number[]; rotation: number[] } | undefined
 }
@@ -24,7 +26,7 @@ interface Props {
  * - イベント透過 (listening=false)
  */
 export default function EditingBBoxCameraLayer({
-    displayW, displayH, offsetX, offsetY, scaleX, scaleY,
+    offsetX, offsetY, scaleX, scaleY, containerW, containerH,
     calibratedSensor, egoPose,
 }: Props) {
     const session           = useEditStore((s) => s.session)
@@ -88,37 +90,41 @@ export default function EditingBBoxCameraLayer({
     // 両方の投影が有効な場合のみ描画
     const arrowVisible = arrowStartPx !== null && arrowEndPx !== null
 
+    // Stage はコンテナサイズ・原点固定とし、パン・ズームのオフセットは Group に持たせる
+    // （高ズーム時に Stage バッファが肥大しないようにするため）
     return (
         <Stage
-            width={displayW}
-            height={displayH}
-            style={{ position: 'absolute', top: offsetY, left: offsetX, pointerEvents: 'none' }}
+            width={containerW}
+            height={containerH}
+            style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
             listening={false}
         >
             <Layer>
-                {validEdges.map(([pa, pb], i) => (
-                    <Line
-                        key={i}
-                        points={[pa[0], pa[1], pb[0], pb[1]]}
-                        stroke='#FF8C00'
-                        strokeWidth={2}
-                        listening={false}
-                    />
-                ))}
-                {arrowVisible && (
-                    <Arrow
-                        points={[
-                            arrowStartPx![0] * scaleX, arrowStartPx![1] * scaleY,
-                            arrowEndPx![0]   * scaleX, arrowEndPx![1]   * scaleY,
-                        ]}
-                        stroke='#FF8C00'
-                        fill='#FF8C00'
-                        strokeWidth={3}
-                        pointerLength={10}
-                        pointerWidth={10}
-                        listening={false}
-                    />
-                )}
+                <Group x={offsetX} y={offsetY}>
+                    {validEdges.map(([pa, pb], i) => (
+                        <Line
+                            key={i}
+                            points={[pa[0], pa[1], pb[0], pb[1]]}
+                            stroke='#FF8C00'
+                            strokeWidth={2}
+                            listening={false}
+                        />
+                    ))}
+                    {arrowVisible && (
+                        <Arrow
+                            points={[
+                                arrowStartPx![0] * scaleX, arrowStartPx![1] * scaleY,
+                                arrowEndPx![0]   * scaleX, arrowEndPx![1]   * scaleY,
+                            ]}
+                            stroke='#FF8C00'
+                            fill='#FF8C00'
+                            strokeWidth={3}
+                            pointerLength={10}
+                            pointerWidth={10}
+                            listening={false}
+                        />
+                    )}
+                </Group>
             </Layer>
         </Stage>
     )

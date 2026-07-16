@@ -8,6 +8,11 @@ permissions:
   id-token: write
   contents: read
 
+# 並行実行を抑止（重なるとVPCエンドポイントのapply/destroyが競合して孤児が残るため）
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
@@ -56,10 +61,27 @@ jobs:
         working-directory: terraform/deploy
         run: |
           terraform init -upgrade
-          terraform apply -auto-approve \
-            -var="region=${{ env.AWS_REGION }}" \
-            -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="multi_az=false"
+
+          # 前回実行のdestroy未完走などでVPCに残存しているECRエンドポイントがあれば
+          # stateにimportして取り込む（ローカルstateは実行ごとに消えるため自己治癒が必要）
+          TF_VARS='-var=region=${{ env.AWS_REGION }} -var=project_name=${{ env.PROJECT_NAME }} -var=multi_az=false'
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=${{ env.PROJECT_NAME }}-vpc" \
+            --query 'Vpcs[0].VpcId' --output text)
+          for pair in "ecr_dkr:ecr.dkr" "ecr_api:ecr.api"; do
+            res="${pair%%:*}"; svc="${pair##*:}"
+            ep=$(aws ec2 describe-vpc-endpoints \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+                        "Name=service-name,Values=com.amazonaws.${{ env.AWS_REGION }}.$svc" \
+                        "Name=vpc-endpoint-state,Values=available,pending" \
+              --query 'VpcEndpoints[0].VpcEndpointId' --output text)
+            if [ "$ep" != "None" ] && [ -n "$ep" ]; then
+              echo "Importing existing $svc endpoint: $ep"
+              terraform import $TF_VARS "aws_vpc_endpoint.$res" "$ep"
+            fi
+          done
+
+          terraform apply -auto-approve $TF_VARS
 
       - name: Login to ECR
         id: ecr-login

@@ -106,8 +106,32 @@ async def get_sensor_data_ego_pose(token: str, db: AsyncSession = Depends(get_db
 
 # ── SampleData image ──────────────────────────────────────────────────────────
 
+def _downscale_image(data: bytes, fileformat: str, max_size: int) -> bytes:
+    """画像の長辺が max_size 以下になるよう縮小する。元サイズ以下なら再エンコードせず元 bytes を返す。"""
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(data))
+    if max(img.size) <= max_size:
+        return data
+    img.thumbnail((max_size, max_size), Image.LANCZOS)
+    buf = io.BytesIO()
+    if fileformat.lower() == "png":
+        img.save(buf, format="PNG", optimize=True)
+    else:
+        img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
 @router.get("/sensor-data/{token}/image")
-async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
+async def get_sensor_data_image(
+    token: str,
+    max_size: int | None = Query(None, ge=64, le=4096, description="画像の長辺の最大px（縮小して転送量を削減）"),
+    db: AsyncSession = Depends(get_db),
+):
+    """センサー画像バイナリを配信する。
+
+    max_size はローカル配信時のみ有効（aws 環境では CloudFront URL の原本配信となり無視される）。
+    """
     sd = await SensorRepository(db).get_sample_data_by_token(token)
     if not sd:
         raise HTTPException(status_code=404, detail="SampleData not found")
@@ -121,6 +145,9 @@ async def get_sensor_data_image(token: str, db: AsyncSession = Depends(get_db)):
         data = read_file(sd.filename)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Image file not found")
+
+    if max_size is not None:
+        data = _downscale_image(data, sd.fileformat, max_size)
 
     media_type = "image/png" if sd.fileformat.lower() == "png" else "image/jpeg"
     return StreamingResponse(

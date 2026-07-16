@@ -22,7 +22,15 @@ class SensorDataBriefResponse(BaseModel):
     filename:                str
     fileformat:              str
     calibrated_sensor_token: str
+    width:                   int | None = None   # 元画像の幅px（カメラのみ）
+    height:                  int | None = None   # 元画像の高さpx（カメラのみ）
     ego_pose:                EgoPoseMinimalResponse
+
+
+class SceneSampleSensorDataResponse(BaseModel):
+    sample_token: str
+    timestamp:    int
+    channels:     dict[str, SensorDataBriefResponse]   # channel名 → SensorDataBrief
 
 
 class BestCameraResponse(BaseModel):

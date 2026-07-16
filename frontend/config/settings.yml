@@ -61,3 +61,7 @@ annotation:
     refine_half_width: 0.2  # ヒストグラムビンの中央値を求める際の精密化範囲 (m)
     min_points: 20  # 有効とみなす最小点群数
     max_deviation: 1.0  # priorからの最大許容乖離 (m)
+
+waypoints:
+  scene_waypoint_size: 6.0   # Scene画面のwaypointの表示サイズ（点の半径px、地図画像幅3000px基準。Start/Endは1.5倍）
+  sample_waypoint_size: 4.0  # Sample画面、Instance画面、Annotation画面のwaypointの表示サイズ（点の半径px、地図画像幅3000px基準）

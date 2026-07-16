@@ -3,7 +3,10 @@
  * コンポーネント内に描画ロジックを書かず、この関数群を経由する
  */
 import type { EgoPosePoint } from '../types/sensor'
-import { egoPoseToPixel } from './coordinateUtils'
+import type { Annotation } from '../types/annotation'
+import { WAYPOINTS } from '@/config/settings'
+import { egoPoseToPixel, project3DTo2D, bboxCornersToGlobal } from './coordinateUtils'
+import { getBBoxFrontCenter, getBBoxArrowTip } from './bboxArrowGeometry'
 
 // ── Ego Pose 描画 ────────────────────────────────────────────────────────────
 
@@ -14,6 +17,7 @@ export function drawEgoPoses(
   displaySize: [number, number],
   location:    string,
   showStartEnd: boolean = true,
+  dotRadiusPx: number   = WAYPOINTS.SAMPLE_WAYPOINT_SIZE,  // 通常点の半径px（幅3000px基準）。強調点は2倍、Start/Endは1.5倍
 ): void {
   if (poses.length === 0) return
 
@@ -23,9 +27,9 @@ export function drawEgoPoses(
   // basemapが大きいほどサイズを拡大補正（基準: 幅3000px想定）
   const sizeScale = displaySize[0] / 3000
 
-  const dotRadius    = Math.round(4  * sizeScale)
-  const currentRadius= Math.round(8  * sizeScale)
-  const endRadius    = Math.round(6  * sizeScale)
+  const dotRadius    = Math.round(dotRadiusPx       * sizeScale)
+  const currentRadius= Math.round(dotRadiusPx * 2   * sizeScale)
+  const endRadius    = Math.round(dotRadiusPx * 1.5 * sizeScale)
   const fontSize     = Math.round(28 * sizeScale)
   const lineWidth    = Math.max(2 * sizeScale, 1)
   const labelPadX    = Math.round(8  * sizeScale)
@@ -105,12 +109,13 @@ export function drawEgoPosesBackground(
   poseGroups:  EgoPosePoint[][],
   displaySize: [number, number],
   location:    string,
+  dotRadiusPx: number = WAYPOINTS.SCENE_WAYPOINT_SIZE,  // 点の半径px（幅3000px基準）
 ): void {
   if (poseGroups.length === 0) return
 
   const sizeScale = displaySize[0] / 3000
   const lineWidth = Math.max(1.5 * sizeScale, 0.5)
-  const dotRadius = Math.max(1.5 * sizeScale, 1)
+  const dotRadius = Math.max(dotRadiusPx * sizeScale, 1)
 
   ctx.save()
   poseGroups.forEach((poses) => {
@@ -118,7 +123,7 @@ export function drawEgoPosesBackground(
     const toPixel = (t: number[]): [number, number] => egoPoseToPixel(t, location, displaySize)
 
     ctx.beginPath()
-    ctx.strokeStyle = 'rgba(100, 160, 255, 0.2)'
+    ctx.strokeStyle = 'rgba(100, 160, 255, 0.4)'
     ctx.lineWidth   = lineWidth
     ctx.lineJoin    = 'round'
     ctx.lineCap     = 'round'
@@ -133,11 +138,43 @@ export function drawEgoPosesBackground(
       const [px, py] = toPixel(pose.translation)
       ctx.beginPath()
       ctx.arc(px, py, dotRadius, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(100, 160, 255, 0.25)'
+      ctx.fillStyle = 'rgba(100, 160, 255, 0.55)'
       ctx.fill()
     })
   })
   ctx.restore()
+}
+
+/**
+ * canvas ピクセル座標に最も近い Waypoint を持つグループの index を返す。
+ * hitRadiusPx（canvas px）以内に点がなければ null。
+ * 複数グループが半径内にある場合は最近傍の点を持つグループが勝つ。
+ */
+export function hitTestEgoPoseGroups(
+  poseGroups:  EgoPosePoint[][],
+  canvasXY:    [number, number],
+  displaySize: [number, number],
+  location:    string,
+  hitRadiusPx: number,
+): number | null {
+  const [cx, cy] = canvasXY
+  let bestDist2 = hitRadiusPx * hitRadiusPx
+  let bestIndex: number | null = null
+
+  poseGroups.forEach((poses, groupIndex) => {
+    for (const pose of poses) {
+      const [px, py] = egoPoseToPixel(pose.translation, location, displaySize)
+      const dx = px - cx
+      const dy = py - cy
+      const dist2 = dx * dx + dy * dy
+      if (dist2 <= bestDist2) {
+        bestDist2 = dist2
+        bestIndex = groupIndex
+      }
+    }
+  })
+
+  return bestIndex
 }
 
 // ── BBox 2D 描画 ─────────────────────────────────────────────────────────────
@@ -195,6 +232,97 @@ export function drawBBox2D(
   }
 
   ctx.restore()
+}
+
+// ── カメラ画像上の BBox 描画 ──────────────────────────────────────────────────
+
+/** BBox の画面上 2D 矩形境界（クリック判定用） */
+export interface CameraBBoxRect {
+  token: string
+  minX:  number
+  minY:  number
+  maxX:  number
+  maxY:  number
+}
+
+/**
+ * アノテーション群をカメラ画像座標に 3D→2D 投影して BBox + 向き矢印を描画する
+ * （CameraImageCanvas と動画フレーム生成で共用）
+ *
+ * @param ctx         描画先の 2D コンテキスト
+ * @param annotations 描画対象のアノテーション
+ * @param egoPose     カメラ SampleData 自身の ego pose
+ * @param calibSensor カメラの CalibratedSensor（translation / rotation）
+ * @param intrinsic   カメラ内部パラメータ 3x3
+ * @param scaleX      元画像座標 → 描画先座標の xスケール
+ * @param scaleY      元画像座標 → 描画先座標の yスケール
+ * @param opts        colorFor: アノテーション別の線色（デフォルト #4ADE80）
+ *                    alphaFor: アノテーション別の不透明度（デフォルト 1.0）
+ * @returns           描画した BBox の 2D 矩形境界リスト（クリック判定用）
+ */
+export function drawCameraBBoxes(
+  ctx:         CanvasRenderingContext2D,
+  annotations: Annotation[],
+  egoPose:     { translation: number[]; rotation: number[] },
+  calibSensor: { translation: number[]; rotation: number[] },
+  intrinsic:   number[][],
+  scaleX:      number,
+  scaleY:      number,
+  opts?: {
+    colorFor?: (ann: Annotation) => string
+    alphaFor?: (ann: Annotation) => number
+  },
+): CameraBBoxRect[] {
+  const rects: CameraBBoxRect[] = []
+
+  for (const ann of annotations) {
+    const globalCorners = bboxCornersToGlobal(ann.translation, ann.rotation, ann.size)
+
+    const corners2D: [number, number][] = []
+    for (const corner of globalCorners) {
+      const px = project3DTo2D(corner, intrinsic, egoPose, calibSensor)
+      if (px !== null) {
+        corners2D.push([px[0] * scaleX, px[1] * scaleY])
+      }
+    }
+
+    if (corners2D.length < 4) continue
+
+    while (corners2D.length < 8) corners2D.push(corners2D[corners2D.length - 1])
+
+    const allX = corners2D.map((c) => c[0])
+    const allY = corners2D.map((c) => c[1])
+    rects.push({
+      token: ann.token,
+      minX:  Math.min(...allX),
+      minY:  Math.min(...allY),
+      maxX:  Math.max(...allX),
+      maxY:  Math.max(...allY),
+    })
+
+    const color = opts?.colorFor?.(ann) ?? '#4ADE80'
+    const alpha = opts?.alphaFor?.(ann) ?? 1.0
+    if (alpha !== 1.0) ctx.globalAlpha = alpha
+    drawBBox2D(ctx, corners2D, color)
+
+    // 矢印描画
+    const arrowExtra = Math.min(1.0, ann.size[1] * 0.3)
+    const arrowStartGlobal = getBBoxFrontCenter(ann.translation, ann.rotation, ann.size)
+    const arrowEndGlobal   = getBBoxArrowTip(ann.translation, ann.rotation, ann.size, arrowExtra)
+    const arrowStartPx = project3DTo2D(arrowStartGlobal, intrinsic, egoPose, calibSensor)
+    const arrowEndPx   = project3DTo2D(arrowEndGlobal,   intrinsic, egoPose, calibSensor)
+    if (arrowStartPx !== null && arrowEndPx !== null) {
+      drawArrow2D(
+        ctx,
+        [arrowStartPx[0] * scaleX, arrowStartPx[1] * scaleY],
+        [arrowEndPx[0]   * scaleX, arrowEndPx[1]   * scaleY],
+        color, 2, 10, 10,
+      )
+    }
+    if (alpha !== 1.0) ctx.globalAlpha = 1.0
+  }
+
+  return rects
 }
 
 // ── 点群 BEV 描画 ─────────────────────────────────────────────────────────────

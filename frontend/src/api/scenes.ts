@@ -2,7 +2,7 @@ import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/rea
 import { apiFetch } from './client'
 import type { Scene, Sample, SceneListResponse } from '../types/scene'
 import type { SceneDeleteResult } from '../types/sceneDelete'
-import type { EgoPosePoint } from '../types/sensor'
+import type { EgoPosePoint, SceneSampleSensorData } from '../types/sensor'
 
 export function useScenes(params?: { limit?: number; offset?: number }) {
   const limit  = params?.limit  ?? 50
@@ -37,6 +37,19 @@ export function useSceneEgoPoses(token: string | null) {
   })
 }
 
+/** scene 内全 sample のセンサーデータマップを一括取得する queryOptions（動画生成用） */
+export function sceneSensorDataQueryOptions(token: string, channels: string[]) {
+  const channelsCsv = [...channels].sort().join(',')
+  return {
+    queryKey: ['scene-sensor-data', token, channelsCsv] as const,
+    queryFn: () =>
+      apiFetch<SceneSampleSensorData[]>(
+        `/scenes/${token}/sensor-data?channels=${encodeURIComponent(channelsCsv)}`,
+      ),
+    staleTime: Infinity,
+  }
+}
+
 /** ユーザ追加 scene を関連レコードごと削除する（DELETE /scenes/{token}） */
 export function useDeleteScene() {
   const queryClient = useQueryClient()
@@ -49,7 +62,13 @@ export function useDeleteScene() {
   })
 }
 
-/** 複数シーンの Ego-poses を並列取得し、シーンごとのグループ配列で返す */
+/** シーントークン付きの Ego-pose グループ */
+export interface SceneEgoPoseGroup {
+  token: string
+  poses: EgoPosePoint[]
+}
+
+/** 複数シーンの Ego-poses を並列取得し、シーントークン付きグループ配列で返す */
 export function useAllScenesEgoPoses(sceneTokens: string[]) {
   const results = useQueries({
     queries: sceneTokens.map((token) => ({
@@ -58,9 +77,10 @@ export function useAllScenesEgoPoses(sceneTokens: string[]) {
       staleTime: Infinity,
     })),
   })
+  // useQueries は入力順を保証するので、filter 前に token とペア化して対応を保つ
   const groups = results
-    .map((r) => r.data)
-    .filter((d): d is EgoPosePoint[] => d !== undefined)
+    .map((r, i) => ({ token: sceneTokens[i], poses: r.data }))
+    .filter((g): g is SceneEgoPoseGroup => g.poses !== undefined)
   const isLoading = results.some((r) => r.isLoading)
   return { data: groups, isLoading }
 }

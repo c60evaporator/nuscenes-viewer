@@ -8,7 +8,12 @@ from app.schemas.common import PaginatedResponse
 from app.schemas.scene import SceneResponse, SampleResponse
 from app.schemas.scene_delete import SceneDeleteResult
 from app.schemas.scene_import import SceneImportResult
-from app.schemas.sensor import SampleEgoPoseResponse
+from app.repositories.sensor import SensorRepository
+from app.schemas.sensor import (
+    SampleEgoPoseResponse,
+    SceneSampleSensorDataResponse,
+    SensorDataBriefResponse,
+)
 from app.services.scene_delete_service import delete_scene as delete_scene_service
 from app.services.scene_import_service import import_scenes_from_json
 
@@ -81,6 +86,41 @@ async def get_scene(token: str, db: AsyncSession = Depends(get_db)):
 async def get_scene_samples(token: str, db: AsyncSession = Depends(get_db)):
     samples = await SceneRepository(db).get_samples_by_scene(token)
     return [SceneConverter.to_sample_response(s) for s in samples]
+
+
+@router.get("/{token}/sensor-data", response_model=list[SceneSampleSensorDataResponse])
+async def get_scene_sensor_data(
+    token: str,
+    channels: str | None = Query(None, description="カンマ区切りのチャンネル名で絞り込む（例: CAM_FRONT,LIDAR_TOP）"),
+    db: AsyncSession = Depends(get_db),
+):
+    """scene 内全 sample のセンサーデータマップ（channel → SensorDataBrief）を一括取得する。
+
+    フレームごとの GET /samples/{token}/sensor-data 呼び出しを 1 回にまとめる用途（動画生成等）。
+    """
+    repo = SceneRepository(db)
+    scene = await repo.get_by_token(token)
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    channel_list = [c.strip() for c in channels.split(",") if c.strip()] if channels else None
+    samples = await repo.get_samples_by_scene(token)  # timestamp 昇順
+    sd_list = await SensorRepository(db).get_sample_data_by_scene(token, channel_list)
+
+    by_sample: dict[str, dict[str, SensorDataBriefResponse]] = {}
+    for sd in sd_list:
+        by_sample.setdefault(sd.sample_token, {})[
+            sd.calibrated_sensor.sensor.channel
+        ] = SensorDataBriefResponse.model_validate(sd)
+
+    return [
+        SceneSampleSensorDataResponse(
+            sample_token=s.token,
+            timestamp=s.timestamp,
+            channels=by_sample.get(s.token, {}),
+        )
+        for s in samples
+    ]
 
 
 @router.get("/{token}/ego-poses", response_model=list[SampleEgoPoseResponse])

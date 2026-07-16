@@ -22,11 +22,18 @@ export function useSample(token: string | null) {
   })
 }
 
+/** サンプルのアノテーション一覧の queryOptions（useSampleAnnotations と動画生成プリフェッチでキー共有） */
+export function sampleAnnotationsQueryOptions(token: string) {
+  return {
+    queryKey: ['sample-annotations', token] as const,
+    queryFn:  () => apiFetch<Annotation[]>(`/samples/${token}/annotations`),
+  }
+}
+
 export function useSampleAnnotations(token: string | null) {
   return useQuery({
-    queryKey: ['sample-annotations', token],
-    queryFn:  () => apiFetch<Annotation[]>(`/samples/${token}/annotations`),
-    enabled:  !!token,
+    ...sampleAnnotationsQueryOptions(token ?? ''),
+    enabled: !!token,
   })
 }
 

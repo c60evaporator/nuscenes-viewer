@@ -8,6 +8,7 @@ import SampleList from '@/components/sample/SampleList'
 import SampleSlider from '@/components/sample/SampleSlider'
 import SampleInfo from '@/components/sample/SampleInfo'
 import SensorGrid from '@/components/sample/SensorGrid'
+import CreateVideoModal from '@/components/sample/CreateVideoModal'
 import { useScenes } from '@/api/scenes'
 import { useSceneEgoPoses } from '@/api/scenes'
 import { useLogsByLocation } from '@/api/logs'
@@ -37,6 +38,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
   )
   const [highlightInstanceToken, setHighlightInstanceToken] = useState<string | null>(null)
   const [currentSampleIndex, setCurrentSampleIndex] = useState(0)
+  const [videoOpen, setVideoOpen] = useState(false)
 
   const handleBBoxClick = (annToken: string) => {
     const ann = (annotations ?? []).find((a) => a.token === annToken)
@@ -133,8 +135,8 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
     [sensorDataMap, egoPoses, currentSampleToken],
   )
 
-  // Annotations ボタン
-  const annotationsButton = (
+  // 右ペイン下部のアクションボタン群
+  const actionButtons = (
     <Button
       className="w-full text-white text-xs"
       style={{ backgroundColor: '#4A90D9' }}
@@ -169,11 +171,23 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
             />
           }
           footer={
-            <SampleSlider
-              samples={samples}
-              selectedIndex={currentSampleIndex}
-              onIndexChange={handleSliderChange}
-            />
+            <>
+              <SampleSlider
+                samples={samples}
+                selectedIndex={currentSampleIndex}
+                onIndexChange={handleSliderChange}
+              />
+              <div className="p-3 pt-0">
+                <Button
+                  className="w-full text-white text-xs"
+                  style={{ backgroundColor: '#4A90D9' }}
+                  disabled={!selectedSceneToken || samples.length === 0}
+                  onClick={() => setVideoOpen(true)}
+                >
+                  Create Video
+                </Button>
+              </div>
+            </>
           }
         >
           <SampleList
@@ -184,7 +198,7 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
         </LeftPane>
       }
       right={
-        <RightPane actions={annotationsButton}>
+        <RightPane actions={actionButtons}>
           <SampleInfo
             sample={selectedSample}
             instances={instances ?? []}
@@ -207,6 +221,18 @@ export default function SamplePage({ activeTab, onTabChange }: SamplePageProps) 
         onBBoxClick={handleBBoxClick}
         highlightInstanceToken={highlightInstanceToken ?? undefined}
       />
+      {selectedSceneToken && (
+        <CreateVideoModal
+          open={videoOpen}
+          onOpenChange={setVideoOpen}
+          sceneToken={selectedSceneToken}
+          sceneName={locationScenes.find((s) => s.token === selectedSceneToken)?.name ?? null}
+          samples={samples}
+          calibSensorMap={calibSensorMap}
+          egoPoses={egoPoses ?? []}
+          location={currentMapLocation}
+        />
+      )}
     </MainLayout>
   )
 }

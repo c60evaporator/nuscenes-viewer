@@ -31,6 +31,8 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
   // 解決後もクリアせず保持する（scrollToToken は解決済み token で安定するため、
   // SceneList 側のスクロールは一度きりになる）。
   const [pendingScrollName, setPendingScrollName] = useState<string | null>(null)
+  // 中央ペインの Waypoint クリックで選択した scene（リストを可視域までスクロールさせる用）
+  const [mapClickedToken, setMapClickedToken] = useState<string | null>(null)
 
   const currentMapLocation = useViewerStore((s) => s.currentMapLocation)
   const currentSceneToken  = useViewerStore((s) => s.currentSceneToken)
@@ -246,7 +248,7 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
             scenes={filteredScenes}
             currentSceneToken={currentSceneToken}
             onSelect={setScene}
-            scrollToToken={scrollToToken}
+            scrollToToken={scrollToToken ?? mapClickedToken}
           />
         </LeftPane>
       }
@@ -260,6 +262,10 @@ export default function ScenePage({ activeTab, onTabChange }: ScenePageProps) {
         sceneToken={currentSceneToken}
         location={currentMapLocation}
         allSceneTokens={filteredScenes.map((s) => s.token)}
+        onSceneClick={(token) => {
+          setScene(token)
+          setMapClickedToken(token)
+        }}
       />
       <AddSceneModal
         open={addSceneOpen}

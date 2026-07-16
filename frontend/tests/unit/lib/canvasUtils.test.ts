@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { drawEgoPoses, drawBBox2D, sensorToBevPixel, bevPixelToSensor } from '@/lib/canvasUtils'
+import { drawEgoPoses, drawEgoPosesBackground, drawBBox2D, drawCameraBBoxes, sensorToBevPixel, bevPixelToSensor, hitTestEgoPoseGroups } from '@/lib/canvasUtils'
 import type { BevViewParams } from '@/lib/canvasUtils'
+import { egoPoseToPixel } from '@/lib/coordinateUtils'
 import type { EgoPosePoint } from '@/types/sensor'
+import type { Annotation } from '@/types/annotation'
 
 // Minimal CanvasRenderingContext2D mock
 function makeCtx() {
@@ -87,6 +89,94 @@ describe('drawEgoPoses', () => {
     expect(radii[1]).toBeGreaterThan(radii[0])
     expect(radii[1]).toBeGreaterThan(radii[2])
   })
+
+  it('dotRadiusPx 指定で通常点:強調点:Start/End が 1:2:1.5 でスケールする', () => {
+    // displaySize 幅3000px → sizeScale = 1 で radiusPx がそのまま半径になる
+    const disp3000: [number, number] = [3000, 3000]
+    const poses = [makePose(0, 0), makePose(5, 5), makePose(10, 10), makePose(15, 15)]
+    drawEgoPoses(ctx, poses, 1, disp3000, LOC, false, 12)
+    const radii = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[2])
+    expect(radii[0]).toBe(18)  // Start（1.5倍）
+    expect(radii[1]).toBe(24)  // currentIndex=1（2倍）
+    expect(radii[2]).toBe(12)  // 通常点
+    expect(radii[3]).toBe(18)  // End（1.5倍）
+  })
+})
+
+describe('drawEgoPosesBackground', () => {
+  let ctx: CanvasRenderingContext2D
+
+  beforeEach(() => { ctx = makeCtx() })
+
+  const DISP: [number, number] = [3000, 3000]  // sizeScale = 1
+  const LOC = 'singapore-onenorth'
+
+  it('does nothing when groups are empty', () => {
+    drawEgoPosesBackground(ctx, [], DISP, LOC)
+    expect(ctx.beginPath).not.toHaveBeenCalled()
+  })
+
+  it('各グループの各点に arc を描画する', () => {
+    const groups = [
+      [makePose(0, 0), makePose(5, 5)],
+      [makePose(10, 10)],
+    ]
+    drawEgoPosesBackground(ctx, groups, DISP, LOC)
+    expect(ctx.arc).toHaveBeenCalledTimes(3)
+  })
+
+  it('dotRadiusPx が点の半径に反映される', () => {
+    drawEgoPosesBackground(ctx, [[makePose(0, 0)]], DISP, LOC, 5)
+    const arcCalls = (ctx.arc as ReturnType<typeof vi.fn>).mock.calls
+    expect(arcCalls[0][2]).toBe(5)
+  })
+
+  it('点の色は濃い青 rgba(100, 160, 255, 0.55)', () => {
+    drawEgoPosesBackground(ctx, [[makePose(0, 0)]], DISP, LOC)
+    expect(ctx.fillStyle).toBe('rgba(100, 160, 255, 0.55)')
+  })
+})
+
+describe('hitTestEgoPoseGroups', () => {
+  const DISP: [number, number] = [1000, 1000]
+  const LOC = 'singapore-onenorth'
+
+  // メートル座標 → canvas ピクセル（テスト内でクリック位置を組み立てる用）
+  const toPixel = (x: number, y: number): [number, number] =>
+    egoPoseToPixel([x, y, 0], LOC, DISP)
+
+  it('ヒット半径内の点があればそのグループの index を返す', () => {
+    const groups = [
+      [makePose(100, 100), makePose(110, 100)],
+      [makePose(500, 500), makePose(510, 500)],
+    ]
+    const [px, py] = toPixel(500, 500)
+    expect(hitTestEgoPoseGroups(groups, [px + 2, py + 2], DISP, LOC, 5)).toBe(1)
+  })
+
+  it('複数グループが半径内にある場合は最近傍の点を持つグループが勝つ', () => {
+    const groups = [
+      [makePose(100, 100)],
+      [makePose(101, 100)],  // ピクセルで約0.6px右
+    ]
+    const [px0, py0] = toPixel(100, 100)
+    const [px1]      = toPixel(101, 100)
+    // 両方が半径内に入るクリック位置（group 1 の点のすぐ近く）
+    expect(hitTestEgoPoseGroups(groups, [px1 + 0.1, py0], DISP, LOC, 10)).toBe(1)
+    // group 0 の点のすぐ近く
+    expect(hitTestEgoPoseGroups(groups, [px0 - 0.1, py0], DISP, LOC, 10)).toBe(0)
+  })
+
+  it('半径内に点がなければ null を返す', () => {
+    const groups = [[makePose(100, 100)]]
+    const [px, py] = toPixel(100, 100)
+    expect(hitTestEgoPoseGroups(groups, [px + 100, py], DISP, LOC, 5)).toBeNull()
+  })
+
+  it('空グループのみ・グループなしでは null を返す', () => {
+    expect(hitTestEgoPoseGroups([], [0, 0], DISP, LOC, 5)).toBeNull()
+    expect(hitTestEgoPoseGroups([[], []], [0, 0], DISP, LOC, 5)).toBeNull()
+  })
 })
 
 describe('drawBBox2D', () => {
@@ -129,6 +219,76 @@ describe('drawBBox2D', () => {
   it('does not draw label when not provided', () => {
     drawBBox2D(ctx, makeCorners(), '#fff')
     expect(ctx.fillText).not.toHaveBeenCalled()
+  })
+})
+
+describe('drawCameraBBoxes', () => {
+  let ctx: CanvasRenderingContext2D
+
+  beforeEach(() => { ctx = makeCtx() })
+
+  // カメラ正面 (ego から x+ 方向 10m 先) に置いた BBox が投影されるセットアップ
+  const egoPose = { translation: [0, 0, 0], rotation: [1, 0, 0, 0] }
+  // カメラ光軸を ego x+ に向ける回転（ego → camera: z が前方になるよう -90°/+90° 合成）
+  const calibSensor = {
+    translation: [0, 0, 1.5],
+    rotation: [0.5, -0.5, 0.5, -0.5],
+  }
+  const intrinsic = [
+    [1000, 0, 800],
+    [0, 1000, 450],
+    [0, 0, 1],
+  ]
+
+  const makeAnnotation = (token: string, x: number): Annotation => ({
+    token,
+    sample_token:     'sample-1',
+    instance_token:   `inst-${token}`,
+    translation:      [x, 0, 1],
+    rotation:         [1, 0, 0, 0],
+    size:             [2, 4, 1.5],
+    prev:             null,
+    next:             null,
+    num_lidar_pts:    0,
+    num_radar_pts:    0,
+    visibility_token: null,
+    category_token:   'cat-1',
+    attributes:       [],
+    visibility:       null,
+  } as unknown as Annotation)
+
+  it('カメラ前方の BBox 1件につき rect を1件返す', () => {
+    const rects = drawCameraBBoxes(
+      ctx, [makeAnnotation('ann-1', 10)], egoPose, calibSensor, intrinsic, 1, 1,
+    )
+    expect(rects).toHaveLength(1)
+    expect(rects[0].token).toBe('ann-1')
+    expect(rects[0].maxX).toBeGreaterThan(rects[0].minX)
+    expect(rects[0].maxY).toBeGreaterThan(rects[0].minY)
+  })
+
+  it('カメラ後方の BBox は描画されず rect も返らない', () => {
+    const rects = drawCameraBBoxes(
+      ctx, [makeAnnotation('ann-behind', -10)], egoPose, calibSensor, intrinsic, 1, 1,
+    )
+    expect(rects).toHaveLength(0)
+    expect(ctx.beginPath).not.toHaveBeenCalled()
+  })
+
+  it('colorFor が strokeStyle に反映される', () => {
+    drawCameraBBoxes(
+      ctx, [makeAnnotation('ann-1', 10)], egoPose, calibSensor, intrinsic, 1, 1,
+      { colorFor: () => '#FF8C00' },
+    )
+    expect(ctx.strokeStyle).toBe('#FF8C00')
+  })
+
+  it('opts 省略時はエラーなく描画され globalAlpha を変更しない', () => {
+    const rects = drawCameraBBoxes(
+      ctx, [makeAnnotation('ann-1', 10), makeAnnotation('ann-2', 15)],
+      egoPose, calibSensor, intrinsic, 0.5, 0.5,
+    )
+    expect(rects).toHaveLength(2)
   })
 })
 

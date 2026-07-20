@@ -70,8 +70,6 @@ PROJECT_NAME=your-project-name                  # プロジェクト名
 REGION=your-aws-region(e.g., ap-northeast-1)    # デプロイしたいAWSリージョン
 DISTRIBUTION_ID=                                # 後で修正するので最初は空欄でOK
 MULTI_AZ=false                                  # マルチAZの有効化有無
-PRIVATE_SUBNET_ID=                              # 後で修正するので最初は空欄でOK
-SG_ECS_ID=                                      # 後で修正するので最初は空欄でOK
 ```
 
 ## 手動デプロイ
@@ -1219,7 +1217,7 @@ AWS_PROFILE=terraform terraform plan
 
 #### デプロイ
 
-実際にリソースをデプロイするときは、CloudFrontの無料ディストリビューションが1個しか作れないこととに注意が必要です。基本的には手動作成したものが残っている（しかも月に1回しか削除できるタイミングがない）はずなので、
+実際にリソースをデプロイするときは、CloudFrontの無料ディストリビューションが1個しか作れないこととに注意が必要です。基本的には手動作成したものが残っている（しかも月に1回しか削除できるタイミングがない）はずなので、当面はこれを流用するのが良いと思います。
 
 まず以下のように`terraform.tfvars`に既存のstatic用OAC ID（CloudFront → Origin accessの"{プロジェクト名}-data-oac"のID列に記載されている）とWeb ACL IDを記載します
 
@@ -1308,7 +1306,7 @@ psql \
   -d nuscenes_viewer
 ```
 
-接続できたら、以下コマンドでmigratorユーザのパスワードを変更します。
+接続できたら、以下コマンドでmigratorユーザのパスワードを変更します（最後のセミコロンを忘れないように）。
 
 ```sql
 ALTER USER migrator WITH PASSWORD '新しいパスワード';
@@ -1356,6 +1354,8 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 make maintenance-down
 ```
 
+##### Parameter Storeの更新
+
 AWSコンソールからSystems Manager → Parameter Storeで`/{プロジェクト名}/db/migrator_password`と`/{プロジェクト名}/db/app_password`を選択し、Editで先ほど設定したパスワードを入力します。
 
 また、このタイミングで`/{プロジェクト名}/cloudfront/data_url`も`https://{distribution-domain}`に修正しておくと良いでしょう（`{distribution-domain}`はCloudFront → Distributions → 当該DistributionのDistribution domain nameに記載）。
@@ -1394,14 +1394,7 @@ make deploy-backend
 
 ##### マイグレーションタスク実行
 
-まず.env.makeの`PRIVATE_SUBNET_ID`（VPC → Subnetsで見られるprigate1サブネットのSubnet ID）と`SG_ECS_ID`（VPC → Security groupsで見られる{プロジェクト名}-sg-ecsのSecurity group ID）を記載します
-
-```.env.makeの一部
-PRIVATE_SUBNET_ID={prigate1サブネットのSubnet ID}
-SG_ECS_ID={ECS用セキュリティグループのSecurity group ID}
-```
-
-以下コマンドでマイグレーション用のECSタスクを実行します
+以下コマンドでマイグレーション用のECSタスクを実行します（サブネットID・セキュリティグループIDはTerraformのoutputから自動取得されるため、手動設定は不要です）
 
 ```zsh
 make rds-migration
@@ -1429,6 +1422,12 @@ cd terraform/deploy && AWS_PROFILE=terraform terraform apply -auto-approve \
 cd ../..
 ```
 
+以下コマンドで、上記TerraformのoutputからサブネットID・セキュリティグループIDを環境変数に取得します
+
+```zsh
+export PRIVATE_SUBNET_ID=$(cd terraform/deploy && AWS_PROFILE=terraform terraform output -raw migration_subnet_id)
+export SG_ECS_ID=$(cd terraform/deploy && AWS_PROFILE=terraform terraform output -raw ecs_security_group_id)
+```
 
 以下コマンドでnuScenes本体DBインポート用のECSタスク（{プロジェクト名}-import-task）を実行します
 
@@ -1493,14 +1492,34 @@ make deploy-frontend
 
 アプリが動作すれば成功です
 
-#### 削除
+#### リソースの削除
 
 以下コマンドでリソースを一括削除できます（`Do you really want to destroy all resources?`と聞かれたらyesと打つ）
 
 ```zsh
 cd terraform
+AWS_PROFILE=terraform terraform state rm \
+  aws_cloudfront_distribution.main
 AWS_PROFILE=terraform terraform destroy
 ```
+
+恐らく以下のリソースは削除に失敗するので、各個以下のように対処してください
+
+- ECR Repository (`${PROJECT_NAME}/backend`): 手動で削除
+- CloudFront Distribution: 前述のように月1回しか削除できるタイミングがないため、`AWS_PROFILE=terraform terraform state rm aws_cloudfront_distribution.main`の部分で削除対象から除外している。費用もほぼ掛からないので残しておくのがGoodだと思います
+- S3 バケット (`${PROJECT_NAME}_data`と`${PROJECT_NAME}_static`): バケットが空でないので削除できない。こちらも費用がほぼ掛からない＆再作成は面倒なので、そのまま残しておいて良いと思います
+
+##### リソース削除後の再作成
+
+削除したリソースを再作成したい場合は、以下コマンドで実行できます（CloudFront DistributionのDistribution IDを読み込む必要があことに注意）
+
+```zsh
+AWS_PROFILE=terraform terraform import \
+  aws_cloudfront_distribution.main {既存Distribution ID}
+AWS_PROFILE=terraform terraform apply
+```
+
+リソースが立ち上がったら、[デプロイ後の手作業]()を再度実施してください（バケットを削除していないので「S3へのデータアップロード」は不要です）
 
 ### 2. バックエンド更新
 

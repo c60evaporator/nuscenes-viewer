@@ -96,11 +96,13 @@ rds-migration:
 		-var="region=$(REGION)" \
 		-var="project_name=$(PROJECT_NAME)" \
 		-var="multi_az=$(MULTI_AZ)"
+	SUBNET_ID=$$(cd terraform/deploy && AWS_PROFILE=terraform terraform output -raw migration_subnet_id) && \
+	SG_ID=$$(cd terraform/deploy && AWS_PROFILE=terraform terraform output -raw ecs_security_group_id) && \
 	aws ecs run-task \
 		--cluster $(CLUSTER) \
 		--task-definition $(PROJECT_NAME)-migration-task \
 		--launch-type FARGATE \
-		--network-configuration "awsvpcConfiguration={subnets=[$(PRIVATE_SUBNET_ID)],securityGroups=[$(SG_ECS_ID)],assignPublicIp=DISABLED}" \
+		--network-configuration "awsvpcConfiguration={subnets=[$$SUBNET_ID],securityGroups=[$$SG_ID],assignPublicIp=DISABLED}" \
 		--region $(REGION) \
 		--no-cli-pager \
 		--query 'tasks[0].{taskArn:taskArn,lastStatus:lastStatus}' \
